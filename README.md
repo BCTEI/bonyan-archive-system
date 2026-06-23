@@ -41,7 +41,23 @@ bun run dist
 > ملاحظة: على Linux يتطلب بناء مثبت NSIS تثبيت **Wine**. إذا لم يكن Wine متوفراً، يمكنك إنشاء نسخة محمولة (.exe واحد) بدون تثبيت:
 
 ```bash
-bun run dist:portable
+bun run dist:win-portable
+```
+
+## بناء حزمة Debian / Linux
+
+```bash
+# حزمة .deb
+bun run dist:linux-deb
+
+# AppImage
+bun run dist:linux
+```
+
+ثم ثبّت الحزمة على Debian/Ubuntu:
+
+```bash
+sudo dpkg -i release/bonyan-archive-system-*.deb
 ```
 
 ## تسجيل الدخول الافتراضي
@@ -51,9 +67,8 @@ bun run dist:portable
 
 ## موقع قاعدة البيانات
 
-```
-%APPDATA%\bonyan-archive-system\archive.db
-```
+- **Windows:** `%APPDATA%\bonyan-archive-system\archive.db`
+- **Linux:** `~/.config/bonyan-archive-system/archive.db`
 
 ## النسخ الاحتياطي والاستعادة
 
