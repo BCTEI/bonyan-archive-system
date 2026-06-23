@@ -5,6 +5,7 @@
   "directories": { "output": "release", "buildResources": "build" },
   "files": ["dist/**/*"],
   "artifactName": "${name}-${version}-${arch}.${ext}",
+  "publish": null,
   "win": {
     "target": [
       { "target": "nsis", "arch": ["x64"] },
