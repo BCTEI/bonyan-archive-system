@@ -13,6 +13,7 @@
     "dist": "bun run build:prod && electron-builder",
     "dist:win": "bun run build:prod && electron-builder --win",
     "dist:win-portable": "bun run build:prod && electron-builder --win portable",
+    "dist:portable": "bun run dist:win-portable",
     "dist:linux-deb": "bun run build:prod && electron-builder --linux deb",
     "dist:linux": "bun run build:prod && electron-builder --linux",
     "dist:dir": "bun run build:prod && electron-builder --win --dir",
