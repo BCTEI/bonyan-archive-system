@@ -1,0 +1,37 @@
+<div class="space-y-6">
+  <h1 class="text-2xl font-bold text-primary">لوحة التحكم</h1>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <app-stats-card label="إجمالي الوثائق" [value]="stats().total" icon="folder_open" color="#1e3a5f"></app-stats-card>
+    <app-stats-card label="صادر" [value]="stats().outgoing" icon="arrow_forward" color="#059669"></app-stats-card>
+    <app-stats-card label="وارد" [value]="stats().incoming" icon="arrow_back" color="#d97706"></app-stats-card>
+    <app-stats-card label="مراسلات" [value]="stats().correspondence" icon="mail" color="#2563eb"></app-stats-card>
+  </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <mat-card class="lg:col-span-2 p-4">
+      <h2 class="text-lg font-bold text-primary mb-4">إحصائية الوثائق</h2>
+      <canvas id="docsChart" height="120"></canvas>
+    </mat-card>
+
+    <mat-card class="p-4">
+      <h2 class="text-lg font-bold text-primary mb-4">آخر النشاطات</h2>
+      <div class="space-y-3 max-h-[300px] overflow-y-auto">
+        @for (entry of recentAudit(); track entry.id) {
+          <div class="border-b border-border pb-2 last:border-0">
+            <div class="flex items-center justify-between">
+              <span class="text-sm font-medium">{{ entry.action }}</span>
+              <span class="text-xs text-text-light">{{ entry.timestamp }}</span>
+            </div>
+            <div class="text-xs text-text-light mt-1">
+              {{ entry.doc_ref }} - {{ entry.username }}
+            </div>
+          </div>
+        }
+        @if (recentAudit().length === 0) {
+          <p class="text-text-light text-sm text-center py-4">لا توجد نشاطات</p>
+        }
+      </div>
+    </mat-card>
+  </div>
+</div>

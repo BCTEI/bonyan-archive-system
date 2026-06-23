@@ -1,0 +1,40 @@
+<div dir="rtl" class="shell h-screen flex flex-col">
+  <header class="h-[60px] bg-gradient-to-l from-primary to-primary-light text-white flex items-center px-4 gap-4 shadow-md">
+    <button mat-icon-button (click)="toggleSidebar()" class="!text-white lg:hidden">
+      <mat-icon>menu</mat-icon>
+    </button>
+    <div class="flex items-center gap-2">
+      <mat-icon class="!text-3xl !w-8 !h-8">archive</mat-icon>
+      <span class="font-bold text-lg hidden md:inline">نظام الأرشيف الإلكتروني</span>
+    </div>
+    <div class="flex-1 max-w-xl mx-4">
+      <div class="relative">
+        <mat-icon class="absolute right-3 top-1/2 -translate-y-1/2 text-white/60">search</mat-icon>
+        <input type="text" placeholder="بحث عام..." (keyup.enter)="onSearch($any($event.target).value)"
+               class="w-full pr-10 pl-4 py-1.5 rounded-lg bg-white/15 border border-white/20 text-white placeholder-white/60 focus:outline-none focus:bg-white/20">
+      </div>
+    </div>
+    <div class="flex items-center gap-3">
+      <span class="text-sm hidden sm:inline">{{ auth.currentUser()?.username }}</span>
+      <button mat-icon-button [matMenuTriggerFor]="userMenu" class="!text-white">
+        <mat-icon>account_circle</mat-icon>
+      </button>
+      <mat-menu #userMenu="matMenu">
+        <button mat-menu-item (click)="logout()">
+          <mat-icon>logout</mat-icon>
+          <span>تسجيل الخروج</span>
+        </button>
+      </mat-menu>
+    </div>
+  </header>
+
+  <div class="flex-1 grid transition-all" [style.grid-template-columns]="sidebarOpen() ? '300px 1fr' : '0 1fr'" style="overflow: hidden;">
+    <aside class="bg-card border-l border-border overflow-y-auto" [class.hidden]="!sidebarOpen()">
+      <app-folder-tree></app-folder-tree>
+    </aside>
+    <main class="bg-bg overflow-y-auto p-6">
+      <router-outlet></router-outlet>
+    </main>
+  </div>
+</div>
+<app-toast></app-toast>

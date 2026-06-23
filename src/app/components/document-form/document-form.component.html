@@ -1,0 +1,199 @@
+<div dir="rtl" class="p-6 max-h-[90vh] overflow-y-auto">
+  <h2 class="text-xl font-bold text-primary mb-4">
+    {{ doc().id ? 'تعديل وثيقة' : 'وثيقة جديدة' }}
+  </h2>
+
+  <div class="flex flex-wrap items-center gap-3 mb-4">
+    <span class="text-sm text-text-light">الرقم المرجعي:</span>
+    @if (doc().ref_number) {
+      <span class="px-3 py-1 rounded-lg bg-primary text-white font-bold">{{ doc().ref_number }}</span>
+    } @else {
+      <span class="text-text-light text-sm">لم يتم التوليد</span>
+    }
+    <button mat-stroked-button color="primary" (click)="generateRef()" [disabled]="generatingRef()">
+      <mat-icon>refresh</mat-icon>
+      توليد
+    </button>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+    <div>
+      <label class="block text-sm font-medium mb-1">نوع الوثيقة</label>
+      <select [ngModel]="doc().type" (ngModelChange)="onTypeChange($event)"
+              class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary">
+        @for (t of types; track t) {
+          <option [value]="t">{{ t }}</option>
+        }
+      </select>
+    </div>
+    <div>
+      <label class="block text-sm font-medium mb-1">المجلد</label>
+      <select [ngModel]="doc().folder_id" (ngModelChange)="onFolderChange(+$event)"
+              class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary">
+        @for (folder of folders(); track folder.id) {
+          <option [value]="folder.id">{{ folder.name }}</option>
+        }
+      </select>
+    </div>
+  </div>
+
+  <div class="mb-4">
+    <label class="block text-sm font-medium mb-1">الموضوع *</label>
+    <input [ngModel]="doc().subject" (ngModelChange)="updateDoc('subject', $event)"
+           class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary">
+  </div>
+
+  @if (doc().type === 'صادر') {
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      <div>
+        <label class="block text-sm font-medium mb-1">الجهة المرسلة (المؤسسة) *</label>
+        <input [ngModel]="doc().sender" (ngModelChange)="updateDoc('sender', $event)"
+               class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary">
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1">الجهة المستقبلة *</label>
+        <input [ngModel]="doc().receiver" (ngModelChange)="updateDoc('receiver', $event)"
+               class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary">
+      </div>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      <div>
+        <label class="block text-sm font-medium mb-1">تاريخ الإصدار *</label>
+        <input type="date" [ngModel]="doc().date" (ngModelChange)="updateDoc('date', $event)"
+               class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary">
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1">اسم المؤلف / معد الملف *</label>
+        <input [ngModel]="doc().author" (ngModelChange)="updateDoc('author', $event)"
+               class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary">
+      </div>
+    </div>
+  }
+
+  @if (doc().type === 'وارد') {
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      <div>
+        <label class="block text-sm font-medium mb-1">الجهة المرسلة *</label>
+        <input [ngModel]="doc().sender" (ngModelChange)="updateDoc('sender', $event)"
+               class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary">
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1">تاريخ الاستلام *</label>
+        <input type="date" [ngModel]="doc().date" (ngModelChange)="updateDoc('date', $event)"
+               class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary">
+      </div>
+    </div>
+    <div class="mb-4">
+      <label class="block text-sm font-medium mb-1">العنوان / الوصف التفصيلي</label>
+      <textarea [ngModel]="doc().address" (ngModelChange)="updateDoc('address', $event)" rows="3"
+                class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary"></textarea>
+    </div>
+    <div class="mb-4">
+      <label class="block text-sm font-medium mb-1">طريقة الاستلام *</label>
+      <div class="flex flex-wrap gap-4">
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="radio" name="input_method" value="upload" [ngModel]="doc().input_method" (ngModelChange)="updateDoc('input_method', $event)">
+          <span>تحميل من الجهاز</span>
+        </label>
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="radio" name="input_method" value="camera" [ngModel]="doc().input_method" (ngModelChange)="updateDoc('input_method', $event)">
+          <span>التقاط صورة</span>
+        </label>
+        <label class="flex items-center gap-2 cursor-pointer">
+          <input type="radio" name="input_method" value="scanner" [ngModel]="doc().input_method" (ngModelChange)="updateDoc('input_method', $event)">
+          <span>الماسح الضوئي</span>
+        </label>
+      </div>
+    </div>
+  }
+
+  @if (doc().type === 'مراسلات') {
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+      <div>
+        <label class="block text-sm font-medium mb-1">القسم / الجهة المرسلة *</label>
+        <input [ngModel]="doc().sender" (ngModelChange)="updateDoc('sender', $event)"
+               class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary">
+      </div>
+      <div>
+        <label class="block text-sm font-medium mb-1">القسم المستهدف / المستقبل *</label>
+        <input [ngModel]="doc().receiver" (ngModelChange)="updateDoc('receiver', $event)"
+               class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary">
+      </div>
+    </div>
+    <div class="mb-4">
+      <label class="block text-sm font-medium mb-1">تاريخ المراسلة *</label>
+      <input type="date" [ngModel]="doc().date" (ngModelChange)="updateDoc('date', $event)"
+             class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary md:w-1/2">
+    </div>
+    <div class="mb-4">
+      <label class="block text-sm font-medium mb-1">محتوى الرسالة / الملخص</label>
+      <textarea [ngModel]="doc().content" (ngModelChange)="updateDoc('content', $event)" rows="3"
+                class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary"></textarea>
+    </div>
+  }
+
+  <div class="mb-4">
+    <label class="block text-sm font-medium mb-1">ملاحظات</label>
+    <textarea [ngModel]="doc().notes" (ngModelChange)="updateDoc('notes', $event)" rows="2"
+              class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary"></textarea>
+  </div>
+
+  <div class="mb-4 flex items-center gap-3">
+    <label class="font-medium">الحالة:</label>
+    <label class="flex items-center gap-2 cursor-pointer">
+      <input type="radio" name="status" value="معتمد" [ngModel]="doc().status" (ngModelChange)="updateDoc('status', $event)">
+      <span>معتمد</span>
+    </label>
+    <label class="flex items-center gap-2 cursor-pointer">
+      <input type="radio" name="status" value="قيد الاعتماد" [ngModel]="doc().status" (ngModelChange)="updateDoc('status', $event)">
+      <span>قيد الاعتماد</span>
+    </label>
+  </div>
+
+  <div class="mb-4">
+    <label class="block text-sm font-medium mb-1">التوقيع *</label>
+    <canvas #sigCanvas width="600" height="150" class="w-full border border-border rounded-lg bg-white cursor-crosshair touch-none"
+            (mousedown)="startDraw($event)" (mousemove)="draw($event)" (mouseup)="endDraw()" (mouseleave)="endDraw()"
+            (touchstart)="startDraw($event)" (touchmove)="draw($event)" (touchend)="endDraw()"></canvas>
+    <div class="flex gap-2 mt-2">
+      <button mat-stroked-button type="button" (click)="clearSignature()">مسح</button>
+      <button mat-stroked-button color="primary" type="button" (click)="saveSignature()">حفظ التوقيع</button>
+      @if (doc().signature_base64) {
+        <span class="text-success text-sm flex items-center gap-1"><mat-icon>check_circle</mat-icon> تم حفظ التوقيع</span>
+      }
+    </div>
+  </div>
+
+  <div class="mb-6">
+    <label class="block text-sm font-medium mb-1">المرفقات</label>
+    <div class="border-2 border-dashed border-border rounded-lg p-6 text-center transition"
+         [class.bg-secondary]="dragOver()"
+         (dragover)="$event.preventDefault(); dragOver.set(true)"
+         (dragleave)="dragOver.set(false)"
+         (drop)="onDrop($event)">
+      <mat-icon class="!text-4xl !w-10 !h-10 text-text-light mb-2">cloud_upload</mat-icon>
+      <p class="text-text-light text-sm mb-2">اسحب الملفات هنا أو انقر للاختيار</p>
+      <input type="file" multiple hidden #fileInput (change)="onFileSelect($event)">
+      <button mat-stroked-button type="button" (click)="fileInput.click()">اختيار ملفات</button>
+      <p class="text-xs text-text-light mt-2">PDF, DOC, DOCX, XLS, XLSX, JPG, PNG</p>
+    </div>
+    @if (attachments().length > 0) {
+      <div class="flex flex-wrap gap-2 mt-3">
+        @for (att of attachments(); track att.name + att.ext) {
+          <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary text-sm">
+            <mat-icon class="!text-base">attachment</mat-icon>
+            <span>{{ att.name }}.{{ att.ext }}</span>
+            <button mat-icon-button class="!w-6 !h-6" (click)="removeAttachment($index)">
+              <mat-icon class="!text-base">close</mat-icon>
+            </button>
+          </div>
+        }
+      </div>
+    }
+  </div>
+
+  <div class="flex justify-end gap-3">
+    <button mat-button type="button" (click)="cancel()">إلغاء</button>
+    <button mat-raised-button color="primary" type="button" (click)="save()">حفظ الوثيقة</button>
+  </div>
+</div>

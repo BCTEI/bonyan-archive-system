@@ -1,0 +1,61 @@
+<div class="p-6" dir="rtl">
+  <div class="flex items-center justify-between mb-6">
+    <div class="flex items-center gap-3 flex-wrap">
+      <span class="px-3 py-1 rounded-lg bg-primary text-white font-bold">{{ doc.ref_number }}</span>
+      <span class="px-3 py-1 rounded-lg text-sm font-bold"
+            [style.background-color]="doc.type === 'صادر' ? 'rgba(5,150,105,0.1)' : doc.type === 'وارد' ? 'rgba(217,119,6,0.1)' : 'rgba(37,99,235,0.1)'"
+            [style.color]="doc.type === 'صادر' ? '#059669' : doc.type === 'وارد' ? '#d97706' : '#2563eb'">{{ doc.type }}</span>
+      <span class="px-3 py-1 rounded-lg text-sm text-white" [class.bg-success]="doc.status === 'معتمد'" [class.bg-warning]="doc.status !== 'معتمد'">{{ doc.status }}</span>
+    </div>
+    <div class="flex items-center gap-2">
+      <button mat-icon-button (click)="print()" title="طباعة">
+        <mat-icon>print</mat-icon>
+      </button>
+      <button mat-icon-button (click)="close()" title="إغلاق">
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 text-sm">
+    <div><span class="font-bold text-primary">الموضوع:</span> {{ doc.subject }}</div>
+    <div><span class="font-bold text-primary">التاريخ:</span> {{ doc.date }}</div>
+    @if (doc.sender) { <div><span class="font-bold text-primary">المرسل:</span> {{ doc.sender }}</div> }
+    @if (doc.receiver) { <div><span class="font-bold text-primary">المستلم:</span> {{ doc.receiver }}</div> }
+    @if (doc.author) { <div><span class="font-bold text-primary">المؤلف / معد الملف:</span> {{ doc.author }}</div> }
+    @if (doc.input_method) { <div><span class="font-bold text-primary">طريقة الاستلام:</span> {{ inputMethodLabel(doc.input_method) }}</div> }
+    @if (doc.address) { <div><span class="font-bold text-primary">العنوان / الوصف:</span> {{ doc.address }}</div> }
+    @if (doc.content) { <div><span class="font-bold text-primary">المحتوى / الملخص:</span> {{ doc.content }}</div> }
+    @if (doc.body) { <div><span class="font-bold text-primary">المضمون:</span> {{ doc.body }}</div> }
+    <div><span class="font-bold text-primary">المجلد:</span> {{ folder?.name ?? '' }}</div>
+    <div><span class="font-bold text-primary">أنشئ بواسطة:</span> {{ doc.created_by ?? '-' }}</div>
+  </div>
+
+  @if (doc.notes) {
+    <div class="mb-6">
+      <h3 class="font-bold text-primary mb-2">ملاحظات</h3>
+      <div class="bg-bg p-4 rounded-lg whitespace-pre-wrap">{{ doc.notes }}</div>
+    </div>
+  }
+
+  @if (attachments.length > 0) {
+    <div class="mb-6">
+      <h3 class="font-bold text-primary mb-2">المرفقات</h3>
+      <div class="flex flex-wrap gap-2">
+        @for (att of attachments; track att.name + att.ext) {
+          <button (click)="openAttachment(att)" class="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary hover:bg-border transition text-sm">
+            <mat-icon>attachment</mat-icon>
+            <span>{{ att.name }}.{{ att.ext }}</span>
+          </button>
+        }
+      </div>
+    </div>
+  }
+
+  @if (doc.signature_base64) {
+    <div class="mb-4">
+      <h3 class="font-bold text-primary mb-2">التوقيع</h3>
+      <img [src]="doc.signature_base64" alt="التوقيع" class="max-h-32 border border-border rounded-lg p-2 bg-white">
+    </div>
+  }
+</div>

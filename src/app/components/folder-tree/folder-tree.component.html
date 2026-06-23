@@ -1,0 +1,29 @@
+<div class="p-4">
+  <div class="mb-4">
+    <div class="relative">
+      <mat-icon class="absolute right-3 top-1/2 -translate-y-1/2 text-text-light">search</mat-icon>
+      <input type="text" [(ngModel)]="filter" placeholder="تصفية المجلدات..."
+             class="w-full pr-10 pl-3 py-2 rounded-lg border border-border bg-bg text-sm focus:outline-none focus:border-primary">
+    </div>
+  </div>
+
+  <mat-accordion multi="true" displayMode="flat">
+    @for (group of groupKeys(); track group) {
+      <mat-expansion-panel [expanded]="true" class="!shadow-none !bg-transparent !border-b !border-border">
+        <mat-expansion-panel-header class="!py-2 !px-0 !h-auto">
+          <span class="font-bold text-primary text-sm">{{ group }}</span>
+        </mat-expansion-panel-header>
+        <div class="flex flex-col gap-1 pr-2">
+          @for (folder of filteredFolders(grouped().get(group) ?? []); track folder.id) {
+            <button (click)="selectFolder(folder)"
+                    class="folder-item flex items-center justify-between w-full text-right px-3 py-2 rounded-lg text-sm hover:bg-secondary transition"
+                    [class.bg-secondary]="selectedFolderId() === folder.id">
+              <span class="truncate">{{ folder.name }}</span>
+              <span class="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">{{ folder.document_count }}</span>
+            </button>
+          }
+        </div>
+      </mat-expansion-panel>
+    }
+  </mat-accordion>
+</div>

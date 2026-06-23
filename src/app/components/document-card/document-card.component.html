@@ -1,0 +1,61 @@
+<mat-card class="doc-card h-full flex flex-col">
+  <mat-card-header class="pb-2">
+    <div class="flex-1">
+      <div class="flex items-center gap-2 mb-2 flex-wrap">
+        <span class="px-2 py-0.5 rounded text-xs font-bold bg-primary text-white">{{ doc().ref_number }}</span>
+        <span class="type-badge px-2 py-0.5 rounded text-xs font-bold" [class]="typeClass(doc().type)">{{ doc().type }}</span>
+        @if (doc().status === 'معتمد') {
+          <span class="px-2 py-0.5 rounded text-xs text-white bg-success">معتمد</span>
+        } @else {
+          <span class="px-2 py-0.5 rounded text-xs text-white bg-warning">قيد الاعتماد</span>
+        }
+      </div>
+      <mat-card-title class="!text-base !font-bold leading-snug" [innerHTML]="highlighted(doc().subject)"></mat-card-title>
+    </div>
+    <button mat-icon-button [matMenuTriggerFor]="menu" class="!mr-auto">
+      <mat-icon>more_vert</mat-icon>
+    </button>
+    <mat-menu #menu="matMenu">
+      <button mat-menu-item (click)="view.emit(doc())">
+        <mat-icon>visibility</mat-icon>
+        <span>عرض</span>
+      </button>
+      @if (auth.isAdmin()) {
+        <button mat-menu-item (click)="edit.emit(doc())">
+          <mat-icon>edit</mat-icon>
+          <span>تعديل</span>
+        </button>
+        <button mat-menu-item (click)="delete.emit(doc())">
+          <mat-icon>delete</mat-icon>
+          <span>حذف</span>
+        </button>
+      }
+      <button mat-menu-item (click)="print.emit(doc())">
+        <mat-icon>print</mat-icon>
+        <span>طباعة</span>
+      </button>
+    </mat-menu>
+  </mat-card-header>
+  <mat-card-content class="flex-1">
+    <div class="text-sm text-text-light space-y-1">
+      <p><span class="font-medium">التاريخ:</span> {{ doc().date }}</p>
+      @if (doc().sender) { <p><span class="font-medium">المرسل:</span> {{ doc().sender }}</p> }
+      @if (doc().receiver) { <p><span class="font-medium">المستلم:</span> {{ doc().receiver }}</p> }
+      @if (folderName()) { <p><span class="font-medium">المجلد:</span> {{ folderName() }}</p> }
+    </div>
+  </mat-card-content>
+  <mat-card-actions class="justify-between pt-0">
+    <div class="flex items-center gap-3 text-text-light text-sm">
+      <span class="flex items-center gap-1">
+        <mat-icon>attach_file</mat-icon>
+        <span>{{ attachmentsCount() }}</span>
+      </span>
+      @if (doc().signature_base64) {
+        <span class="flex items-center gap-1" title="موقع">
+          <span class="w-2.5 h-2.5 rounded-full bg-success"></span>
+          <span>موقع</span>
+        </span>
+      }
+    </div>
+  </mat-card-actions>
+</mat-card>
