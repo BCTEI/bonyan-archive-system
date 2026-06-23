@@ -21,7 +21,11 @@ export class DatabaseService {
   }
 
   async run(sql: string, params?: unknown[]): Promise<{ lastInsertRowid: number | bigint; changes: number }> {
-    return this.api.dbRun(sql, params);
+    const result = await this.api.dbRun(sql, params);
+    if (result && typeof result === 'object' && 'success' in result && result.success === false) {
+      throw new Error((result as any).error ?? 'فشل تنفيذ العملية');
+    }
+    return result;
   }
 
   async getNextRef(type: 'صادر' | 'وارد' | 'مراسلات', folderId: number): Promise<string> {
@@ -65,10 +69,16 @@ export class DatabaseService {
   }
 
   async exportData(): Promise<string> {
-    return this.api.exportData();
+    const result = await this.api.exportData() as string | { success: false; error?: string };
+    if (typeof result === 'object' && 'success' in result && result.success === false) {
+      throw new Error(result.error ?? 'فشل التصدير');
+    }
+    return result as string;
   }
 
   async importData(jsonData: string, mode: 'merge' | 'replace'): Promise<{ success: boolean; message: string }> {
-    return this.api.importData(jsonData, mode);
+    const result = await this.api.importData(jsonData, mode);
+    if (!result.success) throw new Error(result.message);
+    return result;
   }
 }

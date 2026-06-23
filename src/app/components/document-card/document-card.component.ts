@@ -7,11 +7,12 @@ import { MatMenuModule } from '@angular/material/menu';
 import { ArchiveDocument } from '../../models/document.model';
 import { AuthService } from '../../services/auth.service';
 import { DocumentService } from '../../services/document.service';
+import { HasPermissionDirective } from '../../directives/has-permission.directive';
 
 @Component({
   selector: 'app-document-card',
   standalone: true,
-  imports: [CommonModule, MatCardModule, MatIconModule, MatButtonModule, MatMenuModule],
+  imports: [CommonModule, MatCardModule, MatIconModule, MatButtonModule, MatMenuModule, HasPermissionDirective],
   templateUrl: './document-card.component.html',
   styleUrl: './document-card.component.scss'
 })

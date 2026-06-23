@@ -1,13 +1,15 @@
-import { Component, inject, signal } from '@angular/core';
-import { Router, RouterOutlet } from '@angular/router';
+import { Component, HostListener, OnInit, inject, signal } from '@angular/core';
+import { RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
-import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatIconModule } from '@angular/material/icon';
-import { MatButtonModule } from '@angular/material/button';
-import { MatMenuModule } from '@angular/material/menu';
-import { AuthService } from '../../services/auth.service';
 import { FolderTreeComponent } from '../folder-tree/folder-tree.component';
 import { ToastComponent } from '../toast/toast.component';
+import { HeaderComponent } from '../header/header.component';
+import { AuthService } from '../../services/auth.service';
+import { HasPermissionDirective } from '../../directives/has-permission.directive';
+
+const MOBILE_BREAKPOINT = 768;
+const SIDEBAR_STATE_KEY = 'bonyan_sidebar_open';
 
 @Component({
   selector: 'app-app-shell',
@@ -15,34 +17,78 @@ import { ToastComponent } from '../toast/toast.component';
   imports: [
     CommonModule,
     RouterOutlet,
-    MatToolbarModule,
+    RouterLink,
+    RouterLinkActive,
     MatIconModule,
-    MatButtonModule,
-    MatMenuModule,
     FolderTreeComponent,
-    ToastComponent
+    ToastComponent,
+    HeaderComponent,
+    HasPermissionDirective
   ],
   templateUrl: './app-shell.component.html',
   styleUrl: './app-shell.component.scss'
 })
-export class AppShellComponent {
+export class AppShellComponent implements OnInit {
   auth = inject(AuthService);
   router = inject(Router);
   sidebarOpen = signal(true);
+  isMobile = signal(false);
+
+  ngOnInit(): void {
+    this.updateViewport();
+  }
+
+  @HostListener('window:resize')
+  onResize(): void {
+    this.updateViewport();
+  }
+
+  @HostListener('document:keydown.escape')
+  onEscape(): void {
+    if (!this.router.url.includes('/main/dashboard')) {
+      this.router.navigate(['/main/dashboard']);
+    }
+  }
+
+  breadcrumb(): { label: string; link?: string }[] {
+    const url = this.router.url.split('?')[0];
+    const crumbs: { label: string; link?: string }[] = [{ label: '🏠 الرئيسية', link: '/main/dashboard' }];
+    if (url.includes('/documents')) crumbs.push({ label: 'الوثائق' });
+    if (url.includes('/audit')) crumbs.push({ label: 'سجل التدقيق' });
+    if (url.includes('/users')) crumbs.push({ label: 'إدارة المستخدمين' });
+    if (url.includes('/users/permissions')) crumbs.push({ label: 'صلاحيات المجلدات' });
+    return crumbs;
+  }
 
   toggleSidebar(): void {
     this.sidebarOpen.update(v => !v);
+    localStorage.setItem(SIDEBAR_STATE_KEY, JSON.stringify(this.sidebarOpen()));
   }
 
-  async logout(): Promise<void> {
-    await this.auth.logout();
+  private updateViewport(): void {
+    const mobile = window.innerWidth <= MOBILE_BREAKPOINT;
+    const wasMobile = this.isMobile();
+    this.isMobile.set(mobile);
+
+    if (mobile) {
+      // On mobile the sidebar is an overlay; default to closed
+      this.sidebarOpen.set(false);
+    } else if (wasMobile && !mobile) {
+      // Restore desktop preference when returning to desktop
+      this.restoreSidebarState();
+    }
   }
 
-  onSearch(query: string): void {
-    if (query.trim()) {
-      this.router.navigate(['/main/documents'], { queryParams: { q: query.trim() } });
+  private restoreSidebarState(): void {
+    const saved = localStorage.getItem(SIDEBAR_STATE_KEY);
+    if (saved) {
+      try {
+        this.sidebarOpen.set(JSON.parse(saved));
+      } catch {
+        this.sidebarOpen.set(true);
+      }
     } else {
-      this.router.navigate(['/main/documents'], { queryParams: {} });
+      this.sidebarOpen.set(true);
     }
   }
 }

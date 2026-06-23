@@ -6,6 +6,12 @@
     <h1 class="text-white text-xl font-bold mb-1">نظام الأرشيف الإلكتروني</h1>
     <p class="text-white/70 mb-6">مركز البنيان</p>
 
+    @if (errorMessage) {
+      <div class="mb-4 p-3 rounded-lg bg-red-500/20 border border-red-400/40 text-white text-sm text-right">
+        {{ errorMessage }}
+      </div>
+    }
+
     <div class="space-y-4 text-right">
       <div>
         <label class="block text-white/80 text-sm mb-1">اسم المستخدم</label>

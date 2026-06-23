@@ -2,17 +2,15 @@
   <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
     <h1 class="text-2xl font-bold text-primary">الوثائق</h1>
     <div class="flex items-center gap-2">
-      @if (auth.isAdmin()) {
-        <button mat-raised-button color="primary" (click)="openNew()">
-          <mat-icon>add</mat-icon>
-          وثيقة جديدة
-        </button>
-      }
-      <button mat-stroked-button color="primary" (click)="exportData()">
+      <button *appHasPermission="'canCreateDocument'" mat-raised-button color="primary" (click)="openNew()">
+        <mat-icon>add</mat-icon>
+        وثيقة جديدة
+      </button>
+      <button *appHasPermission="'canExportImport'" mat-stroked-button color="primary" (click)="exportData()">
         <mat-icon>download</mat-icon>
         تصدير
       </button>
-      <button mat-stroked-button color="primary" (click)="fileInput.click()">
+      <button *appHasPermission="'canExportImport'" mat-stroked-button color="primary" (click)="fileInput.click()">
         <mat-icon>upload</mat-icon>
         استيراد
       </button>

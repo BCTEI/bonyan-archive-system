@@ -1,0 +1,150 @@
+<div class="p-4 max-w-7xl mx-auto">
+  <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+    <div>
+      <h1 class="text-2xl font-bold text-primary">👥 إدارة المستخدمين</h1>
+      <p class="text-text-light text-sm">إنشاء وتعديل وإدارة صلاحيات المستخدمين</p>
+    </div>
+    <button mat-raised-button color="primary" (click)="openForm()">
+      <mat-icon>person_add</mat-icon>
+      <span>إضافة مستخدم جديد</span>
+    </button>
+  </div>
+
+  <!-- Stats Cards -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+    <div class="bg-card p-4 rounded-xl shadow-sm border border-border flex items-center gap-3">
+      <div class="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center text-xl">👥</div>
+      <div><div class="text-2xl font-bold">{{ users().length }}</div><div class="text-xs text-text-light">إجمالي المستخدمين</div></div>
+    </div>
+    <div class="bg-card p-4 rounded-xl shadow-sm border border-border flex items-center gap-3">
+      <div class="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center text-xl">🔴</div>
+      <div><div class="text-2xl font-bold">{{ adminCount }}</div><div class="text-xs text-text-light">المدراء</div></div>
+    </div>
+    <div class="bg-card p-4 rounded-xl shadow-sm border border-border flex items-center gap-3">
+      <div class="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center text-xl">🟡</div>
+      <div><div class="text-2xl font-bold">{{ editorCount }}</div><div class="text-xs text-text-light">المحررون</div></div>
+    </div>
+    <div class="bg-card p-4 rounded-xl shadow-sm border border-border flex items-center gap-3">
+      <div class="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center text-xl">🟢</div>
+      <div><div class="text-2xl font-bold">{{ viewerCount }}</div><div class="text-xs text-text-light">المشاهدون</div></div>
+    </div>
+  </div>
+
+  <div class="bg-card rounded-xl shadow-sm border border-border p-4 mb-6">
+    <div class="flex flex-col md:flex-row gap-4">
+      <mat-form-field class="flex-1" appearance="outline">
+        <mat-label>البحث في المستخدمين</mat-label>
+        <input matInput [(ngModel)]="search" (input)="applyFilters()" placeholder="اسم المستخدم أو الاسم الكامل">
+        <mat-icon matSuffix>search</mat-icon>
+      </mat-form-field>
+
+      <mat-form-field class="w-full md:w-48" appearance="outline">
+        <mat-label>الصلاحية</mat-label>
+        <mat-select [(ngModel)]="roleFilter" (selectionChange)="applyFilters()">
+          <mat-option value="all">جميع الصلاحيات</mat-option>
+          <mat-option value="admin">مدير</mat-option>
+          <mat-option value="editor">محرر</mat-option>
+          <mat-option value="viewer">مشاهد</mat-option>
+        </mat-select>
+      </mat-form-field>
+
+      <mat-form-field class="w-full md:w-48" appearance="outline">
+        <mat-label>الحالة</mat-label>
+        <mat-select [(ngModel)]="statusFilter" (selectionChange)="applyFilters()">
+          <mat-option value="all">جميع الحالات</mat-option>
+          <mat-option value="active">نشط</mat-option>
+          <mat-option value="inactive">معطل</mat-option>
+        </mat-select>
+      </mat-form-field>
+    </div>
+  </div>
+
+  <div class="bg-card rounded-xl shadow-sm border border-border overflow-hidden">
+    @if (loading()) {
+      <div class="p-8 text-center text-text-light">جاري تحميل المستخدمين...</div>
+    } @else {
+      <table mat-table [dataSource]="paginatedUsers()" class="w-full">
+        <ng-container matColumnDef="id">
+          <th mat-header-cell *matHeaderCellDef>المعرف</th>
+          <td mat-cell *matCellDef="let u">{{ u.id }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="username">
+          <th mat-header-cell *matHeaderCellDef>اسم المستخدم</th>
+          <td mat-cell *matCellDef="let u" class="font-medium">{{ u.username }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="full_name">
+          <th mat-header-cell *matHeaderCellDef>الاسم الكامل</th>
+          <td mat-cell *matCellDef="let u">{{ u.full_name || '-' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="role">
+          <th mat-header-cell *matHeaderCellDef>الصلاحية</th>
+          <td mat-cell *matCellDef="let u">
+            <span class="role-badge px-2 py-1 rounded-full text-xs font-semibold" [class]="roleClass(u.role)">
+              {{ roleLabels[u.role] }}
+            </span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="is_active">
+          <th mat-header-cell *matHeaderCellDef>الحالة</th>
+          <td mat-cell *matCellDef="let u">
+            <span class="inline-flex items-center gap-1 text-xs"
+                  [class.text-success]="u.is_active"
+                  [class.text-danger]="!u.is_active">
+              <mat-icon class="!text-sm">{{ u.is_active ? 'check_circle' : 'cancel' }}</mat-icon>
+              {{ u.is_active ? 'نشط' : 'معطل' }}
+            </span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="created_at">
+          <th mat-header-cell *matHeaderCellDef>تاريخ الإنشاء</th>
+          <td mat-cell *matCellDef="let u">{{ formatDate(u.created_at) }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="actions">
+          <th mat-header-cell *matHeaderCellDef>إجراءات</th>
+          <td mat-cell *matCellDef="let u">
+            <button mat-icon-button [matMenuTriggerFor]="menu" aria-label="إجراءات">
+              <mat-icon>more_vert</mat-icon>
+            </button>
+            <mat-menu #menu="matMenu">
+              <button mat-menu-item (click)="openForm(u)">
+                <mat-icon>edit</mat-icon>
+                <span>تعديل</span>
+              </button>
+              <button mat-menu-item (click)="openSessions(u)">
+                <mat-icon>history</mat-icon>
+                <span>سجل الجلسات</span>
+              </button>
+              <button mat-menu-item (click)="openPermissions(u)">
+                <mat-icon>folder_shared</mat-icon>
+                <span>صلاحيات المجلدات</span>
+              </button>
+              <button mat-menu-item (click)="toggleStatus(u)">
+                <mat-icon>{{ u.is_active ? 'block' : 'check_circle' }}</mat-icon>
+                <span>{{ u.is_active ? 'تعطيل' : 'تفعيل' }}</span>
+              </button>
+              <button mat-menu-item (click)="deleteUser(u)" class="text-danger">
+                <mat-icon>delete</mat-icon>
+                <span>حذف</span>
+              </button>
+            </mat-menu>
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+      </table>
+
+      <mat-paginator [length]="filtered().length"
+                     [pageSize]="pageSize()"
+                     [pageSizeOptions]="[5, 10, 25, 50]"
+                     (page)="onPage($event)">
+      </mat-paginator>
+    }
+  </div>
+</div>

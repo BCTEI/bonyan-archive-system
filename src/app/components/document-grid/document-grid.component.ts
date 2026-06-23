@@ -6,6 +6,7 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { DocumentCardComponent } from '../document-card/document-card.component';
+import { HasPermissionDirective } from '../../directives/has-permission.directive';
 import { DocumentFormComponent } from '../document-form/document-form.component';
 import { DocumentViewComponent } from '../document-view/document-view.component';
 import { DocumentService } from '../../services/document.service';
@@ -21,7 +22,7 @@ import { Folder } from '../../models/folder.model';
   selector: 'app-document-grid',
   standalone: true,
   imports: [
-    CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, DocumentCardComponent
+    CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, DocumentCardComponent, HasPermissionDirective
   ],
   templateUrl: './document-grid.component.html',
   styleUrl: './document-grid.component.scss'

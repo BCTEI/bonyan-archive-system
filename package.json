@@ -8,8 +8,8 @@
     "ng": "ng",
     "start": "bun run build:electron && electron .",
     "build": "ng build",
-    "build:electron": "ng build --configuration production --base-href ./ && tsc -p electron/tsconfig.json",
-    "build:prod": "ng build --configuration production --base-href ./ && tsc -p electron/tsconfig.json",
+    "build:electron": "ng build --configuration production --base-href app://-/ && tsc -p electron/tsconfig.json",
+    "build:prod": "ng build --configuration production --base-href app://-/ && tsc -p electron/tsconfig.json",
     "dist": "bun run build:prod && electron-builder",
     "dist:win": "bun run build:prod && electron-builder --win",
     "dist:win-portable": "bun run build:prod && electron-builder --win portable",
@@ -20,6 +20,7 @@
     "build:win": "bun run build:prod && electron-builder --win portable",
     "build:linux": "bun run build:prod && electron-builder --linux AppImage",
     "build:linux-deb": "bun run build:prod && electron-builder --linux deb",
+    "test:login": "bun run build:prod && electron scripts/test-login.js",
     "postinstall": "electron-rebuild"
   },
   "private": true,

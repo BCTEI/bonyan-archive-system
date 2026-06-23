@@ -1,4 +1,4 @@
-<div class="space-y-6">
+<div class="dashboard-container space-y-6">
   <h1 class="text-2xl font-bold text-primary">لوحة التحكم</h1>
 
   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -9,29 +9,119 @@
   </div>
 
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-    <mat-card class="lg:col-span-2 p-4">
+    <mat-card class="dashboard-card lg:col-span-2 p-4">
       <h2 class="text-lg font-bold text-primary mb-4">إحصائية الوثائق</h2>
       <canvas id="docsChart" height="120"></canvas>
     </mat-card>
 
-    <mat-card class="p-4">
-      <h2 class="text-lg font-bold text-primary mb-4">آخر النشاطات</h2>
-      <div class="space-y-3 max-h-[300px] overflow-y-auto">
-        @for (entry of recentAudit(); track entry.id) {
-          <div class="border-b border-border pb-2 last:border-0">
-            <div class="flex items-center justify-between">
-              <span class="text-sm font-medium">{{ entry.action }}</span>
-              <span class="text-xs text-text-light">{{ entry.timestamp }}</span>
-            </div>
-            <div class="text-xs text-text-light mt-1">
-              {{ entry.doc_ref }} - {{ entry.username }}
+    <mat-card class="dashboard-card p-4">
+      <div class="card-header">
+        <h2 class="text-lg font-bold text-primary">سجل الدخول والخروج — اليوم</h2>
+        <span class="date-badge">{{ today | date:'fullDate':'ar-SA' }}</span>
+      </div>
+      <div class="activity-list">
+        @for (session of todaySessions(); track session.id) {
+          <div class="activity-item" [class.login]="session.action === 'login'" [class.logout]="session.action === 'logout'">
+            <div class="activity-icon">{{ session.action === 'login' ? '🔑' : '🚪' }}</div>
+            <div class="activity-details">
+              <div class="activity-title">
+                <strong>{{ session.username }}</strong>
+                <span class="action-badge" [class.login]="session.action === 'login'" [class.logout]="session.action === 'logout'">
+                  {{ session.action === 'login' ? 'تسجيل دخول' : 'تسجيل خروج' }}
+                </span>
+              </div>
+              <div class="activity-meta">
+                <span>🕐 {{ formatSessionTime(session.timestamp) }}</span>
+                @if (session.device_info) { <span>💻 {{ session.device_info }}</span> }
+              </div>
             </div>
           </div>
         }
-        @if (recentAudit().length === 0) {
-          <p class="text-text-light text-sm text-center py-4">لا توجد نشاطات</p>
+        @if (todaySessions().length === 0) {
+          <p class="text-text-light text-sm text-center py-4">لا توجد نشاطات اليوم</p>
         }
+      </div>
+      <div class="card-footer text-left">
+        <a routerLink="/main/audit" class="text-primary text-sm hover:underline">عرض السجل الكامل →</a>
       </div>
     </mat-card>
   </div>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <mat-card class="dashboard-card lg:col-span-2 p-4">
+      <h2 class="text-lg font-bold text-primary mb-4">📝 آخر الوثائق المضافة</h2>
+      <div class="recent-docs">
+        @for (doc of recentDocuments(); track doc.id) {
+          <div class="recent-doc-item" [routerLink]="['/main/documents']">
+            <span class="doc-type-badge" [class.sad]="doc.type === 'صادر'" [class.war]="doc.type === 'وارد'" [class.mur]="doc.type === 'مراسلات'">
+              {{ doc.type }}
+            </span>
+            <span class="doc-ref">{{ doc.ref_number }}</span>
+            <span class="doc-subject">{{ doc.subject }}</span>
+            <span class="doc-date">{{ doc.created_at | date:'short':'ar-SA' }}</span>
+          </div>
+        }
+        @if (recentDocuments().length === 0) {
+          <p class="text-text-light text-sm text-center py-4">لا توجد وثائق حديثة</p>
+        }
+      </div>
+    </mat-card>
+
+    <mat-card class="dashboard-card p-4">
+      <h2 class="text-lg font-bold text-primary mb-4">⚡ إجراءات سريعة</h2>
+      <div class="actions-grid">
+        @if (rolePermissions.canCreateDocument) {
+          <a routerLink="/main/documents" class="action-btn">
+            <span class="icon">➕</span>
+            <span>وثيقة جديدة</span>
+          </a>
+        }
+        <a routerLink="/main/documents" class="action-btn">
+          <span class="icon">📂</span>
+          <span>عرض الوثائق</span>
+        </a>
+        @if (rolePermissions.canViewAudit) {
+          <a routerLink="/main/audit" class="action-btn">
+            <span class="icon">📋</span>
+            <span>سجل التدقيق</span>
+          </a>
+        }
+        @if (rolePermissions.canManageUsers) {
+          <a routerLink="/main/users" class="action-btn">
+            <span class="icon">👥</span>
+            <span>إدارة المستخدمين</span>
+          </a>
+        }
+        <button type="button" class="action-btn" (click)="exportData()">
+          <span class="icon">📥</span>
+          <span>تصدير البيانات</span>
+        </button>
+        <label class="action-btn cursor-pointer">
+          <span class="icon">📤</span>
+          <span>استيراد البيانات</span>
+          <input type="file" accept=".json,application/json" class="hidden" (change)="importData($event)">
+        </label>
+      </div>
+    </mat-card>
+  </div>
+
+  <mat-card class="dashboard-card p-4">
+    <h2 class="text-lg font-bold text-primary mb-4">آخر النشاطات</h2>
+    <div class="space-y-3 max-h-[300px] overflow-y-auto">
+      @for (entry of recentAudit(); track entry.id) {
+        <div class="border-b border-border pb-2 last:border-0">
+          <div class="flex items-center justify-between">
+            <span class="text-sm font-medium px-2 py-0.5 rounded" [class]="actionClass(entry.action)">{{ entry.action }}</span>
+            <span class="text-xs text-text-light">{{ entry.timestamp }}</span>
+          </div>
+          <div class="text-xs text-text-light mt-1">
+            {{ entry.doc_ref }} - {{ entry.username }}
+          </div>
+        </div>
+      }
+      @if (recentAudit().length === 0) {
+        <p class="text-text-light text-sm text-center py-4">لا توجد نشاطات</p>
+      }
+    </div>
+  </mat-card>
 </div>

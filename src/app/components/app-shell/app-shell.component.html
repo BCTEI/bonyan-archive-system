@@ -1,40 +1,59 @@
-<div dir="rtl" class="shell h-screen flex flex-col">
-  <header class="h-[60px] bg-gradient-to-l from-primary to-primary-light text-white flex items-center px-4 gap-4 shadow-md">
-    <button mat-icon-button (click)="toggleSidebar()" class="!text-white lg:hidden">
-      <mat-icon>menu</mat-icon>
-    </button>
-    <div class="flex items-center gap-2">
-      <mat-icon class="!text-3xl !w-8 !h-8">archive</mat-icon>
-      <span class="font-bold text-lg hidden md:inline">نظام الأرشيف الإلكتروني</span>
-    </div>
-    <div class="flex-1 max-w-xl mx-4">
-      <div class="relative">
-        <mat-icon class="absolute right-3 top-1/2 -translate-y-1/2 text-white/60">search</mat-icon>
-        <input type="text" placeholder="بحث عام..." (keyup.enter)="onSearch($any($event.target).value)"
-               class="w-full pr-10 pl-4 py-1.5 rounded-lg bg-white/15 border border-white/20 text-white placeholder-white/60 focus:outline-none focus:bg-white/20">
-      </div>
-    </div>
-    <div class="flex items-center gap-3">
-      <span class="text-sm hidden sm:inline">{{ auth.currentUser()?.username }}</span>
-      <button mat-icon-button [matMenuTriggerFor]="userMenu" class="!text-white">
-        <mat-icon>account_circle</mat-icon>
-      </button>
-      <mat-menu #userMenu="matMenu">
-        <button mat-menu-item (click)="logout()">
-          <mat-icon>logout</mat-icon>
-          <span>تسجيل الخروج</span>
-        </button>
-      </mat-menu>
-    </div>
-  </header>
+<div
+  dir="rtl"
+  class="shell"
+  [class.sidebar-open]="sidebarOpen()"
+  [class.sidebar-collapsed]="!sidebarOpen()"
+  [class.is-mobile]="isMobile()">
 
-  <div class="flex-1 grid transition-all" [style.grid-template-columns]="sidebarOpen() ? '300px 1fr' : '0 1fr'" style="overflow: hidden;">
-    <aside class="bg-card border-l border-border overflow-y-auto" [class.hidden]="!sidebarOpen()">
-      <app-folder-tree></app-folder-tree>
+  <app-header (toggleSidebar)="toggleSidebar()"></app-header>
+
+  <div class="content-grid">
+    <aside class="sidebar" aria-label="القائمة الجانبية">
+      <div class="sidebar-inner">
+        <nav class="sidebar-nav">
+          <a routerLink="/main/dashboard" routerLinkActive="active" class="nav-link">
+            <mat-icon>dashboard</mat-icon>
+            <span>لوحة التحكم</span>
+          </a>
+          <a routerLink="/main/documents" routerLinkActive="active" class="nav-link">
+            <mat-icon>description</mat-icon>
+            <span>الوثائق</span>
+          </a>
+          <a *appHasPermission="'canViewAudit'" routerLink="/main/audit" routerLinkActive="active" class="nav-link">
+            <mat-icon>fact_check</mat-icon>
+            <span>سجل التدقيق</span>
+          </a>
+          <a *appHasPermission="'canManageUsers'" routerLink="/main/users" routerLinkActive="active" class="nav-link">
+            <mat-icon>manage_accounts</mat-icon>
+            <span>إدارة المستخدمين</span>
+          </a>
+        </nav>
+
+        <div class="border-t border-border my-2"></div>
+
+        <app-folder-tree></app-folder-tree>
+      </div>
     </aside>
-    <main class="bg-bg overflow-y-auto p-6">
+
+    <main class="main-content">
+      <nav class="breadcrumb" aria-label="مسار التنقل">
+        @for (crumb of breadcrumb(); track crumb.label; let last = $last) {
+          @if (!last && crumb.link) {
+            <a [routerLink]="crumb.link" class="crumb-link">{{ crumb.label }}</a>
+            <span class="crumb-separator">/</span>
+          } @else {
+            <span class="crumb-current">{{ crumb.label }}</span>
+          }
+        }
+      </nav>
       <router-outlet></router-outlet>
     </main>
   </div>
+
+  <!-- Backdrop for mobile sidebar -->
+  @if (isMobile() && sidebarOpen()) {
+    <div class="sidebar-backdrop" (click)="toggleSidebar()" aria-hidden="true"></div>
+  }
 </div>
+
 <app-toast></app-toast>

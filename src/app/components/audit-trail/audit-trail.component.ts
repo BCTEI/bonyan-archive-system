@@ -8,11 +8,12 @@ import { AuditService } from '../../services/audit.service';
 import { AuthService } from '../../services/auth.service';
 import { ToastService } from '../../services/toast.service';
 import { AuditEntry } from '../../models/audit-entry.model';
+import { HasPermissionDirective } from '../../directives/has-permission.directive';
 
 @Component({
   selector: 'app-audit-trail',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatTableModule, MatButtonModule, MatIconModule],
+  imports: [CommonModule, FormsModule, MatTableModule, MatButtonModule, MatIconModule, HasPermissionDirective],
   templateUrl: './audit-trail.component.html',
   styleUrl: './audit-trail.component.scss'
 })

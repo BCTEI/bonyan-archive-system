@@ -18,6 +18,7 @@ export class LoginComponent {
   rememberMe = false;
   loading = false;
   hidePassword = true;
+  errorMessage: string | null = null;
 
   private auth = inject(AuthService);
   private router = inject(Router);
@@ -32,23 +33,36 @@ export class LoginComponent {
   }
 
   async login(): Promise<void> {
+    this.errorMessage = null;
+
     if (!this.username || !this.password) {
-      this.toast.show('يرجى إدخال اسم المستخدم وكلمة المرور', 'warning');
+      this.errorMessage = 'يرجى إدخال اسم المستخدم وكلمة المرور';
+      this.toast.show(this.errorMessage, 'warning');
       return;
     }
+
     this.loading = true;
-    const result = await this.auth.login(this.username, this.password);
-    this.loading = false;
-    if (result.success) {
-      if (this.rememberMe) {
-        localStorage.setItem('bonyan_username', this.username);
+    try {
+      const result = await this.auth.login(this.username, this.password);
+      if (result.success) {
+        if (this.rememberMe) {
+          localStorage.setItem('bonyan_username', this.username);
+        } else {
+          localStorage.removeItem('bonyan_username');
+        }
+        this.toast.show('تم تسجيل الدخول بنجاح', 'success');
+        await this.router.navigate(['/main/dashboard']);
       } else {
-        localStorage.removeItem('bonyan_username');
+        this.errorMessage = result.message ?? 'فشل تسجيل الدخول';
+        this.toast.show(this.errorMessage, 'error');
       }
-      this.toast.show('تم تسجيل الدخول بنجاح', 'success');
-      this.router.navigate(['/main/dashboard']);
-    } else {
-      this.toast.show(result.message ?? 'فشل تسجيل الدخول', 'error');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'خطأ غير متوقع أثناء تسجيل الدخول';
+      console.error('[Login Component] Login error:', err);
+      this.errorMessage = msg;
+      this.toast.show(msg, 'error');
+    } finally {
+      this.loading = false;
     }
   }
 }

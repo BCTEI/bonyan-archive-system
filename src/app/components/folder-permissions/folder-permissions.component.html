@@ -1,0 +1,55 @@
+<h2 mat-dialog-title class="text-right">🔐 صلاحيات المجلدات — {{ user.full_name || user.username }}</h2>
+
+<mat-dialog-content class="text-right">
+  @if (loading()) {
+    <div class="text-center py-4">جاري التحميل...</div>
+  } @else {
+    <div class="flex flex-wrap gap-2 mb-4">
+      <button mat-stroked-button (click)="selectAll('can_view')">تحديد الكل (عرض)</button>
+      <button mat-stroked-button (click)="selectAll('can_create')">تحديد الكل (إضافة)</button>
+      <button mat-stroked-button (click)="selectAll('can_edit')">تحديد الكل (تعديل)</button>
+      <button mat-stroked-button (click)="selectAll('can_delete')">تحديد الكل (حذف)</button>
+      <button mat-stroked-button color="warn" (click)="clearAll()">إلغاء الكل</button>
+    </div>
+
+    <div class="overflow-auto max-h-[60vh]">
+      <table mat-table class="w-full">
+        <thead>
+          <tr>
+            <th class="text-right">المجلد</th>
+            <th><mat-checkbox (change)="toggleColumn('can_view', $event.checked)" labelPosition="before">عرض</mat-checkbox></th>
+            <th><mat-checkbox (change)="toggleColumn('can_create', $event.checked)" labelPosition="before">إضافة</mat-checkbox></th>
+            <th><mat-checkbox (change)="toggleColumn('can_edit', $event.checked)" labelPosition="before">تعديل</mat-checkbox></th>
+            <th><mat-checkbox (change)="toggleColumn('can_delete', $event.checked)" labelPosition="before">حذف</mat-checkbox></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (group of groups(); track group.name) {
+            <tr class="bg-slate-100 font-bold">
+              <td colspan="5" class="py-2 px-3 cursor-pointer" (click)="toggleGroup(group)">
+                <mat-icon class="!text-sm align-middle">{{ group.expanded ? 'expand_more' : 'chevron_left' }}</mat-icon>
+                {{ group.name }}
+              </td>
+            </tr>
+            @if (group.expanded) {
+              @for (folder of group.folders; track folder.id) {
+                <tr>
+                  <td class="pr-6">{{ folder.id }} — {{ folder.name }}</td>
+                  <td><mat-checkbox [(ngModel)]="permissions()[folder.id].can_view"></mat-checkbox></td>
+                  <td><mat-checkbox [(ngModel)]="permissions()[folder.id].can_create"></mat-checkbox></td>
+                  <td><mat-checkbox [(ngModel)]="permissions()[folder.id].can_edit"></mat-checkbox></td>
+                  <td><mat-checkbox [(ngModel)]="permissions()[folder.id].can_delete"></mat-checkbox></td>
+                </tr>
+              }
+            }
+          }
+        </tbody>
+      </table>
+    </div>
+  }
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="close()">إلغاء</button>
+  <button mat-raised-button color="primary" (click)="save()">💾 حفظ الصلاحيات</button>
+</mat-dialog-actions>

@@ -1,0 +1,61 @@
+<h2 mat-dialog-title class="text-right">
+  {{ isEdit ? '✏️ تعديل مستخدم' : '➕ إضافة مستخدم جديد' }}
+</h2>
+
+<mat-dialog-content class="text-right">
+  <div class="space-y-4 min-w-[320px]">
+    <mat-form-field class="w-full" appearance="outline">
+      <mat-label>اسم المستخدم *</mat-label>
+      <input matInput [(ngModel)]="username" [disabled]="isEdit" autocomplete="off">
+      <mat-hint>3-20 حرف، أحرف إنجليزية وأرقام وشرطة سفلية</mat-hint>
+      @if (errors()['username']) {
+        <mat-error>{{ errors()['username'] }}</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field class="w-full" appearance="outline">
+      <mat-label>الاسم الكامل</mat-label>
+      <input matInput [(ngModel)]="fullName" autocomplete="off">
+    </mat-form-field>
+
+    <mat-form-field class="w-full" appearance="outline">
+      <mat-label>كلمة المرور {{ isEdit ? '' : '*' }}</mat-label>
+      <input matInput type="password" [(ngModel)]="password" autocomplete="new-password">
+      <mat-hint>{{ isEdit ? 'اتركها فارغة إذا لا تريد التغيير' : '6 أحرف على الأقل' }}</mat-hint>
+      @if (errors()['password']) {
+        <mat-error>{{ errors()['password'] }}</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field class="w-full" appearance="outline">
+      <mat-label>تأكيد كلمة المرور</mat-label>
+      <input matInput type="password" [(ngModel)]="confirmPassword" autocomplete="new-password">
+    </mat-form-field>
+
+    <mat-form-field class="w-full" appearance="outline">
+      <mat-label>الصلاحية *</mat-label>
+      <mat-select [(ngModel)]="role">
+        @for (r of roles; track r.value) {
+          <mat-option [value]="r.value">{{ r.label }}</mat-option>
+        }
+      </mat-select>
+      @if (errors()['role']) {
+        <mat-error>{{ errors()['role'] }}</mat-error>
+      }
+    </mat-form-field>
+
+    <div class="flex items-center justify-between">
+      <span>الحالة</span>
+      <mat-slide-toggle [(ngModel)]="isActive" color="primary">
+        {{ isActive() ? 'نشط' : 'معطل' }}
+      </mat-slide-toggle>
+    </div>
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="close()" [disabled]="loading()">إلغاء</button>
+  <button mat-raised-button color="primary" (click)="save()" [disabled]="loading()">
+    @if (loading()) { جاري الحفظ... } @else { 💾 حفظ }
+  </button>
+</mat-dialog-actions>

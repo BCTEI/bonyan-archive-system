@@ -1,0 +1,49 @@
+.header {
+  height: 60px;
+  display: flex;
+  align-items: center;
+  padding: 0 1rem;
+  gap: 1rem;
+  color: white;
+  background: linear-gradient(to left, var(--primary), var(--primary-light));
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+}
+
+.menu-btn {
+  flex-shrink: 0;
+}
+
+.role-badge {
+  font-weight: 600;
+  color: white;
+  background-color: rgba(255, 255, 255, 0.25);
+}
+
+.role-admin { background-color: #dc2626; }
+.role-editor { background-color: #d97706; }
+.role-viewer { background-color: #059669; }
+
+.home-btn {
+  background: rgba(255, 255, 255, 0.15);
+  border: none;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.9rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  transition: background 0.2s;
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.25);
+  }
+
+  &.active {
+    background: rgba(255, 255, 255, 0.3);
+    font-weight: 700;
+  }
+}

@@ -6,12 +6,10 @@
         <mat-icon>download</mat-icon>
         تصدير CSV
       </button>
-      @if (auth.isAdmin()) {
-        <button mat-stroked-button color="warn" (click)="clearAll()">
-          <mat-icon>delete_sweep</mat-icon>
-          مسح السجل
-        </button>
-      }
+      <button *appHasPermission="'canClearData'" mat-stroked-button color="warn" (click)="clearAll()">
+        <mat-icon>delete_sweep</mat-icon>
+        مسح السجل
+      </button>
     </div>
   </div>
 
