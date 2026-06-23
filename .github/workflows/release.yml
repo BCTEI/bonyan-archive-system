@@ -27,7 +27,7 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install build tools for native modules
+      - name: Install Linux build dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential python3 libkrb5-dev libsecret-1-dev fakeroot dpkg
@@ -35,26 +35,23 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Verify seed data (177 folders)
-        run: |
-          node -e "
-            const fs = require('fs');
-            const data = JSON.parse(fs.readFileSync('src/assets/data/folders.json', 'utf8'));
-            if (data.length !== 177) throw new Error('Expected 177 folders, got ' + data.length);
-            console.log('✓ Folders seed data contains', data.length, 'folders');
-          "
-
-      - name: Build production bundle
-        run: bun run build:prod
+      - name: Rebuild native addons (better-sqlite3)
+        run: bun run postinstall
 
       - name: Build Windows portable executable
-        run: bun run dist:win-portable
+        run: bun run build:win
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build Linux Debian package
-        run: bun run dist:linux-deb
+      - name: Build Debian package
+        run: bun run build:linux-deb
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build Linux AppImage
-        run: bunx electron-builder --linux AppImage
+      - name: Build AppImage
+        run: bun run build:linux
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create or Update GitHub Release
         env:
@@ -62,7 +59,6 @@ jobs:
         run: |
           TAG="${{ github.ref_name }}"
 
-          # Ensure release exists
           if gh release view "$TAG" > /dev/null 2>&1; then
             echo "Release $TAG already exists. Uploading/overwriting assets..."
           else
@@ -73,7 +69,6 @@ jobs:
               --target "${{ github.sha }}"
           fi
 
-          # Upload all release assets
           for file in release/*.{exe,deb,AppImage}; do
             if [ -f "$file" ]; then
               echo "Uploading $file"

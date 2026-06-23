@@ -41,17 +41,17 @@ bun run dist
 > ملاحظة: على Linux يتطلب بناء مثبت NSIS تثبيت **Wine**. إذا لم يكن Wine متوفراً، يمكنك إنشاء نسخة محمولة (.exe واحد) بدون تثبيت:
 
 ```bash
-bun run dist:win-portable
+bun run build:win
 ```
 
 ## بناء حزمة Debian / Linux
 
 ```bash
 # حزمة .deb
-bun run dist:linux-deb
+bun run build:linux-deb
 
 # AppImage
-bun run dist:linux
+bun run build:linux
 ```
 
 ثم ثبّت الحزمة على Debian/Ubuntu:

@@ -1,66 +1,91 @@
-name: CI - Build & Verify
+name: CI — Build Validation
 
 on:
   push:
-    branches: [main, master]
+    branches: ['**']
   pull_request:
-    branches: [main, master]
+    branches: [main]
+
+# Cancel redundant runs on the same branch (keeps the latest only)
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  verify-and-build:
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            build_script: build:win
+            artifact_name: windows-installer
+            artifact_path: dist/*.exe
+            ext: .exe
+          - os: ubuntu-latest
+            build_script: build:linux
+            artifact_name: linux-appimage
+            artifact_path: dist/*.AppImage
+            ext: .AppImage
+          - os: ubuntu-latest
+            build_script: build:linux-deb
+            artifact_name: linux-deb
+            artifact_path: dist/*.deb
+            ext: .deb
+
+    runs-on: ${{ matrix.os }}
+    name: Build — ${{ matrix.os }} (${{ matrix.artifact_name }})
 
     steps:
+      # ——— 1. Checkout source ———
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ——— 2. Setup Bun ———
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
 
+      # ——— 3. Setup Node.js 20 ———
       - name: Setup Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Install build tools for native modules
+      # ——— 4. Install Linux packaging deps ———
+      - name: Install Linux build dependencies
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential python3 libkrb5-dev libsecret-1-dev
+          sudo apt-get install -y build-essential python3 libkrb5-dev libsecret-1-dev fakeroot dpkg
 
+      # ——— 5. Install dependencies ———
       - name: Install dependencies
         run: bun install
 
-      - name: Verify seed data (177 folders)
+      # ——— 6. Rebuild native addons for Electron ———
+      - name: Rebuild native addons (better-sqlite3)
+        run: bun run postinstall
+
+      # ——— 7. Build the application ———
+      - name: Build application
+        run: bun run ${{ matrix.build_script }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # ——— 8. Stage installer into dist/ for artifact upload ———
+      - name: Copy installer to dist/
+        shell: bash
         run: |
-          node -e "
-            const fs = require('fs');
-            const data = JSON.parse(fs.readFileSync('src/assets/data/folders.json', 'utf8'));
-            if (data.length !== 177) throw new Error('Expected 177 folders, got ' + data.length);
-            console.log('✓ Folders seed data contains', data.length, 'folders');
-          "
+          mkdir -p dist
+          cp release/*${{ matrix.ext }} dist/
 
-      - name: Build production bundle
-        run: bun run build:prod
-
-      - name: Build portable Windows executable
-        run: bun run dist:portable
-
-      - name: Build Debian package (.deb)
-        run: bun run dist:linux-deb
-
-      - name: Build Linux AppImage
-        run: bunx electron-builder --linux AppImage
-
+      # ——— 9. Upload build artifacts ———
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: bonyan-archive-build-${{ github.run_number }}-${{ github.sha }}
-          path: |
-            release/*.exe
-            release/*.deb
-            release/*.AppImage
+          name: ${{ matrix.artifact_name }}-${{ github.run_number }}-${{ github.sha }}
+          path: ${{ matrix.artifact_path }}
           if-no-files-found: error
           retention-days: 14

@@ -17,6 +17,9 @@
     "dist:linux-deb": "bun run build:prod && electron-builder --linux deb",
     "dist:linux": "bun run build:prod && electron-builder --linux",
     "dist:dir": "bun run build:prod && electron-builder --win --dir",
+    "build:win": "bun run build:prod && electron-builder --win portable",
+    "build:linux": "bun run build:prod && electron-builder --linux AppImage",
+    "build:linux-deb": "bun run build:prod && electron-builder --linux deb",
     "postinstall": "electron-rebuild"
   },
   "private": true,
