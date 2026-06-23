@@ -48,12 +48,19 @@ jobs:
       - name: Build portable Windows executable
         run: bun run dist:portable
 
+      - name: Build Debian package (.deb)
+        run: bun run dist:linux-deb
+
+      - name: Build Linux AppImage
+        run: bunx electron-builder --linux AppImage
+
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: bonyan-archive-build-${{ github.run_number }}-${{ github.sha }}
           path: |
-            dist/
             release/*.exe
+            release/*.deb
+            release/*.AppImage
           if-no-files-found: error
           retention-days: 14
