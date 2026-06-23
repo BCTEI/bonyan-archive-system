@@ -41,12 +41,20 @@ jobs:
       - name: Build portable Windows executable
         run: bun run dist:portable
 
-      - name: Create GitHub Release
+      - name: Create or Update GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release create "${{ github.ref_name }}" \
-            release/*.exe \
-            --title "${{ github.ref_name }}" \
-            --notes "Release ${{ github.ref_name }} of Bonyan Center Electronic Archive System" \
-            --target "${{ github.sha }}"
+          TAG="${{ github.ref_name }}"
+          EXE_FILE=$(ls release/*.exe | head -n 1)
+
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG already exists. Uploading/overwriting assets..."
+            gh release upload "$TAG" "$EXE_FILE" --clobber
+          else
+            echo "Creating new release $TAG..."
+            gh release create "$TAG" "$EXE_FILE" \
+              --title "Bonyan Archive System $TAG" \
+              --notes "Release $TAG of Bonyan Center Electronic Archive System" \
+              --target "${{ github.sha }}"
+          fi

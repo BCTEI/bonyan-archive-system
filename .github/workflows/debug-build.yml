@@ -1,15 +1,16 @@
-name: CI - Build & Verify
+name: Debug / Local Build Copy
 
 on:
+  workflow_dispatch:
   push:
-    branches: [main, master]
-  pull_request:
-    branches: [main, master]
+    branches-ignore:
+      - main
+      - master
 
 jobs:
-  verify-and-build:
+  debug-build:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 30
 
     steps:
       - name: Checkout repository
@@ -48,12 +49,12 @@ jobs:
       - name: Build portable Windows executable
         run: bun run dist:portable
 
-      - name: Upload build artifacts
+      - name: Upload debug copy artifact
         uses: actions/upload-artifact@v4
         with:
-          name: bonyan-archive-build-${{ github.run_number }}-${{ github.sha }}
+          name: bonyan-archive-debug-${{ github.run_number }}-${{ github.sha }}
           path: |
             dist/
             release/*.exe
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 7
