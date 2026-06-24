@@ -18,7 +18,7 @@
     </div>
   </div>
 
-  <div class="bg-card p-4 rounded-xl shadow-sm flex flex-col md:flex-row gap-4">
+  <div class="bg-card p-4 rounded-xl shadow-sm flex flex-col lg:flex-row gap-4">
     <div class="relative flex-1">
       <mat-icon class="absolute right-3 top-1/2 -translate-y-1/2 text-text-light">search</mat-icon>
       <input type="text" [ngModel]="search()" (ngModelChange)="setSearch($event)" placeholder="بحث في الوثائق..."
@@ -26,12 +26,25 @@
     </div>
     <div class="flex items-center gap-2 flex-wrap">
       <button (click)="setType('الكل')" class="px-3 py-1.5 rounded-full text-sm font-medium transition"
-              [class.bg-primary]="selectedType() === 'الكل'" [class.text-white]="selectedType() === 'الكل'"
-              [class.bg-secondary]="selectedType() !== 'الكل'" [class.text-text]="selectedType() !== 'الكل'">الكل</button>
-      @for (t of types; track t) {
-        <button (click)="setType(t)" class="px-3 py-1.5 rounded-full text-sm font-medium transition"
-                [class.bg-primary]="selectedType() === t" [class.text-white]="selectedType() === t"
-                [class.bg-secondary]="selectedType() !== t" [class.text-text]="selectedType() !== t">{{ t }}</button>
+              [class.bg-primary]="selectedTypeId() === 'الكل'" [class.text-white]="selectedTypeId() === 'الكل'"
+              [class.bg-secondary]="selectedTypeId() !== 'الكل'" [class.text-text]="selectedTypeId() !== 'الكل'">الكل</button>
+      @for (t of documentTypes(); track t.id) {
+        <button (click)="setType(t.id)" class="px-3 py-1.5 rounded-full text-sm font-medium transition"
+                [style.background-color]="selectedTypeId() === t.id ? t.color : undefined"
+                [class.text-white]="selectedTypeId() === t.id"
+                [class.bg-secondary]="selectedTypeId() !== t.id"
+                [class.text-text]="selectedTypeId() !== t.id">
+          {{ t.icon }} {{ t.label }}
+        </button>
+      }
+    </div>
+    <div class="flex items-center gap-2 flex-wrap">
+      @for (c of confidentialityLevels; track c.value) {
+        <button (click)="setConfidentiality(c.value)" class="px-3 py-1.5 rounded-full text-sm font-medium transition"
+                [class.bg-primary]="selectedConfidentiality() === c.value" [class.text-white]="selectedConfidentiality() === c.value"
+                [class.bg-secondary]="selectedConfidentiality() !== c.value" [class.text-text]="selectedConfidentiality() !== c.value">
+          {{ c.label }}
+        </button>
       }
     </div>
     <div class="min-w-[180px]">

@@ -1,22 +1,25 @@
 import { Injectable } from '@angular/core';
-import { DatabaseService } from './database.service';
 import { Folder } from '../models/folder.model';
 
 @Injectable({
   providedIn: 'root'
 })
 export class FolderService {
-  constructor(private db: DatabaseService) {}
+  private get api() {
+    return window.electronAPI;
+  }
 
   async getAll(): Promise<Folder[]> {
-    return this.db.getFolders();
+    const result = await this.api.folderCategoryAPI.getAll(true);
+    if (!result.success) throw new Error(result.error ?? 'فشل تحميل المجلدات');
+    return result.folders ?? [];
   }
 
   async getAllWithCounts(): Promise<Folder[]> {
-    const folders = await this.db.getFolders();
-    const counts = await this.db.query<{ folder_id: number; c: number }>(
+    const folders = await this.getAll();
+    const counts = await this.api.dbQuery(
       'SELECT folder_id, COUNT(*) as c FROM documents GROUP BY folder_id'
-    );
+    ) as Array<{ folder_id: number; c: number }>;
     const map = new Map(counts.map(c => [c.folder_id, c.c]));
     return folders.map(f => ({ ...f, document_count: map.get(f.id) ?? 0 }));
   }

@@ -30,10 +30,15 @@
       </div>
     </div>
 
-    <label class="flex items-center gap-2 text-white/80 text-sm mt-4 mb-6 cursor-pointer">
-      <input type="checkbox" [(ngModel)]="rememberMe" class="accent-primary-light w-4 h-4">
-      <span>تذكرني</span>
-    </label>
+    <div class="flex items-center justify-between mt-4 mb-6">
+      <label class="flex items-center gap-2 text-white/80 text-sm cursor-pointer">
+        <input type="checkbox" [(ngModel)]="rememberMe" class="accent-primary-light w-4 h-4">
+        <span>تذكرني</span>
+      </label>
+      <button type="button" (click)="showForgotPassword()" class="text-white/80 text-sm hover:text-white underline">
+        🔑 نسيت كلمة المرور؟
+      </button>
+    </div>
 
     <button (click)="login()" [disabled]="loading"
             class="w-full py-2.5 rounded-lg bg-white text-primary font-bold hover:bg-white/90 transition disabled:opacity-60">

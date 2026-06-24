@@ -3,8 +3,17 @@
     <div class="flex items-center gap-3 flex-wrap">
       <span class="px-3 py-1 rounded-lg bg-primary text-white font-bold">{{ doc.ref_number }}</span>
       <span class="px-3 py-1 rounded-lg text-sm font-bold"
-            [style.background-color]="doc.type === 'صادر' ? 'rgba(5,150,105,0.1)' : doc.type === 'وارد' ? 'rgba(217,119,6,0.1)' : 'rgba(37,99,235,0.1)'"
-            [style.color]="doc.type === 'صادر' ? '#059669' : doc.type === 'وارد' ? '#d97706' : '#2563eb'">{{ doc.type }}</span>
+            [style.background-color]="(doc.type_color ?? '#2563eb') + '20'"
+            [style.color]="doc.type_color ?? '#2563eb'">
+        {{ doc.type_icon }} {{ doc.type_label ?? doc.type }}
+      </span>
+      @if (doc.confidentiality && doc.confidentiality !== 'عادي') {
+        <span class="px-3 py-1 rounded-lg text-sm font-bold flex items-center gap-1"
+              [class]="confClass(doc.confidentiality)">
+          @if (doc.confidentiality === 'سري للغاية') { 🔒 } @else { ⚠️ }
+          {{ doc.confidentiality }}
+        </span>
+      }
       <span class="px-3 py-1 rounded-lg text-sm text-white" [class.bg-success]="doc.status === 'معتمد'" [class.bg-warning]="doc.status !== 'معتمد'">{{ doc.status }}</span>
     </div>
     <div class="flex items-center gap-2">

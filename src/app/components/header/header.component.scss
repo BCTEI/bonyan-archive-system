@@ -24,7 +24,8 @@
 .role-editor { background-color: #d97706; }
 .role-viewer { background-color: #059669; }
 
-.home-btn {
+.home-btn,
+.header-btn {
   background: rgba(255, 255, 255, 0.15);
   border: none;
   color: white;
@@ -35,8 +36,10 @@
   font-size: 0.9rem;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.375rem;
   transition: background 0.2s;
+  min-width: 40px;
 
   &:hover {
     background: rgba(255, 255, 255, 0.25);
@@ -46,4 +49,9 @@
     background: rgba(255, 255, 255, 0.3);
     font-weight: 700;
   }
+}
+
+.header-btn {
+  padding: 0.5rem;
+  font-size: 1.1rem;
 }

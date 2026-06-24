@@ -1,6 +1,6 @@
 import { Directive, Input, TemplateRef, ViewContainerRef, effect, inject, signal } from '@angular/core';
 import { AuthService } from '../services/auth.service';
-import { RolePermissions } from '../models/user.model';
+import { RolePermissions, getRolePermissions } from '../models/user.model';
 
 @Directive({
   selector: '[appHasPermission]',
@@ -25,7 +25,7 @@ export class HasPermissionDirective {
       if (!key) return;
 
       const role = user?.role ?? 'viewer';
-      const perms = this.getRolePermissions(role);
+      const perms = getRolePermissions(role);
       const allowed = perms[key];
 
       if (allowed && !this.hasView) {
@@ -36,38 +36,5 @@ export class HasPermissionDirective {
         this.hasView = false;
       }
     });
-  }
-
-  private getRolePermissions(role: string): RolePermissions {
-    const map: Record<string, RolePermissions> = {
-      admin: {
-        canManageUsers: true,
-        canCreateDocument: true,
-        canEditDocument: true,
-        canDeleteDocument: true,
-        canViewAudit: true,
-        canExportImport: true,
-        canClearData: true
-      },
-      editor: {
-        canManageUsers: false,
-        canCreateDocument: true,
-        canEditDocument: true,
-        canDeleteDocument: true,
-        canViewAudit: true,
-        canExportImport: false,
-        canClearData: false
-      },
-      viewer: {
-        canManageUsers: false,
-        canCreateDocument: false,
-        canEditDocument: false,
-        canDeleteDocument: false,
-        canViewAudit: false,
-        canExportImport: false,
-        canClearData: false
-      }
-    };
-    return map[role] ?? map['viewer'];
   }
 }

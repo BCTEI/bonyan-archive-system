@@ -4,9 +4,10 @@ import { FormsModule } from '@angular/forms';
 import { MatDialogRef, MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { ArchiveDocument, DocumentType, Attachment } from '../../models/document.model';
+import { ArchiveDocument, DocumentTypeEntry, Attachment, ConfidentialityLevel } from '../../models/document.model';
 import { Folder } from '../../models/folder.model';
 import { DocumentService } from '../../services/document.service';
+import { DocumentTypeService } from '../../services/document-type.service';
 import { FolderService } from '../../services/folder.service';
 import { AuditService } from '../../services/audit.service';
 import { AuthService } from '../../services/auth.service';
@@ -24,6 +25,7 @@ export class DocumentFormComponent implements OnInit {
   private dialogRef = inject(MatDialogRef<DocumentFormComponent>);
   private data = inject<{ doc?: ArchiveDocument }>(MAT_DIALOG_DATA);
   private documentService = inject(DocumentService);
+  private documentTypeService = inject(DocumentTypeService);
   private folderService = inject(FolderService);
   private auditService = inject(AuditService);
   private auth = inject(AuthService);
@@ -33,13 +35,16 @@ export class DocumentFormComponent implements OnInit {
   @ViewChild('sigCanvas', { static: false }) sigCanvasRef?: ElementRef<HTMLCanvasElement>;
 
   folders = signal<Folder[]>([]);
-  types: DocumentType[] = ['صادر', 'وارد', 'مراسلات'];
+  documentTypes = signal<DocumentTypeEntry[]>([]);
+  selectedType = signal<DocumentTypeEntry | undefined>(undefined);
   doc = signal<ArchiveDocument>(this.emptyDoc());
   attachments = signal<Attachment[]>([]);
   drawing = signal(false);
   dragOver = signal(false);
   generatingRef = signal(false);
   today = new Date().toISOString().split('T')[0];
+
+  confidentialityLevels: ConfidentialityLevel[] = ['عادي', 'سري', 'سري للغاية'];
 
   allowedTypes = [
     'application/pdf',
@@ -53,27 +58,35 @@ export class DocumentFormComponent implements OnInit {
   allowedExts = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png'];
 
   async ngOnInit(): Promise<void> {
-    this.folders.set(await this.folderService.getAll());
+    const [types, fldrs] = await Promise.all([this.documentTypeService.getAll(true), this.folderService.getAll()]);
+    this.documentTypes.set(types);
+    this.folders.set(fldrs);
+
     if (this.data?.doc) {
       const existing = { ...this.data.doc };
       this.doc.set(existing);
+      this.selectedType.set(types.find(t => t.id === existing.type_id));
       this.attachments.set(this.documentService.parseAttachments(existing));
     } else {
-      this.doc.set(this.emptyDoc());
+      const defaultType = types[0];
+      this.selectedType.set(defaultType);
+      this.doc.set(this.emptyDoc(defaultType?.id ?? 1));
+      if (defaultType) {
+        await this.generateRef();
+      }
     }
   }
 
-  emptyDoc(): ArchiveDocument {
+  emptyDoc(typeId = 1): ArchiveDocument {
     return {
       ref_number: '',
-      type: 'صادر',
+      type_id: typeId,
       folder_id: this.folders()[0]?.id ?? 1,
+      confidentiality: 'عادي',
       subject: '',
       sender: '',
       receiver: '',
       date: this.today,
-      body: '',
-      notes: '',
       status: 'قيد الاعتماد',
       attachments_json: '[]'
     };
@@ -86,13 +99,15 @@ export class DocumentFormComponent implements OnInit {
   async generateRef(): Promise<void> {
     const d = this.doc();
     this.generatingRef.set(true);
-    const ref = await this.documentService.getNextRef(d.type, d.folder_id);
+    const ref = await this.documentService.getNextRef(d.type_id, d.folder_id);
     this.doc.update(doc => ({ ...doc, ref_number: ref }));
     this.generatingRef.set(false);
   }
 
-  onTypeChange(type: DocumentType): void {
-    this.doc.update(doc => ({ ...doc, type }));
+  onTypeChange(typeId: number): void {
+    const type = this.documentTypes().find(t => t.id === typeId);
+    this.selectedType.set(type);
+    this.doc.update(doc => ({ ...doc, type_id: typeId }));
     if (!this.doc().ref_number) {
       this.generateRef();
     }
@@ -103,6 +118,14 @@ export class DocumentFormComponent implements OnInit {
     if (!this.doc().ref_number) {
       this.generateRef();
     }
+  }
+
+  onConfidentialityChange(level: ConfidentialityLevel): void {
+    this.doc.update(doc => ({ ...doc, confidentiality: level }));
+  }
+
+  typeName(typeId: number): string {
+    return this.documentTypes().find(t => t.id === typeId)?.name ?? '';
   }
 
   getCanvas(): HTMLCanvasElement | undefined {
@@ -214,6 +237,7 @@ export class DocumentFormComponent implements OnInit {
 
   async save(): Promise<void> {
     const d = this.doc();
+    const type = this.selectedType();
     if (!d.ref_number) {
       this.toast.show('يرجى توليد الرقم المرجعي', 'warning');
       return;
@@ -222,15 +246,19 @@ export class DocumentFormComponent implements OnInit {
       this.toast.show('يرجى ملء الحقول الإلزامية', 'warning');
       return;
     }
-    if (d.type === 'صادر' && (!d.receiver || !d.author)) {
+    if (!type) {
+      this.toast.show('يرجى اختيار نوع الوثيقة', 'warning');
+      return;
+    }
+    if (type.name === 'صادر' && (!d.receiver || !d.author)) {
       this.toast.show('يرجى ملء الجهة المستقبلة واسم المؤلف', 'warning');
       return;
     }
-    if (d.type === 'وارد' && !d.input_method) {
+    if (type.name === 'وارد' && !d.input_method) {
       this.toast.show('يرجى اختيار طريقة الاستلام', 'warning');
       return;
     }
-    if (d.type === 'مراسلات' && !d.receiver) {
+    if (type.name === 'مراسلات' && !d.receiver) {
       this.toast.show('يرجى ملء القسم المستهدف', 'warning');
       return;
     }

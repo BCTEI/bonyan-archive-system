@@ -2,13 +2,15 @@ import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { AuthService } from '../../services/auth.service';
 import { ToastService } from '../../services/toast.service';
+import { PasswordResetRequestComponent } from '../password-reset-request/password-reset-request.component';
 
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [FormsModule, MatIconModule],
+  imports: [FormsModule, MatIconModule, MatDialogModule],
   templateUrl: './login.component.html',
   styleUrl: './login.component.scss'
 })
@@ -23,6 +25,7 @@ export class LoginComponent {
   private auth = inject(AuthService);
   private router = inject(Router);
   private toast = inject(ToastService);
+  private dialog = inject(MatDialog);
 
   constructor() {
     const saved = localStorage.getItem('bonyan_username');
@@ -64,5 +67,9 @@ export class LoginComponent {
     } finally {
       this.loading = false;
     }
+  }
+
+  showForgotPassword(): void {
+    this.dialog.open(PasswordResetRequestComponent, { width: '420px', maxWidth: '95vw' });
   }
 }

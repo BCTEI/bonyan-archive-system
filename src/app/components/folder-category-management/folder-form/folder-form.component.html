@@ -1,0 +1,52 @@
+<h2 mat-dialog-title class="text-right">
+  {{ isEdit ? '✏️ تعديل تصنيف' : '➕ إضافة تصنيف جديد' }}
+</h2>
+
+<mat-dialog-content class="text-right">
+  <div class="space-y-4 min-w-[320px]">
+    <mat-form-field class="w-full" appearance="outline">
+      <mat-label>اسم التصنيف *</mat-label>
+      <input matInput [ngModel]="name()" (ngModelChange)="name.set($event)" autocomplete="off">
+      @if (errors()['name']) {
+        <mat-error>{{ errors()['name'] }}</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field class="w-full" appearance="outline">
+      <mat-label>المجموعة *</mat-label>
+      <mat-select [value]="group()" (selectionChange)="onGroupChange($event.value)">
+        @for (g of existingGroups; track g) {
+          <mat-option [value]="g">{{ g }}</mat-option>
+        }
+        <mat-option [value]="NEW_GROUP_VALUE">➕ مجموعة جديدة...</mat-option>
+      </mat-select>
+      @if (errors()['group']) {
+        <mat-error>{{ errors()['group'] }}</mat-error>
+      }
+    </mat-form-field>
+
+    @if (isNewGroup()) {
+      <mat-form-field class="w-full" appearance="outline">
+        <mat-label>اسم المجموعة الجديدة *</mat-label>
+        <input matInput [ngModel]="newGroupName()" (ngModelChange)="newGroupName.set($event)" autocomplete="off">
+        @if (errors()['group']) {
+          <mat-error>{{ errors()['group'] }}</mat-error>
+        }
+      </mat-form-field>
+    }
+
+    <div class="flex items-center justify-between">
+      <span>الحالة</span>
+      <mat-slide-toggle [ngModel]="isActive()" (ngModelChange)="isActive.set($event)" color="primary">
+        {{ isActive() ? 'مفعّل' : 'معطّل' }}
+      </mat-slide-toggle>
+    </div>
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="close()" [disabled]="loading()">إلغاء</button>
+  <button mat-raised-button color="primary" (click)="save()" [disabled]="loading()">
+    @if (loading()) { جاري الحفظ... } @else { 💾 حفظ }
+  </button>
+</mat-dialog-actions>

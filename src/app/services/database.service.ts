@@ -28,21 +28,26 @@ export class DatabaseService {
     return result;
   }
 
-  async getNextRef(type: 'صادر' | 'وارد' | 'مراسلات', folderId: number): Promise<string> {
-    return this.api.getNextRef(type, folderId);
+  async getNextRef(typeId: number, folderId: number): Promise<string> {
+    return this.api.getNextRef(typeId, folderId);
   }
 
   async getFolders(): Promise<Folder[]> {
-    return this.query<Folder>('SELECT * FROM folders ORDER BY id');
+    const result = await this.api.folderCategoryAPI.getAll();
+    if (!result.success) throw new Error(result.error ?? 'فشل تحميل المجلدات');
+    return result.folders ?? [];
   }
 
   async getDocuments(): Promise<ArchiveDocument[]> {
-    return this.query<ArchiveDocument>('SELECT * FROM documents ORDER BY created_at DESC');
+    const result = await this.api.documentAPI.getAll();
+    if (!result.success) throw new Error(result.error ?? 'فشل تحميل الوثائق');
+    return result.documents ?? [];
   }
 
   async getDocumentById(id: number): Promise<ArchiveDocument | undefined> {
-    const rows = await this.query<ArchiveDocument>('SELECT * FROM documents WHERE id = ?', [id]);
-    return rows[0];
+    const result = await this.api.documentAPI.getById(id);
+    if (!result.success) throw new Error(result.error ?? 'فشل تحميل الوثيقة');
+    return result.document;
   }
 
   async getAuditEntries(limit?: number): Promise<AuditEntry[]> {
@@ -56,14 +61,16 @@ export class DatabaseService {
     return this.api.addAudit(action, docRef, details);
   }
 
-  async getStats(): Promise<{ total: number; صادر: number; وارد: number; مراسلات: number }> {
-    const result = await this.api.dbQuery('SELECT type, COUNT(*) as c FROM documents GROUP BY type');
-    const stats = { total: 0, صادر: 0, وارد: 0, مراسلات: 0 };
-    for (const row of result as Array<{ type: string; c: number }>) {
-      if (row.type in stats) {
-        (stats as Record<string, number>)[row.type] = row.c;
-      }
+  async getStats(): Promise<{ total: number; [key: string]: number }> {
+    const result = await this.api.dbQuery('SELECT type_id, COUNT(*) as c FROM documents GROUP BY type_id');
+    const stats: { total: number; [key: string]: number } = { total: 0 };
+    for (const row of result as Array<{ type_id: number; c: number }>) {
+      stats[`type_${row.type_id}`] = row.c;
       stats.total += row.c;
+    }
+    const confRows = await this.api.dbQuery("SELECT confidentiality, COUNT(*) as c FROM documents GROUP BY confidentiality");
+    for (const row of confRows as Array<{ confidentiality: string; c: number }>) {
+      stats[row.confidentiality] = row.c;
     }
     return stats;
   }

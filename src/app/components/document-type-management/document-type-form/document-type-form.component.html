@@ -1,0 +1,80 @@
+<h2 mat-dialog-title class="text-right">
+  {{ isEdit ? '✏️ تعديل نوع وثيقة' : '➕ إضافة نوع جديد' }}
+</h2>
+
+<mat-dialog-content class="text-right">
+  <div class="space-y-4 min-w-[320px]">
+    <mat-form-field class="w-full" appearance="outline">
+      <mat-label>الاسم الداخلي *</mat-label>
+      <input matInput [(ngModel)]="name" autocomplete="off">
+      @if (errors()['name']) {
+        <mat-error>{{ errors()['name'] }}</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field class="w-full" appearance="outline">
+      <mat-label>الاسم المعروض *</mat-label>
+      <input matInput [(ngModel)]="label" autocomplete="off">
+      @if (errors()['label']) {
+        <mat-error>{{ errors()['label'] }}</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field class="w-full" appearance="outline">
+      <mat-label>الأيقونة *</mat-label>
+      <input matInput [(ngModel)]="icon" autocomplete="off" maxlength="2">
+      <mat-hint>أدخل رمزاً تعبيرياً واحداً مثل 📄 أو 📤</mat-hint>
+      @if (errors()['icon']) {
+        <mat-error>{{ errors()['icon'] }}</mat-error>
+      }
+    </mat-form-field>
+
+    <div class="flex items-center gap-3">
+      <div class="flex-1">
+        <mat-form-field class="w-full" appearance="outline">
+          <mat-label>اللون *</mat-label>
+          <input matInput [(ngModel)]="color" autocomplete="off">
+          @if (errors()['color']) {
+            <mat-error>{{ errors()['color'] }}</mat-error>
+          }
+        </mat-form-field>
+      </div>
+      <input
+        type="color"
+        class="color-picker"
+        [(ngModel)]="color"
+        title="اختيار اللون">
+      <div
+        class="color-preview"
+        [style.background-color]="color()">
+        {{ icon() }}
+      </div>
+    </div>
+
+    <mat-form-field class="w-full" appearance="outline">
+      <mat-label>البادئة *</mat-label>
+      <input
+        matInput
+        [ngModel]="prefix()"
+        (ngModelChange)="onPrefixInput($event)"
+        autocomplete="off"
+        maxlength="3">
+      <mat-hint>1 إلى 3 أحرف إنجليزية كبيرة، مثل DOC</mat-hint>
+      @if (errors()['prefix']) {
+        <mat-error>{{ errors()['prefix'] }}</mat-error>
+      }
+    </mat-form-field>
+
+    <div class="preview-box">
+      <div class="text-xs text-text-light mb-1">معاينة البادئة</div>
+      <div class="font-mono text-lg">{{ prefix() || 'XXX' }}-000-YYYY-ZZZZ</div>
+    </div>
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="close()" [disabled]="loading()">إلغاء</button>
+  <button mat-raised-button color="primary" (click)="save()" [disabled]="loading()">
+    @if (loading()) { جاري الحفظ... } @else { 💾 حفظ }
+  </button>
+</mat-dialog-actions>

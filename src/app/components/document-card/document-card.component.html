@@ -3,7 +3,18 @@
     <div class="flex-1">
       <div class="flex items-center gap-2 mb-2 flex-wrap">
         <span class="px-2 py-0.5 rounded text-xs font-bold bg-primary text-white">{{ doc().ref_number }}</span>
-        <span class="type-badge px-2 py-0.5 rounded text-xs font-bold" [class]="typeClass(doc().type)">{{ doc().type }}</span>
+        <span class="type-badge px-2 py-0.5 rounded text-xs font-bold"
+              [style.background-color]="typeStyle().bg"
+              [style.color]="typeStyle().text">
+          {{ doc().type_icon }} {{ doc().type_label ?? doc().type }}
+        </span>
+        @if (doc().confidentiality && doc().confidentiality !== 'عادي') {
+          <span class="px-2 py-0.5 rounded text-xs font-bold flex items-center gap-1"
+                [class]="confClass(doc().confidentiality)">
+            @if (doc().confidentiality === 'سري للغاية') { 🔒 } @else { ⚠️ }
+            {{ doc().confidentiality }}
+          </span>
+        }
         @if (doc().status === 'معتمد') {
           <span class="px-2 py-0.5 rounded text-xs text-white bg-success">معتمد</span>
         } @else {

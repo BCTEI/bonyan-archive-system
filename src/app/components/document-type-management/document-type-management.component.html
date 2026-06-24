@@ -1,0 +1,86 @@
+<div class="p-4 max-w-7xl mx-auto">
+  <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+    <div>
+      <h1 class="text-2xl font-bold text-primary">📑 إدارة أنواع الوثائق</h1>
+      <p class="text-text-light text-sm">إنشاء وتعديل أنواع الوثائق والبادئات</p>
+    </div>
+    <button mat-raised-button color="primary" (click)="openForm()">
+      <mat-icon>add</mat-icon>
+      <span>➕ إضافة نوع جديد</span>
+    </button>
+  </div>
+
+  <div class="bg-card rounded-xl shadow-sm border border-border p-4 mb-6">
+    <mat-form-field class="w-full" appearance="outline">
+      <mat-label>البحث في أنواع الوثائق</mat-label>
+      <input matInput [(ngModel)]="search" placeholder="الاسم، الاسم المعروض، البادئة">
+      <mat-icon matSuffix>search</mat-icon>
+    </mat-form-field>
+  </div>
+
+  @if (loading()) {
+    <div class="p-8 text-center text-text-light">جاري تحميل أنواع الوثائق...</div>
+  } @else if (filteredTypes().length === 0) {
+    <div class="p-8 text-center text-text-light">
+      @if (search().trim()) {
+        لا توجد نتائج مطابقة للبحث
+      } @else {
+        لا توجد أنواع وثائق حالياً
+      }
+    </div>
+  } @else {
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      @for (type of filteredTypes(); track type.id) {
+        <div class="type-card bg-card rounded-xl shadow-sm border border-border p-4 relative">
+          @if (isSystem(type)) {
+            <span class="system-badge">🔒 نظامي</span>
+          }
+
+          <div class="flex items-start gap-3 mb-3">
+            <div
+              class="type-icon"
+              [style.background-color]="iconBackground(type.color)"
+              [style.color]="type.color">
+              {{ type.icon }}
+            </div>
+            <div class="flex-1 min-w-0">
+              <h3 class="font-bold text-lg truncate">{{ type.label }}</h3>
+              <p class="text-sm text-text-light truncate">{{ type.name }}</p>
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <div class="text-xs text-text-light mb-1">صيغة الرقم المرجعي</div>
+            <div class="ref-sample">{{ sampleRef(type.prefix) }}</div>
+          </div>
+
+          <div class="flex items-center justify-between">
+            <div class="text-xs text-text-light">
+              الوثائق: <span class="font-medium text-text">{{ documentCount(type) }}</span>
+            </div>
+
+            <div class="flex items-center gap-1">
+              @if (!isSystem(type)) {
+                <button
+                  mat-icon-button
+                  color="primary"
+                  (click)="openForm(type)"
+                  matTooltip="تعديل">
+                  <mat-icon>edit</mat-icon>
+                </button>
+                <button
+                  mat-icon-button
+                  color="warn"
+                  (click)="deleteType(type)"
+                  [disabled]="documentCount(type) > 0"
+                  [matTooltip]="documentCount(type) > 0 ? 'لا يمكن الحذف، يوجد وثائق مرتبطة' : 'حذف'">
+                  <mat-icon>delete</mat-icon>
+                </button>
+              }
+            </div>
+          </div>
+        </div>
+      }
+    </div>
+  }
+</div>

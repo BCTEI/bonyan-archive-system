@@ -3,9 +3,9 @@
 
   <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
     <app-stats-card label="إجمالي الوثائق" [value]="stats().total" icon="folder_open" color="#1e3a5f"></app-stats-card>
-    <app-stats-card label="صادر" [value]="stats().outgoing" icon="arrow_forward" color="#059669"></app-stats-card>
-    <app-stats-card label="وارد" [value]="stats().incoming" icon="arrow_back" color="#d97706"></app-stats-card>
-    <app-stats-card label="مراسلات" [value]="stats().correspondence" icon="mail" color="#2563eb"></app-stats-card>
+    @for (t of typeStats(); track t.label) {
+      <app-stats-card [label]="t.label" [value]="t.value" icon="description" [color]="t.color"></app-stats-card>
+    }
   </div>
 
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -53,8 +53,8 @@
       <div class="recent-docs">
         @for (doc of recentDocuments(); track doc.id) {
           <div class="recent-doc-item" [routerLink]="['/main/documents']">
-            <span class="doc-type-badge" [class.sad]="doc.type === 'صادر'" [class.war]="doc.type === 'وارد'" [class.mur]="doc.type === 'مراسلات'">
-              {{ doc.type }}
+            <span class="doc-type-badge" [style.background-color]="(doc.type_color ?? '#2563eb') + '20'" [style.color]="doc.type_color ?? '#2563eb'">
+              {{ doc.type_icon }} {{ doc.type_label ?? doc.type }}
             </span>
             <span class="doc-ref">{{ doc.ref_number }}</span>
             <span class="doc-subject">{{ doc.subject }}</span>
@@ -90,6 +90,18 @@
           <a routerLink="/main/users" class="action-btn">
             <span class="icon">👥</span>
             <span>إدارة المستخدمين</span>
+          </a>
+        }
+        @if (rolePermissions.canManageSecurity) {
+          <a routerLink="/main/security" class="action-btn">
+            <span class="icon">🔐</span>
+            <span>مركز الأمان</span>
+          </a>
+        }
+        @if (rolePermissions.canCloseYear) {
+          <a routerLink="/main/annual-closing" class="action-btn">
+            <span class="icon">📅</span>
+            <span>الجرد السنوي</span>
           </a>
         }
         <button type="button" class="action-btn" (click)="exportData()">

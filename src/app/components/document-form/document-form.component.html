@@ -19,10 +19,10 @@
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
     <div>
       <label class="block text-sm font-medium mb-1">نوع الوثيقة</label>
-      <select [ngModel]="doc().type" (ngModelChange)="onTypeChange($event)"
+      <select [ngModel]="doc().type_id" (ngModelChange)="onTypeChange(+$event)"
               class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary">
-        @for (t of types; track t) {
-          <option [value]="t">{{ t }}</option>
+        @for (t of documentTypes(); track t.id) {
+          <option [value]="t.id">{{ t.icon }} {{ t.label }}</option>
         }
       </select>
     </div>
@@ -37,13 +37,40 @@
     </div>
   </div>
 
+  <div class="form-group full-width mb-4">
+    <label class="block text-sm font-medium mb-2">مستوى السرية <span class="text-red-500">*</span></label>
+    <div class="confidentiality-options grid grid-cols-1 md:grid-cols-3 gap-3">
+      <div (click)="onConfidentialityChange('عادي')"
+           class="conf-option border rounded-xl p-3 cursor-pointer transition"
+           [ngClass]="{'border-success bg-success/5': doc().confidentiality === 'عادي', 'border-border': doc().confidentiality !== 'عادي'}">
+        <span class="conf-icon text-xl">🟢</span>
+        <span class="conf-label font-bold block">عادي</span>
+        <span class="conf-desc text-xs text-text-light">لا يحتاج كلمة مرور إضافية</span>
+      </div>
+      <div (click)="onConfidentialityChange('سري')"
+           class="conf-option secret border rounded-xl p-3 cursor-pointer transition"
+           [ngClass]="{'border-warning bg-warning/5': doc().confidentiality === 'سري', 'border-border': doc().confidentiality !== 'سري'}">
+        <span class="conf-icon text-xl">🟡</span>
+        <span class="conf-label font-bold block">سري</span>
+        <span class="conf-desc text-xs text-text-light">يتطلب إعادة إدخال كلمة المرور</span>
+      </div>
+      <div (click)="onConfidentialityChange('سري للغاية')"
+           class="conf-option top-secret border rounded-xl p-3 cursor-pointer transition"
+           [ngClass]="{'border-danger bg-danger/5': doc().confidentiality === 'سري للغاية', 'border-border': doc().confidentiality !== 'سري للغاية'}">
+        <span class="conf-icon text-xl">🔴</span>
+        <span class="conf-label font-bold block">سري للغاية</span>
+        <span class="conf-desc text-xs text-text-light">يتطلب كلمة المرور + رمز تحقق من النظام</span>
+      </div>
+    </div>
+  </div>
+
   <div class="mb-4">
     <label class="block text-sm font-medium mb-1">الموضوع *</label>
     <input [ngModel]="doc().subject" (ngModelChange)="updateDoc('subject', $event)"
            class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary">
   </div>
 
-  @if (doc().type === 'صادر') {
+  @if (typeName(doc().type_id) === 'صادر') {
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
       <div>
         <label class="block text-sm font-medium mb-1">الجهة المرسلة (المؤسسة) *</label>
@@ -70,7 +97,7 @@
     </div>
   }
 
-  @if (doc().type === 'وارد') {
+  @if (typeName(doc().type_id) === 'وارد') {
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
       <div>
         <label class="block text-sm font-medium mb-1">الجهة المرسلة *</label>
@@ -107,7 +134,7 @@
     </div>
   }
 
-  @if (doc().type === 'مراسلات') {
+  @if (typeName(doc().type_id) === 'مراسلات') {
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
       <div>
         <label class="block text-sm font-medium mb-1">القسم / الجهة المرسلة *</label>

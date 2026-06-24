@@ -5,6 +5,7 @@ import { MatToolbarModule } from '@angular/material/toolbar';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatMenuModule } from '@angular/material/menu';
+import { MatDividerModule } from '@angular/material/divider';
 import { AuthService } from '../../services/auth.service';
 import { ROLE_LABELS } from '../../models/user.model';
 
@@ -18,7 +19,8 @@ import { ROLE_LABELS } from '../../models/user.model';
     MatToolbarModule,
     MatIconModule,
     MatButtonModule,
-    MatMenuModule
+    MatMenuModule,
+    MatDividerModule
   ],
   templateUrl: './header.component.html',
   styleUrl: './header.component.scss'
@@ -34,6 +36,7 @@ export class HeaderComponent {
   roleLabel = computed(() => this.currentUser() ? ROLE_LABELS[this.currentUser()!.role] : '');
   roleClass = computed(() => `role-${this.currentUser()?.role || 'viewer'}`);
   isDashboard = computed(() => this.router.url.includes('/dashboard'));
+  isAdmin = computed(() => this.currentUser()?.role === 'admin');
 
   onToggleSidebar(): void {
     this.toggleSidebar.emit();

@@ -33,11 +33,17 @@ export class DocumentCardComponent {
     return this.documentService.parseAttachments(this.doc()).length;
   }
 
-  typeClass(type: string): string {
-    switch (type) {
-      case 'صادر': return 'bg-success/10 text-success';
-      case 'وارد': return 'bg-warning/10 text-warning';
-      default: return 'bg-info/10 text-info';
+  typeStyle(): { bg: string; text: string } {
+    const color = this.doc().type_color ?? '#2563eb';
+    return { bg: `${color}20`, text: color };
+  }
+
+  confClass(level: string): string {
+    switch (level) {
+      case 'عادي': return 'bg-success/10 text-success';
+      case 'سري': return 'bg-warning/10 text-warning';
+      case 'سري للغاية': return 'bg-danger/10 text-danger';
+      default: return 'bg-secondary text-text';
     }
   }
 

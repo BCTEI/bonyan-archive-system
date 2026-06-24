@@ -53,6 +53,15 @@ export class DocumentViewComponent implements OnInit {
     }
   }
 
+  confClass(level: string): string {
+    switch (level) {
+      case 'عادي': return 'bg-success/10 text-success';
+      case 'سري': return 'bg-warning/10 text-warning';
+      case 'سري للغاية': return 'bg-danger/10 text-danger';
+      default: return 'bg-secondary text-text';
+    }
+  }
+
   close(): void {
     this.dialogRef.close();
   }

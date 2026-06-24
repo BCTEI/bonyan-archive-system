@@ -8,11 +8,12 @@ import { StatsCardComponent } from '../stats-card/stats-card.component';
 import { DatabaseService } from '../../services/database.service';
 import { AuditService } from '../../services/audit.service';
 import { DocumentService } from '../../services/document.service';
+import { DocumentTypeService } from '../../services/document-type.service';
 import { UserService } from '../../services/user.service';
 import { PermissionService } from '../../services/permission.service';
 import { ToastService } from '../../services/toast.service';
 import { AuditEntry } from '../../models/audit-entry.model';
-import { ArchiveDocument } from '../../models/document.model';
+import { ArchiveDocument, DocumentTypeEntry } from '../../models/document.model';
 import { UserSession } from '../../models/user.model';
 import { Chart, registerables } from 'chart.js';
 
@@ -29,11 +30,13 @@ export class DashboardComponent implements AfterViewInit {
   db = inject(DatabaseService);
   auditService = inject(AuditService);
   documentService = inject(DocumentService);
+  documentTypeService = inject(DocumentTypeService);
   userService = inject(UserService);
   permissions = inject(PermissionService);
   toast = inject(ToastService);
 
-  stats = signal({ total: 0, outgoing: 0, incoming: 0, correspondence: 0 });
+  stats = signal<{ total: number; [key: string]: number }>({ total: 0 });
+  documentTypes = signal<DocumentTypeEntry[]>([]);
   recentAudit = signal<AuditEntry[]>([]);
   todaySessions = signal<UserSession[]>([]);
   recentDocuments = signal<ArchiveDocument[]>([]);
@@ -45,6 +48,7 @@ export class DashboardComponent implements AfterViewInit {
   }
 
   async ngAfterViewInit(): Promise<void> {
+    await this.loadDocumentTypes();
     await this.loadStats();
     await this.loadAudit();
     await this.loadSessions();
@@ -52,14 +56,18 @@ export class DashboardComponent implements AfterViewInit {
     this.renderChart();
   }
 
+  async loadDocumentTypes(): Promise<void> {
+    try {
+      const types = await this.documentTypeService.getAll(true);
+      this.documentTypes.set(types);
+    } catch {
+      this.documentTypes.set([]);
+    }
+  }
+
   async loadStats(): Promise<void> {
     const s = await this.db.getStats();
-    this.stats.set({
-      total: s.total,
-      outgoing: s['صادر'],
-      incoming: s['وارد'],
-      correspondence: s['مراسلات']
-    });
+    this.stats.set(s);
   }
 
   async loadAudit(): Promise<void> {
@@ -85,21 +93,34 @@ export class DashboardComponent implements AfterViewInit {
     }
   }
 
+  typeStats(): { label: string; value: number; color: string }[] {
+    return this.documentTypes().map(t => ({
+      label: t.label,
+      value: this.stats()[`type_${t.id}`] ?? 0,
+      color: t.color
+    }));
+  }
+
   renderChart(): void {
     const canvas = document.getElementById('docsChart') as HTMLCanvasElement | null;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    const typeStats = this.typeStats();
+    const labels = ['الكل', ...typeStats.map(t => t.label)];
+    const data = [this.stats().total, ...typeStats.map(t => t.value)];
+    const colors = ['#1e3a5f', ...typeStats.map(t => t.color)];
+
     this.chart?.destroy();
     this.chart = new Chart(ctx, {
       type: 'bar',
       data: {
-        labels: ['الكل', 'صادر', 'وارد', 'مراسلات'],
+        labels,
         datasets: [{
           label: 'عدد الوثائق',
-          data: [this.stats().total, this.stats().outgoing, this.stats().incoming, this.stats().correspondence],
-          backgroundColor: ['#1e3a5f', '#059669', '#d97706', '#2563eb'],
+          data,
+          backgroundColor: colors,
           borderRadius: 6
         }]
       },

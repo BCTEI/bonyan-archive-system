@@ -27,6 +27,22 @@
             <mat-icon>manage_accounts</mat-icon>
             <span>إدارة المستخدمين</span>
           </a>
+          <a *appHasPermission="'canManageDocumentTypes'" routerLink="/main/document-types" routerLinkActive="active" class="nav-link">
+            <mat-icon>class</mat-icon>
+            <span>أنواع الوثائق</span>
+          </a>
+          <a *appHasPermission="'canManageFolders'" routerLink="/main/folder-categories" routerLinkActive="active" class="nav-link">
+            <mat-icon>folder</mat-icon>
+            <span>التصنيفات</span>
+          </a>
+          <a *appHasPermission="'canManageSecurity'" routerLink="/main/security" routerLinkActive="active" class="nav-link">
+            <mat-icon>security</mat-icon>
+            <span>مركز الأمان</span>
+          </a>
+          <a *appHasPermission="'canCloseYear'" routerLink="/main/annual-closing" routerLinkActive="active" class="nav-link">
+            <mat-icon>event_available</mat-icon>
+            <span>الجرد السنوي</span>
+          </a>
         </nav>
 
         <div class="border-t border-border my-2"></div>

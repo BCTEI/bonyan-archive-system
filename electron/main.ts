@@ -33,7 +33,6 @@ function mimeTypeForExt(ext: string): string {
 }
 
 function resolveBrowserFile(urlPath: string): string {
-  // urlPath begins with '/'; strip any host prefix segment we used for routing.
   let cleanPath = urlPath;
   if (cleanPath.startsWith(`/${APP_HOST}`)) {
     cleanPath = cleanPath.slice(APP_HOST.length + 1) || '/';
@@ -48,13 +47,11 @@ function resolveBrowserFile(urlPath: string): string {
     return filePath;
   }
 
-  // Missing file: serve index.html for Angular routes (no extension or .html).
   const ext = path.extname(filePath).toLowerCase();
   if (!ext || ext === '.html') {
     return path.join(browserDir, 'index.html');
   }
 
-  // Otherwise keep the path so the renderer gets a real 404.
   return filePath;
 }
 
@@ -78,6 +75,7 @@ function registerAppProtocol(): void {
 function appUrl(hash: string): string {
   return `${APP_PROTOCOL}://${APP_HOST}/index.html#${hash}`;
 }
+
 import {
   initDb,
   query,
@@ -91,6 +89,7 @@ import {
   getInitError,
   getUsers,
   getUserById,
+  getUserByUsername,
   createUser,
   updateUser,
   deleteUser,
@@ -101,8 +100,34 @@ import {
   getFolderPermission,
   getUserFolderPermissions,
   setFolderPermissions,
+  getDocumentTypes,
+  getDocumentTypeById,
+  createDocumentType,
+  updateDocumentType,
+  deleteDocumentType,
+  getFolders,
+  getFolderGroups,
+  getFolderById,
+  createFolder,
+  updateFolder,
+  deleteFolder,
+  getCurrentVerificationCode,
+  generateVerificationCode,
+  verifySystemCode,
+  logDocumentAccess,
+  requestPasswordReset,
+  getPendingPasswordResetRequests,
+  approvePasswordReset,
+  rejectPasswordReset,
+  adminResetPassword,
+  changeOwnPassword,
+  getArchivedYears,
+  closeYear,
+  getArchivedDocuments,
   AuthUser,
   FolderPermission,
+  DocumentTypeInput,
+  FolderInput,
 } from './database';
 
 let loginWindow: BrowserWindow | null = null;
@@ -123,7 +148,6 @@ function hasPermission(user: AuthUser | null, required: string[]): boolean {
 
 function activeUser(): AuthUser | null {
   if (!currentUser) return null;
-  // Re-verify active status from DB if possible
   try {
     const fresh = getUserById(currentUser.id);
     if (fresh && fresh.is_active !== 1) {
@@ -136,11 +160,18 @@ function activeUser(): AuthUser | null {
   return currentUser;
 }
 
+function canAccessConfidentiality(role: string, confidentiality: string): boolean {
+  if (confidentiality === 'عادي') return true;
+  if (confidentiality === 'سري') return role === 'admin' || role === 'editor';
+  if (confidentiality === 'سري للغاية') return role === 'admin';
+  return false;
+}
+
 function createLoginWindow(): void {
   console.log('[Main] Creating login window');
   loginWindow = new BrowserWindow({
     width: 450,
-    height: 600,
+    height: 650,
     frame: false,
     center: true,
     resizable: false,
@@ -162,8 +193,8 @@ function createLoginWindow(): void {
 function createMainWindow(): void {
   console.log('[Main] Creating main window');
   mainWindow = new BrowserWindow({
-    minWidth: 1400,
-    minHeight: 900,
+    minWidth: 1024,
+    minHeight: 768,
     show: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
@@ -189,13 +220,12 @@ function createMainWindow(): void {
   });
 }
 
-// Register IPC handlers BEFORE app ready (diagnostic requirement)
+// Register IPC handlers BEFORE app ready
 console.log('[Main] Registering IPC handlers');
 
 ipcMain.handle('db:init', () => {
   console.log('[Main] Handling db:init');
-  const result = initDb();
-  return result;
+  return initDb();
 });
 
 ipcMain.handle('db:query', (_event: IpcMainInvokeEvent, sql: string, params?: unknown[]) => {
@@ -211,12 +241,12 @@ ipcMain.handle('db:run', (_event: IpcMainInvokeEvent, sql: string, params?: unkn
   return run(sql, params);
 });
 
-ipcMain.handle('db:getNextRef', (_event: IpcMainInvokeEvent, type: 'صادر' | 'وارد' | 'مراسلات', folderId: number) => {
+ipcMain.handle('db:getNextRef', (_event: IpcMainInvokeEvent, typeId: number, folderId: number) => {
   console.log('[Main] Handling db:getNextRef');
   const user = activeUser();
   if (!user) throw new Error('يجب تسجيل الدخول');
   if (!hasPermission(user, ['editor'])) throw new Error('ليس لديك صلاحية التعديل');
-  return getNextRef(type, folderId);
+  return getNextRef(typeId, folderId);
 });
 
 ipcMain.handle('db:export', () => {
@@ -270,7 +300,6 @@ ipcMain.handle('db:status', () => {
 ipcMain.handle('auth:login', (_event: IpcMainInvokeEvent, username: string, password: string) => {
   console.log('[Main] Handling auth:login for:', username);
   try {
-    // Make sure DB is initialized before attempting login
     const initResult = initDb();
     if (!initResult.success) {
       console.error('[Main] DB init failed:', initResult.error);
@@ -279,7 +308,6 @@ ipcMain.handle('auth:login', (_event: IpcMainInvokeEvent, username: string, pass
 
     const initErr = getInitError();
     if (initErr && !initResult.error) {
-      // Real DB failed but fallback is active
       console.warn('[Main] DB fallback active:', initErr);
     }
 
@@ -506,6 +534,472 @@ ipcMain.handle('user:setFolderPermissions', (_event: IpcMainInvokeEvent, userId:
     return { success: false, error: message };
   }
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Document type handlers
+// ─────────────────────────────────────────────────────────────────────────────
+
+ipcMain.handle('documentType:getAll', (_event: IpcMainInvokeEvent, activeOnly = false) => {
+  try {
+    const user = activeUser();
+    if (!user) return { success: false, error: 'يجب تسجيل الدخول' };
+    return { success: true, types: getDocumentTypes(activeOnly) };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('documentType:getById', (_event: IpcMainInvokeEvent, id: number) => {
+  try {
+    const user = activeUser();
+    if (!user) return { success: false, error: 'يجب تسجيل الدخول' };
+    return { success: true, type: getDocumentTypeById(id) };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('documentType:create', (_event: IpcMainInvokeEvent, data: DocumentTypeInput) => {
+  try {
+    const user = activeUser();
+    if (!hasPermission(user, ['admin'])) return { success: false, error: 'ليس لديك صلاحية' };
+    const result = createDocumentType(data);
+    if (result.success) {
+      addAudit('إنشاء نوع وثيقة', undefined, `الاسم: ${data.label}`, user?.username);
+    }
+    return result;
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('documentType:update', (_event: IpcMainInvokeEvent, id: number, data: Partial<DocumentTypeInput>) => {
+  try {
+    const user = activeUser();
+    if (!hasPermission(user, ['admin'])) return { success: false, error: 'ليس لديك صلاحية' };
+    const result = updateDocumentType(id, data);
+    if (result.success) {
+      addAudit('تعديل نوع وثيقة', undefined, `المعرف: ${id}`, user?.username);
+    }
+    return result;
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('documentType:delete', (_event: IpcMainInvokeEvent, id: number) => {
+  try {
+    const user = activeUser();
+    if (!hasPermission(user, ['admin'])) return { success: false, error: 'ليس لديك صلاحية' };
+    const result = deleteDocumentType(id);
+    if (result.success) {
+      addAudit('حذف نوع وثيقة', undefined, `المعرف: ${id}`, user?.username);
+    }
+    return result;
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Folder category handlers
+// ─────────────────────────────────────────────────────────────────────────────
+
+ipcMain.handle('folderCategory:getAll', (_event: IpcMainInvokeEvent, activeOnly = false) => {
+  try {
+    const user = activeUser();
+    if (!user) return { success: false, error: 'يجب تسجيل الدخول' };
+    return { success: true, folders: getFolders(activeOnly) };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('folderCategory:getGroups', () => {
+  try {
+    const user = activeUser();
+    if (!user) return { success: false, error: 'يجب تسجيل الدخول' };
+    return { success: true, groups: getFolderGroups() };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('folderCategory:getById', (_event: IpcMainInvokeEvent, id: number) => {
+  try {
+    const user = activeUser();
+    if (!user) return { success: false, error: 'يجب تسجيل الدخول' };
+    return { success: true, folder: getFolderById(id) };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('folderCategory:create', (_event: IpcMainInvokeEvent, data: FolderInput) => {
+  try {
+    const user = activeUser();
+    if (!hasPermission(user, ['admin'])) return { success: false, error: 'ليس لديك صلاحية' };
+    const result = createFolder(data, user?.id);
+    if (result.success) {
+      addAudit('إنشاء تصنيف', undefined, `الاسم: ${data.name}`, user?.username);
+    }
+    return result;
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('folderCategory:update', (_event: IpcMainInvokeEvent, id: number, data: Partial<FolderInput>) => {
+  try {
+    const user = activeUser();
+    if (!hasPermission(user, ['admin'])) return { success: false, error: 'ليس لديك صلاحية' };
+    const result = updateFolder(id, data);
+    if (result.success) {
+      addAudit('تعديل تصنيف', undefined, `المعرف: ${id}`, user?.username);
+    }
+    return result;
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('folderCategory:delete', (_event: IpcMainInvokeEvent, id: number) => {
+  try {
+    const user = activeUser();
+    if (!hasPermission(user, ['admin'])) return { success: false, error: 'ليس لديك صلاحية' };
+    const result = deleteFolder(id);
+    if (result.success) {
+      addAudit('حذف تصنيف', undefined, `المعرف: ${id}`, user?.username);
+    }
+    return result;
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Document handlers with confidentiality enforcement
+// ─────────────────────────────────────────────────────────────────────────────
+
+ipcMain.handle('document:getAll', () => {
+  try {
+    const user = activeUser();
+    if (!user) return { success: false, error: 'يجب تسجيل الدخول' };
+    let sql = 'SELECT d.*, dt.name as type, dt.label as type_label, dt.color as type_color, dt.icon as type_icon FROM documents d JOIN document_types dt ON d.type_id = dt.id';
+    if (user.role === 'viewer') {
+      sql += " WHERE d.confidentiality = 'عادي'";
+    }
+    sql += ' ORDER BY d.created_at DESC';
+    const docs = query(sql);
+    return { success: true, documents: docs };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('document:getById', (_event: IpcMainInvokeEvent, id: number) => {
+  try {
+    const user = activeUser();
+    if (!user) return { success: false, error: 'يجب تسجيل الدخول' };
+    const sql = 'SELECT d.*, dt.name as type, dt.label as type_label, dt.color as type_color, dt.icon as type_icon FROM documents d JOIN document_types dt ON d.type_id = dt.id WHERE d.id = ?';
+    const rows = query(sql, [id]) as Array<Record<string, unknown>>;
+    if (rows.length === 0) return { success: false, error: 'الوثيقة غير موجودة' };
+    const doc = rows[0];
+    const conf = doc.confidentiality as string;
+    if (!canAccessConfidentiality(user.role, conf)) {
+      return { success: false, error: 'ليس لديك صلاحية الوصول لهذه الوثيقة' };
+    }
+    return { success: true, document: doc };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('document:create', (_event: IpcMainInvokeEvent, doc: Record<string, unknown>) => {
+  try {
+    const user = activeUser();
+    if (!hasPermission(user, ['editor'])) return { success: false, error: 'ليس لديك صلاحية إنشاء وثيقة' };
+
+    const result = run(`
+      INSERT INTO documents (
+        ref_number, type_id, folder_id, confidentiality, subject, sender, receiver, author, address, target, content, input_method,
+        date, body, notes, status, signature_base64, attachments_json, created_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `, [
+      doc.ref_number,
+      doc.type_id,
+      doc.folder_id,
+      doc.confidentiality ?? 'عادي',
+      doc.subject,
+      doc.sender ?? null,
+      doc.receiver ?? null,
+      doc.author ?? null,
+      doc.address ?? null,
+      doc.target ?? null,
+      doc.content ?? null,
+      doc.input_method ?? null,
+      doc.date,
+      doc.body ?? null,
+      doc.notes ?? null,
+      doc.status ?? 'قيد الاعتماد',
+      doc.signature_base64 ?? null,
+      doc.attachments_json ?? '[]',
+      user?.username
+    ]);
+    addAudit('إنشاء وثيقة', doc.ref_number as string, doc.subject as string, user?.username);
+    return { success: true, id: Number(result.lastInsertRowid) };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('document:update', (_event: IpcMainInvokeEvent, doc: Record<string, unknown>) => {
+  try {
+    const user = activeUser();
+    if (!user || !hasPermission(user, ['editor'])) return { success: false, error: 'ليس لديك صلاحية تعديل وثيقة' };
+    if (!doc.id) return { success: false, error: 'معرف الوثيقة مطلوب' };
+
+    const existing = query('SELECT confidentiality FROM documents WHERE id = ?', [doc.id]) as Array<{ confidentiality: string }>;
+    if (existing.length === 0) return { success: false, error: 'الوثيقة غير موجودة' };
+    if (!canAccessConfidentiality(user.role, existing[0].confidentiality)) {
+      return { success: false, error: 'ليس لديك صلاحية تعديل هذه الوثيقة' };
+    }
+
+    run(`
+      UPDATE documents SET
+        ref_number = ?, type_id = ?, folder_id = ?, confidentiality = ?, subject = ?, sender = ?, receiver = ?,
+        author = ?, address = ?, target = ?, content = ?, input_method = ?,
+        date = ?, body = ?, notes = ?, status = ?, signature_base64 = ?, attachments_json = ?,
+        updated_at = strftime('%s','now')
+      WHERE id = ?
+    `, [
+      doc.ref_number,
+      doc.type_id,
+      doc.folder_id,
+      doc.confidentiality ?? 'عادي',
+      doc.subject,
+      doc.sender ?? null,
+      doc.receiver ?? null,
+      doc.author ?? null,
+      doc.address ?? null,
+      doc.target ?? null,
+      doc.content ?? null,
+      doc.input_method ?? null,
+      doc.date,
+      doc.body ?? null,
+      doc.notes ?? null,
+      doc.status ?? 'قيد الاعتماد',
+      doc.signature_base64 ?? null,
+      doc.attachments_json ?? '[]',
+      doc.id
+    ]);
+    addAudit('تعديل وثيقة', doc.ref_number as string, doc.subject as string, user?.username);
+    return { success: true };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('document:delete', (_event: IpcMainInvokeEvent, id: number) => {
+  try {
+    const user = activeUser();
+    if (!user || !hasPermission(user, ['editor'])) return { success: false, error: 'ليس لديك صلاحية حذف وثيقة' };
+
+    const existing = query('SELECT ref_number, subject, confidentiality FROM documents WHERE id = ?', [id]) as Array<{ ref_number: string; subject: string; confidentiality: string }>;
+    if (existing.length === 0) return { success: false, error: 'الوثيقة غير موجودة' };
+    if (!canAccessConfidentiality(user.role, existing[0].confidentiality)) {
+      return { success: false, error: 'ليس لديك صلاحية حذف هذه الوثيقة' };
+    }
+
+    run('DELETE FROM documents WHERE id = ?', [id]);
+    addAudit('حذف وثيقة', existing[0].ref_number, existing[0].subject, user?.username);
+    return { success: true };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Security handlers
+// ─────────────────────────────────────────────────────────────────────────────
+
+ipcMain.handle('security:getCurrentCode', () => {
+  try {
+    const user = activeUser();
+    if (!hasPermission(user, ['admin'])) return { success: false, error: 'ليس لديك صلاحية' };
+    const code = getCurrentVerificationCode();
+    return { success: true, code };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('security:generateCode', () => {
+  try {
+    const user = activeUser();
+    if (!hasPermission(user, ['admin'])) return { success: false, error: 'ليس لديك صلاحية' };
+    const result = generateVerificationCode(user!.id);
+    if (result.success) {
+      addAudit('توليد رمز تحقق', undefined, 'تم توليد رمز جديد لمركز الأمان', user?.username);
+    }
+    return result;
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('security:verifyCode', (_event: IpcMainInvokeEvent, code: string) => {
+  try {
+    return verifySystemCode(code);
+  } catch (err: unknown) {
+    return { valid: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('security:verifyPassword', (_event: IpcMainInvokeEvent, username: string, password: string) => {
+  try {
+    initDb();
+    const result = authenticateUser(username, password);
+    return { valid: result.success, error: result.error };
+  } catch (err: unknown) {
+    return { valid: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('document:logAccess', (_event: IpcMainInvokeEvent, documentId: number, accessType: 'view' | 'edit', confidentiality: string, method?: string) => {
+  try {
+    const user = activeUser();
+    if (!user) return { success: false };
+    logDocumentAccess(documentId, user.id, user.username, accessType, confidentiality, method);
+    return { success: true };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Password reset handlers
+// ─────────────────────────────────────────────────────────────────────────────
+
+ipcMain.handle('passwordReset:request', (_event: IpcMainInvokeEvent, username: string) => {
+  try {
+    const target = getUserByUsername(username);
+    if (!target) return { success: false, error: 'اسم المستخدم غير موجود' };
+    const result = requestPasswordReset(target.id, target.username);
+    return result;
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('passwordReset:getPending', () => {
+  try {
+    const user = activeUser();
+    if (!hasPermission(user, ['admin'])) return { success: false, error: 'ليس لديك صلاحية' };
+    return { success: true, requests: getPendingPasswordResetRequests() };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('passwordReset:approve', (_event: IpcMainInvokeEvent, requestId: number, newPassword: string) => {
+  try {
+    const user = activeUser();
+    if (!hasPermission(user, ['admin'])) return { success: false, error: 'ليس لديك صلاحية' };
+    const result = approvePasswordReset(requestId, newPassword, user!.id);
+    if (result.success) {
+      addAudit('موافقة إعادة تعيين كلمة المرور', undefined, `معرف الطلب: ${requestId}`, user?.username);
+    }
+    return result;
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('passwordReset:reject', (_event: IpcMainInvokeEvent, requestId: number) => {
+  try {
+    const user = activeUser();
+    if (!hasPermission(user, ['admin'])) return { success: false, error: 'ليس لديك صلاحية' };
+    const result = rejectPasswordReset(requestId);
+    if (result.success) {
+      addAudit('رفض إعادة تعيين كلمة المرور', undefined, `معرف الطلب: ${requestId}`, user?.username);
+    }
+    return result;
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('passwordReset:adminReset', (_event: IpcMainInvokeEvent, userId: number, newPassword: string) => {
+  try {
+    const user = activeUser();
+    if (!hasPermission(user, ['admin'])) return { success: false, error: 'ليس لديك صلاحية' };
+    const result = adminResetPassword(userId, newPassword);
+    if (result.success) {
+      const target = getUserById(userId);
+      addAudit('إعادة تعيين كلمة المرور', undefined, `المستخدم: ${target?.username ?? userId}`, user?.username);
+    }
+    return result;
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('passwordReset:changeOwnPassword', (_event: IpcMainInvokeEvent, currentPassword: string, newPassword: string) => {
+  try {
+    const user = activeUser();
+    if (!user) return { success: false, error: 'يجب تسجيل الدخول' };
+    const result = changeOwnPassword(user.id, currentPassword, newPassword);
+    if (result.success) {
+      addAudit('تغيير كلمة المرور', undefined, `المستخدم: ${user.username}`, user.username);
+    }
+    return result;
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Annual closing handlers
+// ─────────────────────────────────────────────────────────────────────────────
+
+ipcMain.handle('annualClosing:getArchivedYears', () => {
+  try {
+    const user = activeUser();
+    if (!hasPermission(user, ['admin'])) return { success: false, error: 'ليس لديك صلاحية' };
+    return { success: true, years: getArchivedYears() };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('annualClosing:closeYear', (_event: IpcMainInvokeEvent, year: number) => {
+  try {
+    const user = activeUser();
+    if (!hasPermission(user, ['admin'])) return { success: false, error: 'ليس لديك صلاحية' };
+    const result = closeYear(year, user!.id);
+    if (result.success) {
+      addAudit('إغلاق سنوي', undefined, `تم إغلاق سنة ${year}`, user?.username);
+    }
+    return result;
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('annualClosing:getArchivedDocuments', (_event: IpcMainInvokeEvent, year: number) => {
+  try {
+    const user = activeUser();
+    if (!hasPermission(user, ['admin'])) return { success: false, error: 'ليس لديك صلاحية' };
+    return { success: true, documents: getArchivedDocuments(year) };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// App helpers
+// ─────────────────────────────────────────────────────────────────────────────
 
 ipcMain.handle('app:print', () => {
   console.log('[Main] Handling app:print');

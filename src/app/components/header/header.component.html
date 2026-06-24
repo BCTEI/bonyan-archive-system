@@ -27,15 +27,43 @@
     </div>
   </div>
 
-  <div class="flex items-center gap-3">
+  <div class="flex items-center gap-2">
     <a routerLink="/main/dashboard" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: false }"
        class="home-btn hidden sm:inline-flex" [class.active]="isDashboard()">
       🏠 الرئيسية
     </a>
-    <div class="hidden sm:flex flex-col items-end leading-tight">
+
+    @if (isAdmin()) {
+      <a routerLink="/main/document-types" class="header-btn hidden lg:inline-flex" title="أنواع الوثائق">📑</a>
+      <a routerLink="/main/folder-categories" class="header-btn hidden lg:inline-flex" title="التصنيفات">📂</a>
+      <a routerLink="/main/security" class="header-btn hidden lg:inline-flex" title="مركز الأمان">🔐</a>
+      <a routerLink="/main/annual-closing" class="header-btn hidden lg:inline-flex" title="الجرد السنوي">📅</a>
+    }
+
+    <div class="hidden sm:flex flex-col items-end leading-tight mr-2">
       <span class="text-sm font-medium">{{ displayName() }}</span>
       <span class="text-xs px-2 py-0.5 rounded-full role-badge" [class]="roleClass()">{{ roleLabel() }}</span>
     </div>
+
+    <button mat-icon-button [matMenuTriggerFor]="settingsMenu" class="!text-white" title="الإعدادات">
+      <mat-icon>settings</mat-icon>
+    </button>
+    <mat-menu #settingsMenu="matMenu">
+      <button mat-menu-item routerLink="/main/profile">
+        <mat-icon>person</mat-icon>
+        <span>الملف الشخصي</span>
+      </button>
+      <button mat-menu-item routerLink="/main/change-password">
+        <mat-icon>vpn_key</mat-icon>
+        <span>تغيير كلمة المرور</span>
+      </button>
+      <mat-divider></mat-divider>
+      <button mat-menu-item (click)="logout()">
+        <mat-icon>logout</mat-icon>
+        <span>تسجيل الخروج</span>
+      </button>
+    </mat-menu>
+
     <button mat-icon-button [matMenuTriggerFor]="userMenu" class="!text-white">
       <mat-icon>account_circle</mat-icon>
     </button>
