@@ -208,19 +208,69 @@ bonyan-archive-system/
 
 ## 📸 لقطات من المنصة
 
+فيما يلي نظرة سريعة على أهم شاشات النظام:
+
+### شاشة تسجيل الدخول
+
 <p align="center">
-  <img src="docs/screenshots/login.png" alt="شاشة تسجيل الدخول" width="280">
-  <img src="docs/screenshots/dashboard.png" alt="لوحة التحكم" width="280">
-  <img src="docs/screenshots/documents.png" alt="شاشة الوثائق" width="280">
+  <img src="docs/screenshots/login.png" alt="شاشة تسجيل الدخول إلى نظام الأرشيف الإلكتروني" width="600">
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/security-center.png" alt="مركز الأمان" width="280">
-  <img src="docs/screenshots/annual-closing.png" alt="الجرد السنوي" width="280">
-  <img src="docs/screenshots/folder-management.png" alt="إدارة التصنيفات" width="280">
+  <em>واجهة بسيطة وآمنة للدخول إلى النظام باستخدام اسم المستخدم وكلمة المرور.</em>
 </p>
 
-> ملاحظة: اللقطات هي عينات توضيحية. يمكن تحديثها باستخدام أداة الالتقاط المدمجة في النظام.
+### لوحة التحكم
+
+<p align="center">
+  <img src="docs/screenshots/dashboard.png" alt="لوحة التحكم وإحصائيات الوثائق" width="700">
+</p>
+
+<p align="center">
+  <em>لوحة مركزية تعرض إجمالي الوثائق وأنواعها، مع سجل النشاطات اليومية.</em>
+</p>
+
+### إدارة الوثائق
+
+<p align="center">
+  <img src="docs/screenshots/documents.png" alt="شاشة إدارة الوثائق" width="700">
+</p>
+
+<p align="center">
+  <em>عرض وبحث الوثائق مع تصفية حسب النوع ومستوى السرية والمجلد.</em>
+</p>
+
+### مركز الأمان
+
+<p align="center">
+  <img src="docs/screenshots/security-center.png" alt="مركز إدارة رموز الأمان" width="700">
+</p>
+
+<p align="center">
+  <em>توليد رموز التحقق الآمنة للوصول إلى الوثائق السرية للغاية.</em>
+</p>
+
+### الجرد السنوي
+
+<p align="center">
+  <img src="docs/screenshots/annual-closing.png" alt="شاشة الجرد السنوي" width="700">
+</p>
+
+<p align="center">
+  <em>إغلاق السنة الحالية وأرشفة الوثائق مع نسخة احتياطية كاملة.</em>
+</p>
+
+### إدارة التصنيفات
+
+<p align="center">
+  <img src="docs/screenshots/folder-management.png" alt="شاشة إدارة التصنيفات" width="700">
+</p>
+
+<p align="center">
+  <em>إدارة 177+ تصنيف منظمة في مجموعات، مع إمكانية الإضافة والتعديل.</em>
+</p>
+
+> **ملاحظة:** الصور أعلاه لتوضيح طريقة عمل النظام. يمكن استبدالها بلقطات شاشة حقيقية من التطبيق بعد التشغيل.
 
 ---
 
