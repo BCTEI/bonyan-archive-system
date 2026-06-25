@@ -42,6 +42,7 @@ export class DocumentFormComponent implements OnInit {
   drawing = signal(false);
   dragOver = signal(false);
   generatingRef = signal(false);
+  isSaving = signal(false);
   today = new Date().toISOString().split('T')[0];
 
   confidentialityLevels: ConfidentialityLevel[] = ['عادي', 'سري', 'سري للغاية'];
@@ -236,18 +237,41 @@ export class DocumentFormComponent implements OnInit {
   }
 
   async save(): Promise<void> {
+    if (this.isSaving()) return;
+
     const d = this.doc();
     const type = this.selectedType();
-    if (!d.ref_number) {
-      this.toast.show('يرجى توليد الرقم المرجعي', 'warning');
-      return;
-    }
-    if (!d.subject || !d.folder_id || !d.date || !d.sender) {
-      this.toast.show('يرجى ملء الحقول الإلزامية', 'warning');
+
+    if (!d.type_id) {
+      this.toast.show('نوع الملف مطلوب', 'warning');
       return;
     }
     if (!type) {
       this.toast.show('يرجى اختيار نوع الوثيقة', 'warning');
+      return;
+    }
+    if (!d.folder_id) {
+      this.toast.show('المجلد مطلوب', 'warning');
+      return;
+    }
+    if (!d.date) {
+      this.toast.show('التاريخ مطلوب', 'warning');
+      return;
+    }
+    if (!d.sender) {
+      this.toast.show('المرسل مطلوب', 'warning');
+      return;
+    }
+    if (!d.receiver) {
+      this.toast.show('المستلم مطلوب', 'warning');
+      return;
+    }
+    if (!d.subject) {
+      this.toast.show('الموضوع مطلوب', 'warning');
+      return;
+    }
+    if (!d.ref_number) {
+      this.toast.show('يرجى توليد الرقم المرجعي', 'warning');
       return;
     }
     if (type.name === 'صادر' && (!d.receiver || !d.author)) {
@@ -273,6 +297,7 @@ export class DocumentFormComponent implements OnInit {
       created_by: this.auth.currentUser()?.username
     };
 
+    this.isSaving.set(true);
     try {
       if (d.id) {
         await this.documentService.update(payload);
@@ -286,6 +311,8 @@ export class DocumentFormComponent implements OnInit {
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'فشل الحفظ';
       this.toast.show(message, 'error');
+    } finally {
+      this.isSaving.set(false);
     }
   }
 

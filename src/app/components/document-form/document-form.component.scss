@@ -1,3 +1,9 @@
 canvas {
   touch-action: none;
 }
+
+.type-option {
+  &:hover {
+    border-color: var(--primary);
+  }
+}

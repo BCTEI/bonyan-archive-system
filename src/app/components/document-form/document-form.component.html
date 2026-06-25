@@ -3,6 +3,20 @@
     {{ doc().id ? 'تعديل وثيقة' : 'وثيقة جديدة' }}
   </h2>
 
+  <div class="form-group full-width mb-4">
+    <label class="block text-sm font-medium mb-2">نوع الملف <span class="text-red-500">*</span></label>
+    <div class="type-options grid grid-cols-1 md:grid-cols-3 gap-3">
+      @for (t of documentTypes(); track t.id) {
+        <div (click)="onTypeChange(t.id)"
+             class="type-option border rounded-xl p-3 cursor-pointer transition text-center"
+             [ngClass]="{'border-primary bg-primary/5': doc().type_id === t.id, 'border-border': doc().type_id !== t.id}">
+          <span class="type-icon text-2xl block mb-1">{{ t.icon }}</span>
+          <span class="type-label font-bold block text-sm">{{ t.label }}</span>
+        </div>
+      }
+    </div>
+  </div>
+
   <div class="flex flex-wrap items-center gap-3 mb-4">
     <span class="text-sm text-text-light">الرقم المرجعي:</span>
     @if (doc().ref_number) {
@@ -10,31 +24,20 @@
     } @else {
       <span class="text-text-light text-sm">لم يتم التوليد</span>
     }
-    <button mat-stroked-button color="primary" (click)="generateRef()" [disabled]="generatingRef()">
+    <button mat-stroked-button color="primary" (click)="generateRef()" [disabled]="generatingRef() || !doc().type_id">
       <mat-icon>refresh</mat-icon>
       توليد
     </button>
   </div>
 
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-    <div>
-      <label class="block text-sm font-medium mb-1">نوع الوثيقة</label>
-      <select [ngModel]="doc().type_id" (ngModelChange)="onTypeChange(+$event)"
-              class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary">
-        @for (t of documentTypes(); track t.id) {
-          <option [value]="t.id">{{ t.icon }} {{ t.label }}</option>
-        }
-      </select>
-    </div>
-    <div>
-      <label class="block text-sm font-medium mb-1">المجلد</label>
-      <select [ngModel]="doc().folder_id" (ngModelChange)="onFolderChange(+$event)"
-              class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary">
-        @for (folder of folders(); track folder.id) {
-          <option [value]="folder.id">{{ folder.name }}</option>
-        }
-      </select>
-    </div>
+  <div class="mb-4">
+    <label class="block text-sm font-medium mb-1">المجلد</label>
+    <select [ngModel]="doc().folder_id" (ngModelChange)="onFolderChange(+$event)"
+            class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary">
+      @for (folder of folders(); track folder.id) {
+        <option [value]="folder.id">{{ folder.name }}</option>
+      }
+    </select>
   </div>
 
   <div class="form-group full-width mb-4">
@@ -220,7 +223,16 @@
   </div>
 
   <div class="flex justify-end gap-3">
-    <button mat-button type="button" (click)="cancel()">إلغاء</button>
-    <button mat-raised-button color="primary" type="button" (click)="save()">حفظ الوثيقة</button>
+    <button mat-button type="button" (click)="cancel()" [disabled]="isSaving()">إلغاء</button>
+    <button mat-raised-button color="primary" type="button" (click)="save()" [disabled]="isSaving()">
+      @if (isSaving()) {
+        <mat-icon class="animate-spin">refresh</mat-icon>
+      }
+      @if (isSaving()) {
+        <span>جاري الحفظ...</span>
+      } @else {
+        <span>حفظ الوثيقة</span>
+      }
+    </button>
   </div>
 </div>

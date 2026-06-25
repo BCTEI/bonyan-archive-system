@@ -415,24 +415,86 @@ function seedDocumentTypes(): void {
 function migrateDocumentTypeId(): void {
   if (!db || useMemoryFallback) return;
   const columns = db.prepare("PRAGMA table_info(documents)").all() as Array<{ name: string }>;
-  if (columns.some(c => c.name === 'type_id')) {
-    // Already migrated
-    return;
-  }
-  try {
-    db.exec(`ALTER TABLE documents ADD COLUMN type_id INTEGER NOT NULL DEFAULT 1`);
-  } catch {
-    return;
-  }
-  const typeMap: Record<string, number> = { 'صادر': 1, 'وارد': 2, 'مراسلات': 3 };
-  const update = db.prepare('UPDATE documents SET type_id = ? WHERE type = ?');
-  const tx = db.transaction(() => {
-    for (const [type, id] of Object.entries(typeMap)) {
-      update.run(id, type);
+  const hasTypeId = columns.some(c => c.name === 'type_id');
+  const hasType = columns.some(c => c.name === 'type');
+
+  if (!hasTypeId) {
+    try {
+      db.exec(`ALTER TABLE documents ADD COLUMN type_id INTEGER NOT NULL DEFAULT 1`);
+    } catch {
+      return;
     }
-  });
-  tx();
-  console.log('[Database] Migrated documents.type to type_id');
+    if (hasType) {
+      const typeMap: Record<string, number> = { 'صادر': 1, 'وارد': 2, 'مراسلات': 3 };
+      const update = db.prepare('UPDATE documents SET type_id = ? WHERE type = ?');
+      const tx = db.transaction(() => {
+        for (const [type, id] of Object.entries(typeMap)) {
+          update.run(id, type);
+        }
+      });
+      tx();
+    }
+    console.log('[Database] Migrated documents.type to type_id');
+  }
+
+  // Drop legacy type column to prevent NOT NULL constraint failures on inserts
+  if (hasType) {
+    try {
+      db.exec('ALTER TABLE documents DROP COLUMN type');
+      console.log('[Database] Dropped legacy documents.type column');
+    } catch (err) {
+      console.warn('[Database] Could not drop legacy type column, recreating table:', err instanceof Error ? err.message : err);
+      recreateDocumentsTableWithoutType();
+    }
+  }
+}
+
+function recreateDocumentsTableWithoutType(): void {
+  if (!db || useMemoryFallback) return;
+  try {
+    db.exec(`
+      CREATE TABLE documents_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ref_number TEXT NOT NULL UNIQUE,
+        type_id INTEGER NOT NULL,
+        folder_id INTEGER NOT NULL,
+        confidentiality TEXT DEFAULT 'عادي' CHECK(confidentiality IN ('عادي', 'سري', 'سري للغاية')),
+        subject TEXT NOT NULL,
+        sender TEXT,
+        receiver TEXT,
+        author TEXT,
+        address TEXT,
+        target TEXT,
+        content TEXT,
+        input_method TEXT,
+        date TEXT NOT NULL,
+        body TEXT,
+        notes TEXT,
+        status TEXT NOT NULL DEFAULT 'قيد الاعتماد',
+        signature_base64 TEXT,
+        attachments_json TEXT DEFAULT '[]',
+        created_at INTEGER DEFAULT (strftime('%s','now')),
+        updated_at INTEGER DEFAULT (strftime('%s','now')),
+        created_by TEXT,
+        FOREIGN KEY (type_id) REFERENCES document_types(id),
+        FOREIGN KEY (folder_id) REFERENCES folders(id)
+      );
+
+      INSERT INTO documents_new
+        (id, ref_number, type_id, folder_id, confidentiality, subject, sender, receiver, author, address, target, content, input_method,
+         date, body, notes, status, signature_base64, attachments_json, created_at, updated_at, created_by)
+      SELECT
+        id, ref_number, type_id, folder_id, confidentiality, subject, sender, receiver, author, address, target, content, input_method,
+        date, body, notes, status, signature_base64, attachments_json, created_at, updated_at, created_by
+      FROM documents;
+
+      DROP TABLE documents;
+      ALTER TABLE documents_new RENAME TO documents;
+    `);
+    console.log('[Database] Recreated documents table without legacy type column');
+  } catch (err) {
+    console.error('[Database] Failed to recreate documents table:', err instanceof Error ? err.message : err);
+  }
 }
 
 function migrateFolderSystemFlags(): void {
@@ -1378,7 +1440,7 @@ export function generateVerificationCode(adminId: number): { success: boolean; c
     for (const c of memoryStore.system_verification_codes) c.is_active = 0;
     memoryStore.system_verification_codes.push({
       id: memoryStore.system_verification_codes.length + 1,
-      code: codeHash,
+      code,
       code_hash: codeHash,
       generated_at: now,
       expires_at: expiresAt,
@@ -1392,10 +1454,10 @@ export function generateVerificationCode(adminId: number): { success: boolean; c
   try {
     const tx = db.transaction(() => {
       db!.prepare('UPDATE system_verification_codes SET is_active = 0').run();
-      // Store only the hash; plaintext is shown to admin once and never persisted.
+      // Store plaintext code for admin display and hash for secure verification.
       db!.prepare(
         'INSERT INTO system_verification_codes (code, code_hash, generated_at, expires_at, is_active, generated_by) VALUES (?, ?, ?, ?, ?, ?)'
-      ).run(codeHash, codeHash, now, expiresAt, 1, adminId);
+      ).run(code, codeHash, now, expiresAt, 1, adminId);
     });
     tx();
     return { success: true, code, expiresAt };

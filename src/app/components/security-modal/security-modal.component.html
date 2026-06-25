@@ -1,11 +1,13 @@
 <div class="p-6 w-full max-w-md" dir="rtl">
   <div class="flex items-center justify-between mb-4">
-    <h2 class="text-xl font-bold text-primary flex items-center gap-2">
-      <mat-icon class="text-warning">lock</mat-icon>
-      @if (step() === 'password') {
-        التحقق من الهوية
+    <h2 class="text-xl font-bold flex items-center gap-2"
+        [class.text-warning]="doc.confidentiality === 'سري'"
+        [class.text-danger]="doc.confidentiality === 'سري للغاية'">
+      @if (doc.confidentiality === 'سري للغاية') { 🔴 } @else { 🔒 }
+      @if (doc.confidentiality === 'سري للغاية') {
+        وثيقة سرية للغاية
       } @else {
-        رمز التحقق
+        وثيقة سرية
       }
     </h2>
     <button mat-icon-button (click)="close()" aria-label="إغلاق">
@@ -13,13 +15,28 @@
     </button>
   </div>
 
-  <p class="text-text-light text-sm mb-6">
-    @if (doc.confidentiality === 'سري للغاية') {
-      الوثيقة <span class="font-semibold text-primary">{{ doc.ref_number }}</span> ذات سرية عالية جداً. يتطلب الوصول إدخال كلمة المرور ورمز التحقق.
+  <div class="mb-6">
+    <p class="text-text-light text-sm mb-2">
+      هذه الوثيقة مصنفة كـ <strong>{{ doc.confidentiality }}</strong>.
+    </p>
+
+    @if (step() === 'password') {
+      <p class="instructions text-sm text-text">
+        @if (doc.confidentiality === 'سري للغاية') {
+          <strong>الخطوة 1:</strong> أدخل <strong>كلمة مرور حسابك</strong> للمتابعة.
+        } @else {
+          أدخل <strong>كلمة مرور حسابك</strong> لفتح الوثيقة.
+        }
+      </p>
     } @else {
-      الوثيقة <span class="font-semibold text-primary">{{ doc.ref_number }}</span> سرية. يتطلب الوصول إدخال كلمة المرور.
+      <p class="instructions text-sm text-text">
+        <strong>الخطوة 2:</strong> أدخل <strong>رمز التحقق من مركز الأمان</strong> (6 أرقام).
+      </p>
+      <p class="hint text-xs text-text-light mt-1">
+        اطلب رمز التحقق من المدير. الرمز صالح لـ 24 ساعة فقط.
+      </p>
     }
-  </p>
+  </div>
 
   @if (errorMessage()) {
     <div class="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
@@ -30,7 +47,7 @@
   @if (step() === 'password') {
     <mat-form-field class="w-full" appearance="outline">
       <mat-label>كلمة المرور</mat-label>
-      <input matInput [type]="hidePassword() ? 'password' : 'text'" [ngModel]="password()" (ngModelChange)="password.set($event)" (keyup.enter)="verifyPassword()" [disabled]="locked()">
+      <input matInput [type]="hidePassword() ? 'password' : 'text'" [ngModel]="password()" (ngModelChange)="password.set($event)" (keyup.enter)="verifyPassword()" [disabled]="locked()" placeholder="كلمة المرور الخاصة بك">
       <button mat-icon-button matSuffix type="button" (click)="hidePassword.set(!hidePassword())" [attr.aria-label]="hidePassword() ? 'إظهار كلمة المرور' : 'إخفاء كلمة المرور'">
         <mat-icon>{{ hidePassword() ? 'visibility_off' : 'visibility' }}</mat-icon>
       </button>
@@ -42,14 +59,18 @@
         @if (loading()) {
           جاري التحقق...
         } @else {
-          تحقق
+          @if (doc.confidentiality === 'سري للغاية') {
+            التالي
+          } @else {
+            🔓 فتح الوثيقة
+          }
         }
       </button>
     </div>
   } @else {
     <mat-form-field class="w-full" appearance="outline">
       <mat-label>رمز التحقق (6 أرقام)</mat-label>
-      <input matInput type="text" inputmode="numeric" maxlength="6" [ngModel]="code()" (ngModelChange)="code.set($event)" (keyup.enter)="verifyCode()" [disabled]="loading()">
+      <input matInput type="text" inputmode="numeric" maxlength="6" [ngModel]="code()" (ngModelChange)="code.set($event)" (keyup.enter)="verifyCode()" [disabled]="loading()" placeholder="أدخل الرمز">
     </mat-form-field>
 
     <div class="flex justify-end gap-2 mt-6">
@@ -58,7 +79,7 @@
         @if (loading()) {
           جاري التحقق...
         } @else {
-          تأكيد الرمز
+          🔓 فتح الوثيقة
         }
       </button>
     </div>

@@ -88,6 +88,18 @@ export class SecurityCenterComponent implements OnInit {
     }
   }
 
+  async copyCurrentCode(): Promise<void> {
+    const code = this.currentCode()?.code;
+    if (!code) return;
+
+    try {
+      await navigator.clipboard.writeText(code);
+      this.toast.show('تم نسخ الرمز الحالي', 'success');
+    } catch {
+      this.toast.show('فشل نسخ الرمز', 'error');
+    }
+  }
+
   formatExpiry(timestamp: number | null | undefined): string {
     if (!timestamp) return '-';
     return new Date(timestamp).toLocaleString('ar-SA', {

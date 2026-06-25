@@ -9,7 +9,7 @@ import { DocumentCardComponent } from '../document-card/document-card.component'
 import { HasPermissionDirective } from '../../directives/has-permission.directive';
 import { DocumentFormComponent } from '../document-form/document-form.component';
 import { DocumentViewComponent } from '../document-view/document-view.component';
-import { SecurityModalComponent } from '../security-modal/security-modal.component';
+import { DocumentAccessService } from '../../services/document-access.service';
 import { DocumentService } from '../../services/document.service';
 import { DocumentTypeService } from '../../services/document-type.service';
 import { FolderService } from '../../services/folder.service';
@@ -39,6 +39,7 @@ export class DocumentGridComponent implements OnInit {
   private exportImport = inject(ExportImportService);
   private toast = inject(ToastService);
   private dialog = inject(MatDialog);
+  private documentAccess = inject(DocumentAccessService);
   private route = inject(ActivatedRoute);
 
   documents = signal<ArchiveDocument[]>([]);
@@ -147,7 +148,7 @@ export class DocumentGridComponent implements OnInit {
   }
 
   async onView(doc: ArchiveDocument): Promise<void> {
-    const verified = await this.verifyAccess(doc, 'view');
+    const verified = await this.documentAccess.verifyAccess(doc, 'view');
     if (!verified) return;
     this.dialog.open(DocumentViewComponent, {
       width: '850px',
@@ -157,7 +158,7 @@ export class DocumentGridComponent implements OnInit {
   }
 
   async onEdit(doc: ArchiveDocument): Promise<void> {
-    const verified = await this.verifyAccess(doc, 'edit');
+    const verified = await this.documentAccess.verifyAccess(doc, 'edit');
     if (!verified) return;
     const ref = this.dialog.open(DocumentFormComponent, {
       width: '900px',
@@ -173,21 +174,6 @@ export class DocumentGridComponent implements OnInit {
     });
   }
 
-  async verifyAccess(doc: ArchiveDocument, accessType: 'view' | 'edit'): Promise<boolean> {
-    if (doc.confidentiality === 'عادي') return true;
-    const ref = this.dialog.open(SecurityModalComponent, {
-      width: '480px',
-      maxWidth: '95vw',
-      disableClose: true,
-      data: { doc, accessType }
-    });
-    return new Promise<boolean>(resolve => {
-      ref.afterClosed().subscribe(result => {
-        resolve(result?.verified === true);
-      });
-    });
-  }
-
   async onDelete(doc: ArchiveDocument): Promise<void> {
     if (!confirm('هل أنت متأكد من حذف الوثيقة؟')) return;
     await this.documentService.delete(doc.id!);
@@ -196,7 +182,9 @@ export class DocumentGridComponent implements OnInit {
     this.toast.show('تم حذف الوثيقة', 'success');
   }
 
-  onPrint(doc: ArchiveDocument): void {
+  async onPrint(doc: ArchiveDocument): Promise<void> {
+    const verified = await this.documentAccess.verifyAccess(doc, 'print');
+    if (!verified) return;
     this.dialog.open(DocumentViewComponent, {
       width: '850px',
       maxWidth: '95vw',

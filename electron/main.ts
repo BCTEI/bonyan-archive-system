@@ -715,10 +715,27 @@ ipcMain.handle('document:getById', (_event: IpcMainInvokeEvent, id: number) => {
   }
 });
 
+function validateDocumentInput(doc: Record<string, unknown>, isCreate: boolean): string | null {
+  if (isCreate && !doc.ref_number) return 'الرقم المرجعي مطلوب';
+  if (!doc.type_id) return 'نوع الملف مطلوب';
+  if (!doc.folder_id) return 'المجلد مطلوب';
+  if (!doc.date) return 'التاريخ مطلوب';
+  if (!doc.sender) return 'المرسل مطلوب';
+  if (!doc.receiver) return 'المستلم مطلوب';
+  if (!doc.subject) return 'الموضوع مطلوب';
+  if (!doc.confidentiality) return 'مستوى السرية مطلوب';
+  return null;
+}
+
 ipcMain.handle('document:create', (_event: IpcMainInvokeEvent, doc: Record<string, unknown>) => {
   try {
     const user = activeUser();
     if (!hasPermission(user, ['editor'])) return { success: false, error: 'ليس لديك صلاحية إنشاء وثيقة' };
+
+    const validationError = validateDocumentInput(doc, true);
+    if (validationError) return { success: false, error: validationError };
+
+    console.log('[Main] Creating document:', doc.ref_number, 'type_id:', doc.type_id, 'confidentiality:', doc.confidentiality);
 
     const result = run(`
       INSERT INTO documents (
@@ -758,6 +775,9 @@ ipcMain.handle('document:update', (_event: IpcMainInvokeEvent, doc: Record<strin
     const user = activeUser();
     if (!user || !hasPermission(user, ['editor'])) return { success: false, error: 'ليس لديك صلاحية تعديل وثيقة' };
     if (!doc.id) return { success: false, error: 'معرف الوثيقة مطلوب' };
+
+    const validationError = validateDocumentInput(doc, false);
+    if (validationError) return { success: false, error: validationError };
 
     const existing = query('SELECT confidentiality FROM documents WHERE id = ?', [doc.id]) as Array<{ confidentiality: string }>;
     if (existing.length === 0) return { success: false, error: 'الوثيقة غير موجودة' };

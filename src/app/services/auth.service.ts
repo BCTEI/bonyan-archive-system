@@ -1,6 +1,7 @@
 import { Injectable, signal, NgZone } from '@angular/core';
 import { Router } from '@angular/router';
 import { User, UserRole, hasRole } from '../models/user.model';
+import { DocumentAccessService } from './document-access.service';
 
 const INACTIVITY_LIMIT_MS = 30 * 60 * 1000;   // 30 minutes
 const INACTIVITY_WARNING_MS = 25 * 60 * 1000; // 25 minutes
@@ -16,7 +17,11 @@ export class AuthService {
   private lastActivity = Date.now();
   private warningShown = false;
 
-  constructor(private router: Router, private ngZone: NgZone) {
+  constructor(
+    private router: Router,
+    private ngZone: NgZone,
+    private documentAccess: DocumentAccessService
+  ) {
     this.startInactivityTracking();
   }
 
@@ -71,6 +76,7 @@ export class AuthService {
       await this.withTimeout(window.electronAPI.logout(), 5000, 'انتهت مهلة تسجيل الخروج');
       this.currentUser.set(null);
       this.clearInactivityTimer();
+      this.documentAccess.clearCache();
     } catch (err: unknown) {
       console.error('[Auth Service] Logout exception:', err);
     }
@@ -129,6 +135,7 @@ export class AuthService {
     if (!this.currentUser()) return;
     this.ngZone.run(() => {
       window.alert('تم تسجيل خروجك تلقائياً بسبب عدم النشاط.');
+      this.documentAccess.clearCache();
       this.logout();
     });
   }

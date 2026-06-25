@@ -7,13 +7,11 @@
             [style.color]="doc.type_color ?? '#2563eb'">
         {{ doc.type_icon }} {{ doc.type_label ?? doc.type }}
       </span>
-      @if (doc.confidentiality && doc.confidentiality !== 'عادي') {
-        <span class="px-3 py-1 rounded-lg text-sm font-bold flex items-center gap-1"
-              [class]="confClass(doc.confidentiality)">
-          @if (doc.confidentiality === 'سري للغاية') { 🔒 } @else { ⚠️ }
-          {{ doc.confidentiality }}
-        </span>
-      }
+      <span class="px-3 py-1 rounded-lg text-sm font-bold flex items-center gap-1"
+            [class]="confClass(doc.confidentiality)">
+        {{ doc.confidentiality === 'عادي' ? '🟢' : doc.confidentiality === 'سري' ? '🟡' : '🔴' }}
+        {{ doc.confidentiality }}
+      </span>
       <span class="px-3 py-1 rounded-lg text-sm text-white" [class.bg-success]="doc.status === 'معتمد'" [class.bg-warning]="doc.status !== 'معتمد'">{{ doc.status }}</span>
     </div>
     <div class="flex items-center gap-2">
