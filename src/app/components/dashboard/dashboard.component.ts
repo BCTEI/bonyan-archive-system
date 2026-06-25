@@ -4,16 +4,19 @@ import { RouterModule } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { FormsModule } from '@angular/forms';
 import { StatsCardComponent } from '../stats-card/stats-card.component';
 import { DatabaseService } from '../../services/database.service';
 import { AuditService } from '../../services/audit.service';
 import { DocumentService } from '../../services/document.service';
 import { DocumentTypeService } from '../../services/document-type.service';
+import { MasterListService } from '../../services/master-list.service';
 import { UserService } from '../../services/user.service';
 import { PermissionService } from '../../services/permission.service';
 import { ToastService } from '../../services/toast.service';
 import { AuditEntry } from '../../models/audit-entry.model';
 import { ArchiveDocument, DocumentTypeEntry } from '../../models/document.model';
+import { MasterListEntry, MasterListType } from '../../models/master-list.model';
 import { UserSession } from '../../models/user.model';
 import { Chart, registerables } from 'chart.js';
 
@@ -22,7 +25,7 @@ Chart.register(...registerables);
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, RouterModule, MatCardModule, MatButtonModule, MatIconModule, StatsCardComponent],
+  imports: [CommonModule, RouterModule, FormsModule, MatCardModule, MatButtonModule, MatIconModule, StatsCardComponent],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.scss'
 })
@@ -31,16 +34,27 @@ export class DashboardComponent implements AfterViewInit {
   auditService = inject(AuditService);
   documentService = inject(DocumentService);
   documentTypeService = inject(DocumentTypeService);
+  masterListService = inject(MasterListService);
   userService = inject(UserService);
   permissions = inject(PermissionService);
   toast = inject(ToastService);
 
   stats = signal<{ total: number; [key: string]: number }>({ total: 0 });
   documentTypes = signal<DocumentTypeEntry[]>([]);
+  masterLists = signal<Record<MasterListType, MasterListEntry[]>>({ author: [], sender: [], receiver: [], department: [] });
   recentAudit = signal<AuditEntry[]>([]);
   todaySessions = signal<UserSession[]>([]);
   recentDocuments = signal<ArchiveDocument[]>([]);
+  allDocuments = signal<ArchiveDocument[]>([]);
   today = new Date();
+  chartDimension = signal<'type' | MasterListType>('type');
+  chartDimensions: { value: 'type' | MasterListType; label: string }[] = [
+    { value: 'type', label: 'حسب نوع الوثيقة' },
+    { value: 'author', label: 'حسب المؤلف' },
+    { value: 'sender', label: 'حسب المرسل' },
+    { value: 'receiver', label: 'حسب المستلم' },
+    { value: 'department', label: 'حسب القسم / الجهة' }
+  ];
   private chart?: Chart;
 
   get rolePermissions() {
@@ -49,6 +63,8 @@ export class DashboardComponent implements AfterViewInit {
 
   async ngAfterViewInit(): Promise<void> {
     await this.loadDocumentTypes();
+    await this.loadMasterLists();
+    await this.loadAllDocuments();
     await this.loadStats();
     await this.loadAudit();
     await this.loadSessions();
@@ -62,6 +78,29 @@ export class DashboardComponent implements AfterViewInit {
       this.documentTypes.set(types);
     } catch {
       this.documentTypes.set([]);
+    }
+  }
+
+  async loadMasterLists(): Promise<void> {
+    try {
+      const [author, sender, receiver, department] = await Promise.all([
+        this.masterListService.getAll('author', true),
+        this.masterListService.getAll('sender', true),
+        this.masterListService.getAll('receiver', true),
+        this.masterListService.getAll('department', true)
+      ]);
+      this.masterLists.set({ author, sender, receiver, department });
+    } catch {
+      this.masterLists.set({ author: [], sender: [], receiver: [], department: [] });
+    }
+  }
+
+  async loadAllDocuments(): Promise<void> {
+    try {
+      const docs = await this.documentService.getAll();
+      this.allDocuments.set(docs);
+    } catch {
+      this.allDocuments.set([]);
     }
   }
 
@@ -101,16 +140,51 @@ export class DashboardComponent implements AfterViewInit {
     }));
   }
 
+  chartData(): { label: string; value: number; color: string }[] {
+    const dimension = this.chartDimension();
+    if (dimension === 'type') {
+      return this.documentTypes().map(t => ({
+        label: t.label,
+        value: this.stats()[`type_${t.id}`] ?? 0,
+        color: t.color
+      }));
+    }
+
+    const docs = this.allDocuments();
+    const palette = ['#1e3a5f', '#2563eb', '#0891b2', '#059669', '#d97706', '#dc2626', '#7c3aed', '#db2777', '#4b5563', '#65a30d'];
+    const counts = new Map<string, number>();
+    for (const doc of docs) {
+      const raw = dimension === 'department'
+        ? (doc.sender || doc.receiver || 'غير محدد')
+        : (doc[dimension] || 'غير محدد');
+      const key = raw.trim() || 'غير محدد';
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+
+    const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
+    return sorted.map(([label, value], i) => ({
+      label,
+      value,
+      color: palette[i % palette.length]
+    }));
+  }
+
+  setChartDimension(dimension: 'type' | MasterListType): void {
+    this.chartDimension.set(dimension);
+    this.renderChart();
+  }
+
   renderChart(): void {
     const canvas = document.getElementById('docsChart') as HTMLCanvasElement | null;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const typeStats = this.typeStats();
-    const labels = ['الكل', ...typeStats.map(t => t.label)];
-    const data = [this.stats().total, ...typeStats.map(t => t.value)];
-    const colors = ['#1e3a5f', ...typeStats.map(t => t.color)];
+    const dimension = this.chartDimension();
+    const items = this.chartData();
+    const labels = dimension === 'type' ? ['الكل', ...items.map(t => t.label)] : items.map(t => t.label);
+    const data = dimension === 'type' ? [this.stats().total, ...items.map(t => t.value)] : items.map(t => t.value);
+    const colors = dimension === 'type' ? ['#1e3a5f', ...items.map(t => t.color)] : items.map(t => t.color);
 
     this.chart?.destroy();
     this.chart = new Chart(ctx, {
@@ -126,9 +200,10 @@ export class DashboardComponent implements AfterViewInit {
       },
       options: {
         responsive: true,
-        plugins: { legend: { display: false } },
+        plugins: { legend: { display: false }, title: { display: true, text: this.chartDimensions.find(d => d.value === dimension)?.label ?? '' } },
         scales: {
-          y: { beginAtZero: true, ticks: { stepSize: 1 } }
+          y: { beginAtZero: true, ticks: { stepSize: 1 } },
+          x: { ticks: { font: { size: 11 } } }
         }
       }
     });
@@ -174,6 +249,7 @@ export class DashboardComponent implements AfterViewInit {
       const result = await this.db.importData(text, 'merge');
       this.toast.show(result.message, result.success ? 'success' : 'error');
       await this.loadStats();
+      await this.loadAllDocuments();
       this.renderChart();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'فشل الاستيراد';

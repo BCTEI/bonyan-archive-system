@@ -77,13 +77,37 @@
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
       <div>
         <label class="block text-sm font-medium mb-1">الجهة المرسلة (المؤسسة) *</label>
-        <input [ngModel]="doc().sender" (ngModelChange)="updateDoc('sender', $event)"
-               class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary">
+        <div class="flex gap-2">
+          <mat-form-field class="flex-1" appearance="outline">
+            <input matInput [ngModel]="doc().sender" (ngModelChange)="updateDoc('sender', $event); filterSenders($event)"
+                   [matAutocomplete]="senderAuto" placeholder="اختر أو اكتب...">
+            <mat-autocomplete #senderAuto="matAutocomplete">
+              @for (item of filteredSenders(); track item.id) {
+                <mat-option [value]="item.name">{{ item.name }}</mat-option>
+              }
+            </mat-autocomplete>
+          </mat-form-field>
+          <button mat-stroked-button type="button" (click)="openQuickAdd('sender', doc().sender ?? '')" class="!min-w-[44px]">
+            <mat-icon>add</mat-icon>
+          </button>
+        </div>
       </div>
       <div>
         <label class="block text-sm font-medium mb-1">الجهة المستقبلة *</label>
-        <input [ngModel]="doc().receiver" (ngModelChange)="updateDoc('receiver', $event)"
-               class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary">
+        <div class="flex gap-2">
+          <mat-form-field class="flex-1" appearance="outline">
+            <input matInput [ngModel]="doc().receiver" (ngModelChange)="updateDoc('receiver', $event); filterReceivers($event)"
+                   [matAutocomplete]="receiverAuto" placeholder="اختر أو اكتب...">
+            <mat-autocomplete #receiverAuto="matAutocomplete">
+              @for (item of filteredReceivers(); track item.id) {
+                <mat-option [value]="item.name">{{ item.name }}</mat-option>
+              }
+            </mat-autocomplete>
+          </mat-form-field>
+          <button mat-stroked-button type="button" (click)="openQuickAdd('receiver', doc().receiver ?? '')" class="!min-w-[44px]">
+            <mat-icon>add</mat-icon>
+          </button>
+        </div>
       </div>
     </div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -94,8 +118,20 @@
       </div>
       <div>
         <label class="block text-sm font-medium mb-1">اسم المؤلف / معد الملف *</label>
-        <input [ngModel]="doc().author" (ngModelChange)="updateDoc('author', $event)"
-               class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary">
+        <div class="flex gap-2">
+          <mat-form-field class="flex-1" appearance="outline">
+            <input matInput [ngModel]="doc().author" (ngModelChange)="updateDoc('author', $event); filterAuthors($event)"
+                   [matAutocomplete]="authorAuto" placeholder="اختر أو اكتب...">
+            <mat-autocomplete #authorAuto="matAutocomplete">
+              @for (item of filteredAuthors(); track item.id) {
+                <mat-option [value]="item.name">{{ item.name }}</mat-option>
+              }
+            </mat-autocomplete>
+          </mat-form-field>
+          <button mat-stroked-button type="button" (click)="openQuickAdd('author', doc().author ?? '')" class="!min-w-[44px]">
+            <mat-icon>add</mat-icon>
+          </button>
+        </div>
       </div>
     </div>
   }
@@ -104,8 +140,20 @@
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
       <div>
         <label class="block text-sm font-medium mb-1">الجهة المرسلة *</label>
-        <input [ngModel]="doc().sender" (ngModelChange)="updateDoc('sender', $event)"
-               class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary">
+        <div class="flex gap-2">
+          <mat-form-field class="flex-1" appearance="outline">
+            <input matInput [ngModel]="doc().sender" (ngModelChange)="updateDoc('sender', $event); filterSenders($event)"
+                   [matAutocomplete]="senderAuto2" placeholder="اختر أو اكتب...">
+            <mat-autocomplete #senderAuto2="matAutocomplete">
+              @for (item of filteredSenders(); track item.id) {
+                <mat-option [value]="item.name">{{ item.name }}</mat-option>
+              }
+            </mat-autocomplete>
+          </mat-form-field>
+          <button mat-stroked-button type="button" (click)="openQuickAdd('sender', doc().sender ?? '')" class="!min-w-[44px]">
+            <mat-icon>add</mat-icon>
+          </button>
+        </div>
       </div>
       <div>
         <label class="block text-sm font-medium mb-1">تاريخ الاستلام *</label>
@@ -141,13 +189,37 @@
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
       <div>
         <label class="block text-sm font-medium mb-1">القسم / الجهة المرسلة *</label>
-        <input [ngModel]="doc().sender" (ngModelChange)="updateDoc('sender', $event)"
-               class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary">
+        <div class="flex gap-2">
+          <mat-form-field class="flex-1" appearance="outline">
+            <input matInput [ngModel]="doc().sender" (ngModelChange)="updateDoc('sender', $event); filterDepartments($event)"
+                   [matAutocomplete]="deptAuto1" placeholder="اختر أو اكتب...">
+            <mat-autocomplete #deptAuto1="matAutocomplete">
+              @for (item of filteredDepartments(); track item.id) {
+                <mat-option [value]="item.name">{{ item.name }}</mat-option>
+              }
+            </mat-autocomplete>
+          </mat-form-field>
+          <button mat-stroked-button type="button" (click)="openQuickAdd('department', doc().sender ?? '')" class="!min-w-[44px]">
+            <mat-icon>add</mat-icon>
+          </button>
+        </div>
       </div>
       <div>
         <label class="block text-sm font-medium mb-1">القسم المستهدف / المستقبل *</label>
-        <input [ngModel]="doc().receiver" (ngModelChange)="updateDoc('receiver', $event)"
-               class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary">
+        <div class="flex gap-2">
+          <mat-form-field class="flex-1" appearance="outline">
+            <input matInput [ngModel]="doc().receiver" (ngModelChange)="updateDoc('receiver', $event); filterDepartments($event)"
+                   [matAutocomplete]="deptAuto2" placeholder="اختر أو اكتب...">
+            <mat-autocomplete #deptAuto2="matAutocomplete">
+              @for (item of filteredDepartments(); track item.id) {
+                <mat-option [value]="item.name">{{ item.name }}</mat-option>
+              }
+            </mat-autocomplete>
+          </mat-form-field>
+          <button mat-stroked-button type="button" (click)="openQuickAdd('department', doc().receiver ?? '')" class="!min-w-[44px]">
+            <mat-icon>add</mat-icon>
+          </button>
+        </div>
       </div>
     </div>
     <div class="mb-4">
@@ -221,6 +293,19 @@
       </div>
     }
   </div>
+
+  @if (quickAddType()) {
+    <div class="mb-4 p-4 rounded-xl border border-primary bg-primary/5">
+      <h4 class="font-bold text-primary mb-2">➕ إضافة {{ quickAddType() === 'author' ? 'مؤلف' : quickAddType() === 'sender' ? 'جهة مرسلة' : quickAddType() === 'receiver' ? 'جهة مستقبلة' : 'قسم' }} جديد</h4>
+      <div class="flex gap-2">
+        <input type="text" [ngModel]="quickAddName()" (ngModelChange)="quickAddName.set($event)"
+               class="flex-1 px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary"
+               placeholder="الاسم..." (keyup.enter)="confirmQuickAdd()">
+        <button mat-raised-button color="primary" type="button" (click)="confirmQuickAdd()">إضافة</button>
+        <button mat-stroked-button type="button" (click)="cancelQuickAdd()">إلغاء</button>
+      </div>
+    </div>
+  }
 
   <div class="flex justify-end gap-3">
     <button mat-button type="button" (click)="cancel()" [disabled]="isSaving()">إلغاء</button>

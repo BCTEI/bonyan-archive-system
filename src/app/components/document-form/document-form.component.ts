@@ -4,20 +4,25 @@ import { FormsModule } from '@angular/forms';
 import { MatDialogRef, MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { ArchiveDocument, DocumentTypeEntry, Attachment, ConfidentialityLevel } from '../../models/document.model';
 import { Folder } from '../../models/folder.model';
 import { DocumentService } from '../../services/document.service';
 import { DocumentTypeService } from '../../services/document-type.service';
 import { FolderService } from '../../services/folder.service';
+import { MasterListService } from '../../services/master-list.service';
 import { AuditService } from '../../services/audit.service';
 import { AuthService } from '../../services/auth.service';
 import { SignatureService } from '../../services/signature.service';
 import { ToastService } from '../../services/toast.service';
+import { MasterListEntry, MasterListType } from '../../models/master-list.model';
 
 @Component({
   selector: 'app-document-form',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule],
+  imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatAutocompleteModule],
   templateUrl: './document-form.component.html',
   styleUrl: './document-form.component.scss'
 })
@@ -27,6 +32,7 @@ export class DocumentFormComponent implements OnInit {
   private documentService = inject(DocumentService);
   private documentTypeService = inject(DocumentTypeService);
   private folderService = inject(FolderService);
+  private masterListService = inject(MasterListService);
   private auditService = inject(AuditService);
   private auth = inject(AuthService);
   private signatureService = inject(SignatureService);
@@ -45,6 +51,19 @@ export class DocumentFormComponent implements OnInit {
   isSaving = signal(false);
   today = new Date().toISOString().split('T')[0];
 
+  authors = signal<MasterListEntry[]>([]);
+  senders = signal<MasterListEntry[]>([]);
+  receivers = signal<MasterListEntry[]>([]);
+  departments = signal<MasterListEntry[]>([]);
+
+  filteredAuthors = signal<MasterListEntry[]>([]);
+  filteredSenders = signal<MasterListEntry[]>([]);
+  filteredReceivers = signal<MasterListEntry[]>([]);
+  filteredDepartments = signal<MasterListEntry[]>([]);
+
+  quickAddType = signal<MasterListType | null>(null);
+  quickAddName = signal('');
+
   confidentialityLevels: ConfidentialityLevel[] = ['عادي', 'سري', 'سري للغاية'];
 
   allowedTypes = [
@@ -59,7 +78,11 @@ export class DocumentFormComponent implements OnInit {
   allowedExts = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png'];
 
   async ngOnInit(): Promise<void> {
-    const [types, fldrs] = await Promise.all([this.documentTypeService.getAll(true), this.folderService.getAll()]);
+    const [types, fldrs] = await Promise.all([
+      this.documentTypeService.getAll(true),
+      this.folderService.getAll(),
+      this.loadMasterLists()
+    ]);
     this.documentTypes.set(types);
     this.folders.set(fldrs);
 
@@ -75,6 +98,27 @@ export class DocumentFormComponent implements OnInit {
       if (defaultType) {
         await this.generateRef();
       }
+    }
+  }
+
+  async loadMasterLists(): Promise<void> {
+    try {
+      const [authors, senders, receivers, departments] = await Promise.all([
+        this.masterListService.getAll('author', true),
+        this.masterListService.getAll('sender', true),
+        this.masterListService.getAll('receiver', true),
+        this.masterListService.getAll('department', true)
+      ]);
+      this.authors.set(authors);
+      this.senders.set(senders);
+      this.receivers.set(receivers);
+      this.departments.set(departments);
+      this.filteredAuthors.set(authors);
+      this.filteredSenders.set(senders);
+      this.filteredReceivers.set(receivers);
+      this.filteredDepartments.set(departments);
+    } catch (err) {
+      console.warn('[DocumentForm] Failed to load master lists:', err);
     }
   }
 
@@ -127,6 +171,53 @@ export class DocumentFormComponent implements OnInit {
 
   typeName(typeId: number): string {
     return this.documentTypes().find(t => t.id === typeId)?.name ?? '';
+  }
+
+  filterAuthors(term: string): void {
+    const t = term.toLowerCase();
+    this.filteredAuthors.set(this.authors().filter(a => a.name.toLowerCase().includes(t)));
+  }
+
+  filterSenders(term: string): void {
+    const t = term.toLowerCase();
+    this.filteredSenders.set(this.senders().filter(a => a.name.toLowerCase().includes(t)));
+  }
+
+  filterReceivers(term: string): void {
+    const t = term.toLowerCase();
+    this.filteredReceivers.set(this.receivers().filter(a => a.name.toLowerCase().includes(t)));
+  }
+
+  filterDepartments(term: string): void {
+    const t = term.toLowerCase();
+    this.filteredDepartments.set(this.departments().filter(a => a.name.toLowerCase().includes(t)));
+  }
+
+  openQuickAdd(type: MasterListType, initialName: string): void {
+    this.quickAddType.set(type);
+    this.quickAddName.set(initialName.trim());
+  }
+
+  cancelQuickAdd(): void {
+    this.quickAddType.set(null);
+    this.quickAddName.set('');
+  }
+
+  async confirmQuickAdd(): Promise<void> {
+    const type = this.quickAddType();
+    const name = this.quickAddName().trim();
+    if (!type || !name) return;
+
+    try {
+      await this.masterListService.create({ list_type: type, name });
+      await this.loadMasterLists();
+      this.toast.show('تمت إضافة العنصر إلى القائمة الرئيسية', 'success');
+      this.quickAddType.set(null);
+      this.quickAddName.set('');
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'فشل الإضافة';
+      this.toast.show(message, 'error');
+    }
   }
 
   getCanvas(): HTMLCanvasElement | undefined {

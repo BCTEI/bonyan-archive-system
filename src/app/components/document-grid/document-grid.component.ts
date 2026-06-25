@@ -13,6 +13,7 @@ import { DocumentAccessService } from '../../services/document-access.service';
 import { DocumentService } from '../../services/document.service';
 import { DocumentTypeService } from '../../services/document-type.service';
 import { FolderService } from '../../services/folder.service';
+import { MasterListService } from '../../services/master-list.service';
 import { AuditService } from '../../services/audit.service';
 import { AuthService } from '../../services/auth.service';
 import { ExportImportService } from '../../services/export-import.service';
@@ -40,15 +41,24 @@ export class DocumentGridComponent implements OnInit {
   private toast = inject(ToastService);
   private dialog = inject(MatDialog);
   private documentAccess = inject(DocumentAccessService);
+  private masterListService = inject(MasterListService);
   private route = inject(ActivatedRoute);
 
   documents = signal<ArchiveDocument[]>([]);
   folders = signal<Folder[]>([]);
   documentTypes = signal<DocumentTypeEntry[]>([]);
+  authors = signal<{ name: string }[]>([{ name: 'الكل' }]);
+  senders = signal<{ name: string }[]>([{ name: 'الكل' }]);
+  receivers = signal<{ name: string }[]>([{ name: 'الكل' }]);
+  departments = signal<{ name: string }[]>([{ name: 'الكل' }]);
   filtered = signal<ArchiveDocument[]>([]);
   selectedTypeId = signal<number | 'الكل'>('الكل');
   selectedConfidentiality = signal<ConfidentialityLevel | 'الكل'>('الكل');
   selectedFolder = signal<number | 'الكل'>('الكل');
+  selectedAuthor = signal<string>('الكل');
+  selectedSender = signal<string>('الكل');
+  selectedReceiver = signal<string>('الكل');
+  selectedDepartment = signal<string>('الكل');
   search = signal('');
   loading = signal(false);
 
@@ -78,7 +88,8 @@ export class DocumentGridComponent implements OnInit {
     const [docs, fldrs, types] = await Promise.all([
       this.documentService.getAll(),
       this.folderService.getAll(),
-      this.documentTypeService.getAll(true)
+      this.documentTypeService.getAll(true),
+      this.loadFilterLists()
     ]);
     this.documents.set(docs);
     this.folders.set(fldrs);
@@ -86,11 +97,32 @@ export class DocumentGridComponent implements OnInit {
     this.applyFilters();
   }
 
+  async loadFilterLists(): Promise<void> {
+    try {
+      const [authors, senders, receivers, departments] = await Promise.all([
+        this.masterListService.getAll('author', true),
+        this.masterListService.getAll('sender', true),
+        this.masterListService.getAll('receiver', true),
+        this.masterListService.getAll('department', true)
+      ]);
+      this.authors.set([{ name: 'الكل' }, ...authors.map(a => ({ name: a.name }))]);
+      this.senders.set([{ name: 'الكل' }, ...senders.map(a => ({ name: a.name }))]);
+      this.receivers.set([{ name: 'الكل' }, ...receivers.map(a => ({ name: a.name }))]);
+      this.departments.set([{ name: 'الكل' }, ...departments.map(a => ({ name: a.name }))]);
+    } catch {
+      // ignore - filters fall back to "الكل" only
+    }
+  }
+
   applyFilters(): void {
     let list = this.documents();
     const typeId = this.selectedTypeId();
     const folder = this.selectedFolder();
     const conf = this.selectedConfidentiality();
+    const author = this.selectedAuthor();
+    const sender = this.selectedSender();
+    const receiver = this.selectedReceiver();
+    const department = this.selectedDepartment();
     const term = this.search().trim();
 
     if (typeId !== 'الكل') {
@@ -101,6 +133,18 @@ export class DocumentGridComponent implements OnInit {
     }
     if (conf !== 'الكل') {
       list = list.filter(d => d.confidentiality === conf);
+    }
+    if (author !== 'الكل') {
+      list = list.filter(d => d.author === author);
+    }
+    if (sender !== 'الكل') {
+      list = list.filter(d => d.sender === sender);
+    }
+    if (receiver !== 'الكل') {
+      list = list.filter(d => d.receiver === receiver);
+    }
+    if (department !== 'الكل') {
+      list = list.filter(d => d.sender === department || d.receiver === department);
     }
     if (term) {
       list = list.filter(d =>
@@ -128,8 +172,40 @@ export class DocumentGridComponent implements OnInit {
     this.applyFilters();
   }
 
+  setAuthor(name: string): void {
+    this.selectedAuthor.set(name);
+    this.applyFilters();
+  }
+
+  setSender(name: string): void {
+    this.selectedSender.set(name);
+    this.applyFilters();
+  }
+
+  setReceiver(name: string): void {
+    this.selectedReceiver.set(name);
+    this.applyFilters();
+  }
+
+  setDepartment(name: string): void {
+    this.selectedDepartment.set(name);
+    this.applyFilters();
+  }
+
   setSearch(value: string): void {
     this.search.set(value);
+    this.applyFilters();
+  }
+
+  clearFilters(): void {
+    this.selectedTypeId.set('الكل');
+    this.selectedConfidentiality.set('الكل');
+    this.selectedFolder.set('الكل');
+    this.selectedAuthor.set('الكل');
+    this.selectedSender.set('الكل');
+    this.selectedReceiver.set('الكل');
+    this.selectedDepartment.set('الكل');
+    this.search.set('');
     this.applyFilters();
   }
 
@@ -182,9 +258,7 @@ export class DocumentGridComponent implements OnInit {
     this.toast.show('تم حذف الوثيقة', 'success');
   }
 
-  async onPrint(doc: ArchiveDocument): Promise<void> {
-    const verified = await this.documentAccess.verifyAccess(doc, 'print');
-    if (!verified) return;
+  onPrint(doc: ArchiveDocument): void {
     this.dialog.open(DocumentViewComponent, {
       width: '850px',
       maxWidth: '95vw',

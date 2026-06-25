@@ -1,0 +1,95 @@
+<div class="p-4 max-w-5xl mx-auto" dir="rtl">
+  <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+    <div>
+      <h1 class="text-2xl font-bold text-primary flex items-center gap-2">
+        <mat-icon>list_alt</mat-icon>
+        إدارة القوائم الرئيسية
+      </h1>
+      <p class="text-text-light text-sm">إدارة المؤلفين والجهات المرسلة والمستقبلة والأقسام</p>
+    </div>
+  </div>
+
+  <div class="flex flex-wrap gap-2 mb-6">
+    @for (tab of tabs; track tab.value) {
+      <button (click)="setTab(tab.value)"
+              class="px-4 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2"
+              [class.bg-primary]="activeTab() === tab.value"
+              [class.text-white]="activeTab() === tab.value"
+              [class.bg-secondary]="activeTab() !== tab.value"
+              [class.text-text]="activeTab() !== tab.value">
+        <mat-icon class="!text-base">{{ tab.icon }}</mat-icon>
+        {{ tab.label }}
+      </button>
+    }
+  </div>
+
+  <mat-card class="mb-6">
+    <mat-card-content class="p-4">
+      <div class="flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+        <div class="relative flex-1 w-full">
+          <mat-icon class="absolute right-3 top-1/2 -translate-y-1/2 text-text-light">search</mat-icon>
+          <input type="text" [ngModel]="search()" (ngModelChange)="search.set($event)"
+                 placeholder="بحث في القائمة..."
+                 class="w-full pr-10 pl-3 py-2 rounded-lg border border-border bg-bg text-sm focus:outline-none focus:border-primary">
+        </div>
+        <button mat-raised-button color="primary" (click)="openAdd()">
+          <mat-icon>add</mat-icon>
+          إضافة جديد
+        </button>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card>
+    <mat-card-content class="p-0">
+      @if (loading()) {
+        <div class="flex items-center justify-center p-12">
+          <mat-spinner diameter="40"></mat-spinner>
+        </div>
+      } @else if (filteredItems().length === 0) {
+        <div class="text-center py-16 text-text-light">
+          <mat-icon class="!text-6xl !w-16 !h-16 mb-4 opacity-40">playlist_add</mat-icon>
+          <p>لا توجد عناصر في هذه القائمة</p>
+        </div>
+      } @else {
+        <table class="w-full text-sm">
+          <thead class="bg-secondary/50 text-text">
+            <tr>
+              <th class="px-4 py-3 text-right font-semibold">#</th>
+              <th class="px-4 py-3 text-right font-semibold">الاسم</th>
+              <th class="px-4 py-3 text-right font-semibold">الحالة</th>
+              <th class="px-4 py-3 text-right font-semibold">إجراءات</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (item of filteredItems(); track item.id) {
+              <tr class="border-b border-border last:border-0 hover:bg-secondary/30 transition">
+                <td class="px-4 py-3">{{ item.id }}</td>
+                <td class="px-4 py-3 font-medium">{{ item.name }}</td>
+                <td class="px-4 py-3">
+                  <span class="px-2 py-1 rounded-full text-xs font-bold"
+                        [ngClass]="item.is_active === 1 ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'">
+                    {{ item.is_active === 1 ? 'نشط' : 'معطل' }}
+                  </span>
+                </td>
+                <td class="px-4 py-3">
+                  <div class="flex items-center gap-1">
+                    <button mat-icon-button (click)="openEdit(item)" title="تعديل">
+                      <mat-icon class="!text-base">edit</mat-icon>
+                    </button>
+                    <button mat-icon-button (click)="toggleStatus(item)" title="تفعيل/تعطيل">
+                      <mat-icon class="!text-base">{{ item.is_active === 1 ? 'block' : 'check_circle' }}</mat-icon>
+                    </button>
+                    <button mat-icon-button color="warn" (click)="deleteItem(item)" title="حذف">
+                      <mat-icon class="!text-base">delete</mat-icon>
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      }
+    </mat-card-content>
+  </mat-card>
+</div>

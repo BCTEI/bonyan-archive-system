@@ -82,6 +82,7 @@ import {
   run,
   getNextRef,
   addAudit,
+  clearAudit,
   exportData,
   importData,
   getStats,
@@ -124,6 +125,11 @@ import {
   getArchivedYears,
   closeYear,
   getArchivedDocuments,
+  getMasterLists,
+  createMasterList,
+  updateMasterList,
+  deleteMasterList,
+  toggleMasterListStatus,
   AuthUser,
   FolderPermission,
   DocumentTypeInput,
@@ -270,6 +276,22 @@ ipcMain.handle('db:audit', (_event: IpcMainInvokeEvent, action: string, docRef?:
   console.log('[Main] Handling db:audit');
   addAudit(action, docRef, details, currentUser?.username);
   return true;
+});
+
+ipcMain.handle('audit:clearAll', () => {
+  console.log('[Main] Handling audit:clearAll');
+  return clearAudit();
+});
+
+ipcMain.handle('audit:addEntry', (_event: IpcMainInvokeEvent, entry: { action: string; doc_ref?: string; details?: string; username?: string }) => {
+  console.log('[Main] Handling audit:addEntry');
+  try {
+    addAudit(entry.action, entry.doc_ref, entry.details, entry.username ?? currentUser?.username);
+    return { success: true };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return { success: false, error: message };
+  }
 });
 
 ipcMain.handle('db:stats', () => {
@@ -594,6 +616,76 @@ ipcMain.handle('documentType:delete', (_event: IpcMainInvokeEvent, id: number) =
     const result = deleteDocumentType(id);
     if (result.success) {
       addAudit('حذف نوع وثيقة', undefined, `المعرف: ${id}`, user?.username);
+    }
+    return result;
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Master list handlers (authors, senders, receivers, departments)
+// ─────────────────────────────────────────────────────────────────────────────
+
+ipcMain.handle('masterList:getAll', (_event: IpcMainInvokeEvent, listType?: string, activeOnly = false) => {
+  try {
+    const user = activeUser();
+    if (!user) return { success: false, error: 'يجب تسجيل الدخول' };
+    return { success: true, items: getMasterLists(listType, activeOnly) };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('masterList:create', (_event: IpcMainInvokeEvent, data: Parameters<typeof createMasterList>[0]) => {
+  try {
+    const user = activeUser();
+    if (!hasPermission(user, ['admin'])) return { success: false, error: 'ليس لديك صلاحية' };
+    const result = createMasterList(data);
+    if (result.success) {
+      addAudit('إضافة قائمة رئيسية', undefined, `${data.list_type}: ${data.name}`, user?.username);
+    }
+    return result;
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('masterList:update', (_event: IpcMainInvokeEvent, id: number, data: Parameters<typeof updateMasterList>[1]) => {
+  try {
+    const user = activeUser();
+    if (!hasPermission(user, ['admin'])) return { success: false, error: 'ليس لديك صلاحية' };
+    const result = updateMasterList(id, data);
+    if (result.success) {
+      addAudit('تعديل قائمة رئيسية', undefined, `المعرف: ${id}`, user?.username);
+    }
+    return result;
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('masterList:delete', (_event: IpcMainInvokeEvent, id: number) => {
+  try {
+    const user = activeUser();
+    if (!hasPermission(user, ['admin'])) return { success: false, error: 'ليس لديك صلاحية' };
+    const result = deleteMasterList(id);
+    if (result.success) {
+      addAudit('حذف قائمة رئيسية', undefined, `المعرف: ${id}`, user?.username);
+    }
+    return result;
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('masterList:toggleStatus', (_event: IpcMainInvokeEvent, id: number, isActive: number) => {
+  try {
+    const user = activeUser();
+    if (!hasPermission(user, ['admin'])) return { success: false, error: 'ليس لديك صلاحية' };
+    const result = toggleMasterListStatus(id, isActive);
+    if (result.success) {
+      addAudit('تغيير حالة قائمة رئيسية', undefined, `المعرف: ${id} - ${isActive ? 'نشط' : 'معطل'}`, user?.username);
     }
     return result;
   } catch (err: unknown) {

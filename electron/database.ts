@@ -129,6 +129,15 @@ interface InMemoryArchivedYear {
   notes?: string;
 }
 
+interface InMemoryMasterList {
+  id: number;
+  list_type: string;
+  name: string;
+  name_en?: string | null;
+  is_active: number;
+  created_at: number;
+}
+
 interface InMemoryStore {
   users: InMemoryUser[];
   folders: InMemoryFolder[];
@@ -142,6 +151,7 @@ interface InMemoryStore {
   document_access_log: InMemoryAccessLog[];
   password_reset_requests: InMemoryResetRequest[];
   archived_years: InMemoryArchivedYear[];
+  master_lists: InMemoryMasterList[];
 }
 
 const memoryStore: InMemoryStore = {
@@ -169,7 +179,17 @@ const memoryStore: InMemoryStore = {
   system_verification_codes: [],
   document_access_log: [],
   password_reset_requests: [],
-  archived_years: []
+  archived_years: [],
+  master_lists: [
+    { id: 1, list_type: 'author', name: 'أحمد علي', name_en: null, is_active: 1, created_at: Date.now() },
+    { id: 2, list_type: 'author', name: 'محمد خالد', name_en: null, is_active: 1, created_at: Date.now() },
+    { id: 3, list_type: 'sender', name: 'وزارة الدفاع', name_en: null, is_active: 1, created_at: Date.now() },
+    { id: 4, list_type: 'sender', name: 'القيادة العامة', name_en: null, is_active: 1, created_at: Date.now() },
+    { id: 5, list_type: 'receiver', name: 'مركز البنيان', name_en: null, is_active: 1, created_at: Date.now() },
+    { id: 6, list_type: 'receiver', name: 'الإدارة العامة', name_en: null, is_active: 1, created_at: Date.now() },
+    { id: 7, list_type: 'department', name: 'قسم التدريب', name_en: null, is_active: 1, created_at: Date.now() },
+    { id: 8, list_type: 'department', name: 'قسم الصيانة', name_en: null, is_active: 1, created_at: Date.now() }
+  ]
 };
 
 let useMemoryFallback = false;
@@ -348,6 +368,17 @@ export function initDb(): { success: boolean; error?: string } {
         FOREIGN KEY (archived_by) REFERENCES users(id)
       );
 
+      CREATE TABLE IF NOT EXISTS master_lists (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        list_type TEXT NOT NULL CHECK(list_type IN ('author', 'sender', 'receiver', 'department')),
+        name TEXT NOT NULL,
+        name_en TEXT,
+        is_active INTEGER DEFAULT 1,
+        created_at INTEGER DEFAULT (strftime('%s','now'))
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_master_lists_type ON master_lists(list_type);
+      CREATE INDEX IF NOT EXISTS idx_master_lists_name ON master_lists(name);
       CREATE INDEX IF NOT EXISTS idx_documents_folder ON documents(folder_id);
       CREATE INDEX IF NOT EXISTS idx_documents_ref ON documents(ref_number);
       CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON audit_log(timestamp);
@@ -366,6 +397,7 @@ export function initDb(): { success: boolean; error?: string } {
     migrateDocumentTypeId();
     migrateFolderSystemFlags();
     migrateDocumentConfidentiality();
+    seedMasterLists();
     createPostMigrationIndexes();
 
     return { success: true };
@@ -410,6 +442,27 @@ function seedDocumentTypes(): void {
   });
   tx();
   console.log('[Database] Seeded system document types');
+}
+
+function seedMasterLists(): void {
+  if (!db || useMemoryFallback) return;
+  const count = db.prepare('SELECT COUNT(*) as c FROM master_lists').get() as { c: number };
+  if (count.c > 0) return;
+  const insert = db.prepare(`
+    INSERT INTO master_lists (list_type, name, name_en, is_active) VALUES (?, ?, ?, ?)
+  `);
+  const tx = db.transaction(() => {
+    insert.run('author', 'أحمد علي', null, 1);
+    insert.run('author', 'محمد خالد', null, 1);
+    insert.run('sender', 'وزارة الدفاع', null, 1);
+    insert.run('sender', 'القيادة العامة', null, 1);
+    insert.run('receiver', 'مركز البنيان', null, 1);
+    insert.run('receiver', 'الإدارة العامة', null, 1);
+    insert.run('department', 'قسم التدريب', null, 1);
+    insert.run('department', 'قسم الصيانة', null, 1);
+  });
+  tx();
+  console.log('[Database] Seeded master lists');
 }
 
 function migrateDocumentTypeId(): void {
@@ -1076,6 +1129,21 @@ export function addAudit(action: string, docRef?: string, details?: string, user
     .run(action, docRef ?? null, details ?? null, username ?? null);
 }
 
+export function clearAudit(): { success: boolean; error?: string } {
+  try {
+    if (useMemoryFallback) {
+      memoryStore.audit_log = [];
+      return { success: true };
+    }
+    if (!db) return { success: false, error: 'Database not initialized' };
+    db.prepare('DELETE FROM audit_log').run();
+    return { success: true };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return { success: false, error: message };
+  }
+}
+
 export function getStats(): Record<string, number> {
   if (useMemoryFallback) {
     const stats: Record<string, number> = { total: memoryStore.documents.length };
@@ -1506,6 +1574,131 @@ export function logDocumentAccess(documentId: number, userId: number, username: 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Master lists (authors, senders, receivers, departments)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface MasterListInput {
+  list_type: string;
+  name: string;
+  name_en?: string | null;
+  is_active?: number;
+}
+
+export interface MasterListEntry {
+  id: number;
+  list_type: string;
+  name: string;
+  name_en?: string | null;
+  is_active: number;
+  created_at: number;
+}
+
+export function getMasterLists(listType?: string, activeOnly = false): MasterListEntry[] {
+  if (useMemoryFallback) {
+    let list = memoryStore.master_lists.map(item => ({ ...item }));
+    if (listType) list = list.filter(item => item.list_type === listType);
+    if (activeOnly) list = list.filter(item => item.is_active === 1);
+    return list.sort((a, b) => a.name.localeCompare(b.name, 'ar'));
+  }
+  if (!db) throw new Error('Database not initialized');
+  let sql = 'SELECT * FROM master_lists WHERE 1=1';
+  const params: unknown[] = [];
+  if (listType) {
+    sql += ' AND list_type = ?';
+    params.push(listType);
+  }
+  if (activeOnly) {
+    sql += ' AND is_active = 1';
+  }
+  sql += ' ORDER BY name COLLATE NOCASE';
+  return db.prepare(sql).all(...params) as MasterListEntry[];
+}
+
+export function createMasterList(input: MasterListInput): { success: boolean; id?: number; error?: string } {
+  const { list_type, name, name_en, is_active } = input;
+  if (!list_type || !name || !name.trim()) {
+    return { success: false, error: 'نوع القائمة والاسم مطلوبان' };
+  }
+
+  if (useMemoryFallback) {
+    const id = memoryStore.master_lists.length + 1;
+    memoryStore.master_lists.push({
+      id,
+      list_type,
+      name: name.trim(),
+      name_en: name_en ?? null,
+      is_active: is_active ?? 1,
+      created_at: Date.now()
+    });
+    return { success: true, id };
+  }
+
+  if (!db) return { success: false, error: 'قاعدة البيانات غير موجودة' };
+  try {
+    const result = db.prepare(
+      'INSERT INTO master_lists (list_type, name, name_en, is_active) VALUES (?, ?, ?, ?)'
+    ).run(list_type, name.trim(), name_en ?? null, is_active ?? 1);
+    return { success: true, id: Number(result.lastInsertRowid) };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'فشل إضافة العنصر' };
+  }
+}
+
+export function updateMasterList(id: number, input: Partial<MasterListInput>): { success: boolean; error?: string } {
+  if (useMemoryFallback) {
+    const item = memoryStore.master_lists.find(i => i.id === id);
+    if (!item) return { success: false, error: 'العنصر غير موجود' };
+    if (input.name !== undefined) item.name = input.name.trim();
+    if (input.name_en !== undefined) item.name_en = input.name_en ?? null;
+    if (input.is_active !== undefined) item.is_active = input.is_active;
+    return { success: true };
+  }
+
+  if (!db) return { success: false, error: 'قاعدة البيانات غير موجودة' };
+  const sets: string[] = [];
+  const values: unknown[] = [];
+
+  if (input.name !== undefined) {
+    sets.push('name = ?');
+    values.push(input.name.trim());
+  }
+  if (input.name_en !== undefined) {
+    sets.push('name_en = ?');
+    values.push(input.name_en ?? null);
+  }
+  if (input.is_active !== undefined) {
+    sets.push('is_active = ?');
+    values.push(input.is_active);
+  }
+  if (sets.length === 0) return { success: true };
+
+  values.push(id);
+  try {
+    db.prepare(`UPDATE master_lists SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+    return { success: true };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'فشل تحديث العنصر' };
+  }
+}
+
+export function deleteMasterList(id: number): { success: boolean; error?: string } {
+  if (useMemoryFallback) {
+    const idx = memoryStore.master_lists.findIndex(i => i.id === id);
+    if (idx === -1) return { success: false, error: 'العنصر غير موجود' };
+    memoryStore.master_lists.splice(idx, 1);
+    return { success: true };
+  }
+
+  if (!db) return { success: false, error: 'قاعدة البيانات غير موجودة' };
+  db.prepare('DELETE FROM master_lists WHERE id = ?').run(id);
+  return { success: true };
+}
+
+export function toggleMasterListStatus(id: number, isActive: number): { success: boolean; error?: string } {
+  return updateMasterList(id, { is_active: isActive });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Password reset
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1744,10 +1937,11 @@ export function exportData(): string {
   const document_access_log = query('SELECT * FROM document_access_log');
   const password_reset_requests = query('SELECT * FROM password_reset_requests');
   const archived_years = query('SELECT * FROM archived_years');
+  const master_lists = query('SELECT * FROM master_lists');
 
   return JSON.stringify({
     folders, documents, document_types, counters, audit_log, users,
-    system_verification_codes, document_access_log, password_reset_requests, archived_years
+    system_verification_codes, document_access_log, password_reset_requests, archived_years, master_lists
   }, null, 2);
 }
 
@@ -1768,6 +1962,7 @@ export function importData(jsonData: string, mode: 'merge' | 'replace'): { succe
       document_access_log?: Array<Record<string, unknown>>;
       password_reset_requests?: Array<Record<string, unknown>>;
       archived_years?: Array<Record<string, unknown>>;
+      master_lists?: Array<Record<string, unknown>>;
     };
 
     if (mode === 'replace') {
@@ -1779,6 +1974,7 @@ export function importData(jsonData: string, mode: 'merge' | 'replace'): { succe
         DELETE FROM audit_log;
         DELETE FROM documents;
         DELETE FROM counters;
+        DELETE FROM master_lists;
         DELETE FROM document_types;
         DELETE FROM folders;
         DELETE FROM users;
@@ -1796,6 +1992,7 @@ export function importData(jsonData: string, mode: 'merge' | 'replace'): { succe
     const insertCounter = db.prepare('INSERT OR REPLACE INTO counters (key, value) VALUES (?, ?)');
     const insertAudit = db.prepare('INSERT OR REPLACE INTO audit_log (id, action, doc_ref, details, username, timestamp) VALUES (?, ?, ?, ?, ?, ?)');
     const insertUser = db.prepare('INSERT OR REPLACE INTO users (id, username, password_hash, full_name, role, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    const insertMasterList = db.prepare('INSERT OR REPLACE INTO master_lists (id, list_type, name, name_en, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?)');
 
     const tx = db.transaction(() => {
       if (data.folders) {
@@ -1858,6 +2055,18 @@ export function importData(jsonData: string, mode: 'merge' | 'replace'): { succe
       if (data.counters) {
         for (const item of data.counters) {
           insertCounter.run(item.key, item.value);
+        }
+      }
+      if (data.master_lists) {
+        for (const item of data.master_lists) {
+          insertMasterList.run(
+            (item.id as number | undefined) ?? null,
+            item.list_type,
+            item.name,
+            item.name_en ?? null,
+            item.is_active ?? 1,
+            item.created_at ?? new Date().toISOString()
+          );
         }
       }
       if (data.audit_log) {

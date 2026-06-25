@@ -10,7 +10,15 @@
 
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <mat-card class="dashboard-card lg:col-span-2 p-4">
-      <h2 class="text-lg font-bold text-primary mb-4">إحصائية الوثائق</h2>
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <h2 class="text-lg font-bold text-primary">إحصائية الوثائق</h2>
+        <select [ngModel]="chartDimension()" (ngModelChange)="setChartDimension($event)"
+                class="px-3 py-1.5 rounded-lg border border-border bg-bg text-sm focus:outline-none focus:border-primary">
+          @for (d of chartDimensions; track d.value) {
+            <option [value]="d.value">{{ d.label }}</option>
+          }
+        </select>
+      </div>
       <canvas id="docsChart" height="120"></canvas>
     </mat-card>
 
@@ -102,6 +110,12 @@
           <a routerLink="/main/annual-closing" class="action-btn">
             <span class="icon">📅</span>
             <span>الجرد السنوي</span>
+          </a>
+        }
+        @if (rolePermissions.canManageMasterLists) {
+          <a routerLink="/main/master-lists" class="action-btn">
+            <span class="icon">📋</span>
+            <span>القوائم الرئيسية</span>
           </a>
         }
         <button type="button" class="action-btn" (click)="exportData()">

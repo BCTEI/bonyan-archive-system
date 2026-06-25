@@ -4,16 +4,19 @@ import { FormsModule } from '@angular/forms';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { AuditService } from '../../services/audit.service';
 import { AuthService } from '../../services/auth.service';
 import { ToastService } from '../../services/toast.service';
 import { AuditEntry } from '../../models/audit-entry.model';
 import { HasPermissionDirective } from '../../directives/has-permission.directive';
+import { PasswordConfirmDialogComponent } from '../dialogs/password-confirm-dialog/password-confirm-dialog.component';
+import { FinalConfirmDialogComponent } from '../dialogs/final-confirm-dialog/final-confirm-dialog.component';
 
 @Component({
   selector: 'app-audit-trail',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatTableModule, MatButtonModule, MatIconModule, HasPermissionDirective],
+  imports: [CommonModule, FormsModule, MatTableModule, MatButtonModule, MatIconModule, MatDialogModule, HasPermissionDirective],
   templateUrl: './audit-trail.component.html',
   styleUrl: './audit-trail.component.scss'
 })
@@ -21,6 +24,7 @@ export class AuditTrailComponent implements OnInit {
   private auditService = inject(AuditService);
   auth = inject(AuthService);
   private toast = inject(ToastService);
+  private dialog = inject(MatDialog);
 
   entries = signal<AuditEntry[]>([]);
   filter = signal('');
@@ -54,21 +58,73 @@ export class AuditTrailComponent implements OnInit {
   }
 
   async clearAll(): Promise<void> {
-    if (!this.auth.isAdmin()) {
+    const user = this.auth.currentUser();
+    if (!user?.username) {
       this.toast.show('غير مسموح', 'error');
       return;
     }
-    const username = this.auth.currentUser()?.username ?? '';
-    const password = prompt('أدخل كلمة المرور لتأكيد مسح السجل');
+
+    const password = await this.showPasswordDialog('أدخل كلمة المرور لمسح سجل التدقيق');
     if (!password) return;
-    const valid = await window.electronAPI.verifyPassword(username, password);
-    if (!valid) {
-      this.toast.show('كلمة المرور غير صحيحة', 'error');
+
+    const verified = await window.electronAPI.verifyPassword(user.username, password);
+    if (!verified) {
+      this.toast.show('❌ كلمة المرور غير صحيحة', 'error');
       return;
     }
-    await this.auditService.clearAll();
-    await this.load();
-    this.toast.show('تم مسح السجل', 'success');
+
+    const confirmed = await this.showFinalConfirmationDialog(
+      'مسح سجل التدقيق',
+      'هل أنت متأكد من مسح سجل التدقيق؟',
+      'لا يمكنك التراجع عن هذا القرار! سيتم حذف جميع سجلات التدقيق نهائياً.',
+      'نعم، مسح السجل'
+    );
+    if (!confirmed) return;
+
+    try {
+      const result = await this.auditService.clearAll();
+      if (!result.success) {
+        this.toast.show('❌ خطأ: ' + result.error, 'error');
+        return;
+      }
+
+      this.entries.set([]);
+      this.toast.show('✅ تم مسح سجل التدقيق بنجاح', 'success');
+
+      await this.auditService.log(
+        'مسح سجل',
+        'ALL',
+        `تم مسح سجل التدقيق بالكامل من قبل ${user.username}`
+      );
+      await this.load();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'خطأ في الاتصال بالنظام';
+      this.toast.show('❌ ' + message, 'error');
+    }
+  }
+
+  private showPasswordDialog(message: string): Promise<string | null> {
+    return new Promise(resolve => {
+      const ref = this.dialog.open(PasswordConfirmDialogComponent, {
+        data: { message },
+        disableClose: true,
+        width: '420px',
+        maxWidth: '95vw'
+      });
+      ref.afterClosed().subscribe(result => resolve(result));
+    });
+  }
+
+  private showFinalConfirmationDialog(title: string, message: string, warning: string, confirmText?: string): Promise<boolean> {
+    return new Promise(resolve => {
+      const ref = this.dialog.open(FinalConfirmDialogComponent, {
+        data: { title, message, warning, confirmText },
+        disableClose: true,
+        width: '480px',
+        maxWidth: '95vw'
+      });
+      ref.afterClosed().subscribe(result => resolve(!!result));
+    });
   }
 
   exportCsv(): void {

@@ -1,0 +1,19 @@
+<div class="p-6 w-full max-w-md" dir="rtl">
+  <h2 class="text-xl font-bold text-primary mb-4">{{ title() }}</h2>
+
+  <mat-form-field class="w-full" appearance="outline">
+    <mat-label>اسم {{ typeLabel() }}</mat-label>
+    <input matInput [ngModel]="name()" (ngModelChange)="name.set($event)" (keyup.enter)="save()" [disabled]="isSaving()" placeholder="أدخل الاسم...">
+  </mat-form-field>
+
+  <div class="flex justify-end gap-2 mt-6">
+    <button mat-button (click)="cancel()" [disabled]="isSaving()">إلغاء</button>
+    <button mat-raised-button color="primary" (click)="save()" [disabled]="isSaving()">
+      @if (isSaving()) {
+        جاري الحفظ...
+      } @else {
+        حفظ
+      }
+    </button>
+  </div>
+</div>

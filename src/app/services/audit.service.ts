@@ -8,6 +8,10 @@ import { AuditEntry } from '../models/audit-entry.model';
 export class AuditService {
   constructor(private db: DatabaseService) {}
 
+  private get api() {
+    return window.electronAPI;
+  }
+
   async getEntries(limit?: number): Promise<AuditEntry[]> {
     return this.db.getAuditEntries(limit);
   }
@@ -16,7 +20,7 @@ export class AuditService {
     await this.db.addAudit(action, docRef, details);
   }
 
-  async clearAll(): Promise<void> {
-    await this.db.run('DELETE FROM audit_log');
+  async clearAll(): Promise<{ success: boolean; error?: string }> {
+    return this.api.auditAPI.clearAll();
   }
 }

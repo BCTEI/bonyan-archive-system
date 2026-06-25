@@ -5,8 +5,13 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { ArchiveDocument, Attachment } from '../../models/document.model';
 import { Folder } from '../../models/folder.model';
+import { User } from '../../models/user.model';
 import { DocumentService } from '../../services/document.service';
 import { AuditService } from '../../services/audit.service';
+import { AuthService } from '../../services/auth.service';
+import { PrintService } from '../../services/print.service';
+import { DocumentAccessService } from '../../services/document-access.service';
+import { ToastService } from '../../services/toast.service';
 
 @Component({
   selector: 'app-document-view',
@@ -20,16 +25,22 @@ export class DocumentViewComponent implements OnInit {
   data = inject<{ doc: ArchiveDocument; folder?: Folder; print?: boolean }>(MAT_DIALOG_DATA);
   documentService = inject(DocumentService);
   auditService = inject(AuditService);
+  auth = inject(AuthService);
+  printService = inject(PrintService);
+  documentAccess = inject(DocumentAccessService);
+  toast = inject(ToastService);
 
   doc: ArchiveDocument = this.data.doc;
   folder?: Folder = this.data.folder;
+  currentUser: User | null = null;
   attachments: Attachment[] = [];
 
   async ngOnInit(): Promise<void> {
     this.attachments = this.documentService.parseAttachments(this.doc);
+    this.currentUser = this.auth.currentUser();
     await this.auditService.log('عرض', this.doc.ref_number, this.doc.subject);
     if (this.data.print) {
-      setTimeout(() => this.print(), 500);
+      setTimeout(() => this.handlePrint(), 500);
     }
   }
 
@@ -40,8 +51,17 @@ export class DocumentViewComponent implements OnInit {
     }
   }
 
+  async handlePrint(): Promise<void> {
+    const allowed = await this.documentAccess.verifyAccess(this.doc, 'print');
+    if (!allowed) {
+      this.toast.show('تم رفض الوصول: يتطلب التحقق من الهوية لهذه الوثيقة', 'error');
+      return;
+    }
+    this.printService.printDocument(this.doc, this.folder?.name ?? '', this.currentUser);
+  }
+
   print(): void {
-    window.electronAPI.print();
+    void this.handlePrint();
   }
 
   inputMethodLabel(method: string): string {

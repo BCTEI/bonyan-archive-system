@@ -4,6 +4,7 @@ import { Folder, FolderInput } from '../app/models/folder.model';
 import { VerificationCode, DocumentAccessLogEntry } from '../app/models/security.model';
 import { PasswordResetRequest } from '../app/models/password-reset.model';
 import { ArchivedYear } from '../app/models/annual-closing.model';
+import { MasterListEntry, MasterListInput } from '../app/models/master-list.model';
 
 export interface ElectronAPI {
   dbInit: () => Promise<boolean>;
@@ -13,6 +14,10 @@ export interface ElectronAPI {
   exportData: () => Promise<string>;
   importData: (jsonData: string, mode: 'merge' | 'replace') => Promise<{ success: boolean; message: string }>;
   addAudit: (action: string, docRef?: string, details?: string) => Promise<boolean>;
+  auditAPI: {
+    clearAll: () => Promise<{ success: boolean; error?: string }>;
+    addEntry: (entry: { action: string; doc_ref?: string; details?: string; username?: string }) => Promise<{ success: boolean; error?: string }>;
+  };
   print: () => Promise<{ success: boolean; message: string }>;
   openAttachment: (base64: string, name: string, ext: string) => Promise<{ success: boolean; path?: string; message?: string }>;
 
@@ -83,6 +88,14 @@ export interface ElectronAPI {
     getArchivedYears: () => Promise<{ success: boolean; years?: ArchivedYear[]; error?: string }>;
     closeYear: (year: number) => Promise<{ success: boolean; message?: string; error?: string; backupPath?: string }>;
     getArchivedDocuments: (year: number) => Promise<{ success: boolean; documents?: unknown[]; error?: string }>;
+  };
+
+  masterListAPI: {
+    getAll: (listType?: string, activeOnly?: boolean) => Promise<{ success: boolean; items?: MasterListEntry[]; error?: string }>;
+    create: (data: MasterListInput) => Promise<{ success: boolean; id?: number; error?: string }>;
+    update: (id: number, data: Partial<MasterListInput>) => Promise<{ success: boolean; error?: string }>;
+    delete: (id: number) => Promise<{ success: boolean; error?: string }>;
+    toggleStatus: (id: number, isActive: number) => Promise<{ success: boolean; error?: string }>;
   };
 }
 

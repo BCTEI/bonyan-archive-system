@@ -18,43 +18,83 @@
     </div>
   </div>
 
-  <div class="bg-card p-4 rounded-xl shadow-sm flex flex-col lg:flex-row gap-4">
-    <div class="relative flex-1">
-      <mat-icon class="absolute right-3 top-1/2 -translate-y-1/2 text-text-light">search</mat-icon>
-      <input type="text" [ngModel]="search()" (ngModelChange)="setSearch($event)" placeholder="بحث في الوثائق..."
-             class="w-full pr-10 pl-3 py-2 rounded-lg border border-border bg-bg text-sm focus:outline-none focus:border-primary">
-    </div>
-    <div class="flex items-center gap-2 flex-wrap">
-      <button (click)="setType('الكل')" class="px-3 py-1.5 rounded-full text-sm font-medium transition"
-              [class.bg-primary]="selectedTypeId() === 'الكل'" [class.text-white]="selectedTypeId() === 'الكل'"
-              [class.bg-secondary]="selectedTypeId() !== 'الكل'" [class.text-text]="selectedTypeId() !== 'الكل'">الكل</button>
-      @for (t of documentTypes(); track t.id) {
-        <button (click)="setType(t.id)" class="px-3 py-1.5 rounded-full text-sm font-medium transition"
-                [style.background-color]="selectedTypeId() === t.id ? t.color : undefined"
-                [class.text-white]="selectedTypeId() === t.id"
-                [class.bg-secondary]="selectedTypeId() !== t.id"
-                [class.text-text]="selectedTypeId() !== t.id">
-          {{ t.icon }} {{ t.label }}
-        </button>
-      }
-    </div>
-    <div class="flex items-center gap-2 flex-wrap">
-      @for (c of confidentialityLevels; track c.value) {
-        <button (click)="setConfidentiality(c.value)" class="px-3 py-1.5 rounded-full text-sm font-medium transition"
-                [class.bg-primary]="selectedConfidentiality() === c.value" [class.text-white]="selectedConfidentiality() === c.value"
-                [class.bg-secondary]="selectedConfidentiality() !== c.value" [class.text-text]="selectedConfidentiality() !== c.value">
-          {{ c.label }}
-        </button>
-      }
-    </div>
-    <div class="min-w-[180px]">
-      <select [ngModel]="selectedFolder()" (ngModelChange)="setFolder($event === 'الكل' ? 'الكل' : +$event)"
-              class="w-full px-3 py-2 rounded-lg border border-border bg-bg text-sm focus:outline-none focus:border-primary">
-        <option value="الكل">كل المجلدات</option>
-        @for (folder of folders(); track folder.id) {
-          <option [value]="folder.id">{{ folder.name }}</option>
+  <div class="bg-card p-4 rounded-xl shadow-sm space-y-3">
+    <div class="flex flex-col lg:flex-row gap-4">
+      <div class="relative flex-1">
+        <mat-icon class="absolute right-3 top-1/2 -translate-y-1/2 text-text-light">search</mat-icon>
+        <input type="text" [ngModel]="search()" (ngModelChange)="setSearch($event)" placeholder="بحث في الوثائق..."
+               class="w-full pr-10 pl-3 py-2 rounded-lg border border-border bg-bg text-sm focus:outline-none focus:border-primary">
+      </div>
+      <div class="flex items-center gap-2 flex-wrap">
+        <button (click)="setType('الكل')" class="px-3 py-1.5 rounded-full text-sm font-medium transition"
+                [class.bg-primary]="selectedTypeId() === 'الكل'" [class.text-white]="selectedTypeId() === 'الكل'"
+                [class.bg-secondary]="selectedTypeId() !== 'الكل'" [class.text-text]="selectedTypeId() !== 'الكل'">الكل</button>
+        @for (t of documentTypes(); track t.id) {
+          <button (click)="setType(t.id)" class="px-3 py-1.5 rounded-full text-sm font-medium transition"
+                  [style.background-color]="selectedTypeId() === t.id ? t.color : undefined"
+                  [class.text-white]="selectedTypeId() === t.id"
+                  [class.bg-secondary]="selectedTypeId() !== t.id"
+                  [class.text-text]="selectedTypeId() !== t.id">
+            {{ t.icon }} {{ t.label }}
+          </button>
         }
-      </select>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap">
+        @for (c of confidentialityLevels; track c.value) {
+          <button (click)="setConfidentiality(c.value)" class="px-3 py-1.5 rounded-full text-sm font-medium transition"
+                  [class.bg-primary]="selectedConfidentiality() === c.value" [class.text-white]="selectedConfidentiality() === c.value"
+                  [class.bg-secondary]="selectedConfidentiality() !== c.value" [class.text-text]="selectedConfidentiality() !== c.value">
+            {{ c.label }}
+          </button>
+        }
+      </div>
+      <div class="min-w-[180px]">
+        <select [ngModel]="selectedFolder()" (ngModelChange)="setFolder($event === 'الكل' ? 'الكل' : +$event)"
+                class="w-full px-3 py-2 rounded-lg border border-border bg-bg text-sm focus:outline-none focus:border-primary">
+          <option value="الكل">كل المجلدات</option>
+          @for (folder of folders(); track folder.id) {
+            <option [value]="folder.id">{{ folder.name }}</option>
+          }
+        </select>
+      </div>
+    </div>
+
+    <div class="flex flex-col lg:flex-row gap-3 items-start lg:items-center border-t border-border pt-3">
+      <span class="text-sm text-text-light whitespace-nowrap">تصفية متقدمة:</span>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 flex-1">
+        <select [ngModel]="selectedAuthor()" (ngModelChange)="setAuthor($event)"
+                class="w-full px-3 py-2 rounded-lg border border-border bg-bg text-sm focus:outline-none focus:border-primary">
+          <option value="الكل">كل الكتاب</option>
+          @for (a of authors(); track a.name) {
+            <option [value]="a.name">{{ a.name }}</option>
+          }
+        </select>
+        <select [ngModel]="selectedSender()" (ngModelChange)="setSender($event)"
+                class="w-full px-3 py-2 rounded-lg border border-border bg-bg text-sm focus:outline-none focus:border-primary">
+          <option value="الكل">كل المرسلين</option>
+          @for (s of senders(); track s.name) {
+            <option [value]="s.name">{{ s.name }}</option>
+          }
+        </select>
+        <select [ngModel]="selectedReceiver()" (ngModelChange)="setReceiver($event)"
+                class="w-full px-3 py-2 rounded-lg border border-border bg-bg text-sm focus:outline-none focus:border-primary">
+          <option value="الكل">كل المستلمين</option>
+          @for (r of receivers(); track r.name) {
+            <option [value]="r.name">{{ r.name }}</option>
+          }
+        </select>
+        <select [ngModel]="selectedDepartment()" (ngModelChange)="setDepartment($event)"
+                class="w-full px-3 py-2 rounded-lg border border-border bg-bg text-sm focus:outline-none focus:border-primary">
+          <option value="الكل">كل الجهات / الأقسام</option>
+          @for (d of departments(); track d.name) {
+            <option [value]="d.name">{{ d.name }}</option>
+          }
+        </select>
+      </div>
+      <button mat-stroked-button color="warn" (click)="clearFilters()" type="button">
+        <mat-icon>filter_alt_off</mat-icon>
+        مسح التصفية
+      </button>
     </div>
   </div>
 

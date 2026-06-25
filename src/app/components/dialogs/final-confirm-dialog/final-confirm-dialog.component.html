@@ -1,0 +1,16 @@
+<h2 mat-dialog-title class="text-danger flex items-center gap-2">
+  <mat-icon>warning</mat-icon>
+  {{ data.title }}
+</h2>
+<mat-dialog-content>
+  <p class="text-lg font-semibold text-text mb-2">{{ data.message }}</p>
+  <div class="bg-danger/10 border-r-4 border-danger p-3 rounded-lg">
+    <p class="text-danger font-bold text-sm m-0">{{ data.warning }}</p>
+  </div>
+</mat-dialog-content>
+<mat-dialog-actions align="end" class="gap-2">
+  <button mat-button type="button" (click)="cancel()">إلغاء</button>
+  <button mat-raised-button color="warn" type="button" (click)="confirm()">
+    {{ data.confirmText ?? 'نعم، تأكيد' }}
+  </button>
+</mat-dialog-actions>

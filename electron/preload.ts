@@ -10,6 +10,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   exportData: () => ipcRenderer.invoke('db:export'),
   importData: (jsonData: string, mode: 'merge' | 'replace') => ipcRenderer.invoke('db:import', jsonData, mode),
   addAudit: (action: string, docRef?: string, details?: string) => ipcRenderer.invoke('db:audit', action, docRef, details),
+  auditAPI: {
+    clearAll: () => ipcRenderer.invoke('audit:clearAll'),
+    addEntry: (entry: { action: string; doc_ref?: string; details?: string; username?: string }) => ipcRenderer.invoke('audit:addEntry', entry),
+  },
   print: () => ipcRenderer.invoke('app:print'),
   openAttachment: (base64: string, name: string, ext: string) => ipcRenderer.invoke('app:openAttachment', base64, name, ext),
 
@@ -85,6 +89,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getArchivedYears: () => ipcRenderer.invoke('annualClosing:getArchivedYears'),
     closeYear: (year: number) => ipcRenderer.invoke('annualClosing:closeYear', year),
     getArchivedDocuments: (year: number) => ipcRenderer.invoke('annualClosing:getArchivedDocuments', year),
+  },
+
+  masterListAPI: {
+    getAll: (listType?: string, activeOnly?: boolean) => ipcRenderer.invoke('masterList:getAll', listType, activeOnly),
+    create: (data: unknown) => ipcRenderer.invoke('masterList:create', data),
+    update: (id: number, data: unknown) => ipcRenderer.invoke('masterList:update', id, data),
+    delete: (id: number) => ipcRenderer.invoke('masterList:delete', id),
+    toggleStatus: (id: number, isActive: number) => ipcRenderer.invoke('masterList:toggleStatus', id, isActive),
   }
 });
 

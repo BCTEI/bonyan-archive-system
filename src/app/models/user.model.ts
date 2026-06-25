@@ -40,6 +40,7 @@ export interface RolePermissions {
   canManageFolders: boolean;
   canManageSecurity: boolean;
   canCloseYear: boolean;
+  canManageMasterLists: boolean;
 }
 
 export const ROLE_LABELS: Record<UserRole, string> = {
@@ -73,7 +74,8 @@ export function getRolePermissions(role: UserRole): RolePermissions {
       canManageDocumentTypes: true,
       canManageFolders: true,
       canManageSecurity: true,
-      canCloseYear: true
+      canCloseYear: true,
+      canManageMasterLists: true
     },
     editor: {
       canManageUsers: false,
@@ -86,7 +88,8 @@ export function getRolePermissions(role: UserRole): RolePermissions {
       canManageDocumentTypes: false,
       canManageFolders: false,
       canManageSecurity: false,
-      canCloseYear: false
+      canCloseYear: false,
+      canManageMasterLists: false
     },
     viewer: {
       canManageUsers: false,
@@ -99,7 +102,8 @@ export function getRolePermissions(role: UserRole): RolePermissions {
       canManageDocumentTypes: false,
       canManageFolders: false,
       canManageSecurity: false,
-      canCloseYear: false
+      canCloseYear: false,
+      canManageMasterLists: false
     }
   };
   return map[role] ?? map.viewer;

@@ -11,6 +11,7 @@ import { FolderCategoryManagementComponent } from './components/folder-category-
 import { AnnualClosingComponent } from './components/annual-closing/annual-closing.component';
 import { ChangePasswordComponent } from './components/change-password/change-password.component';
 import { UserProfileComponent } from './components/user-profile/user-profile.component';
+import { MasterListManagementComponent } from './components/master-list-management/master-list-management.component';
 import { authGuard } from './guards/auth.guard';
 import { adminGuard } from './guards/admin.guard';
 import { permissionGuard } from './guards/permission.guard';
@@ -32,6 +33,7 @@ export const routes: Routes = [
       { path: 'document-types', component: DocumentTypeManagementComponent, canActivate: [adminGuard] },
       { path: 'folder-categories', component: FolderCategoryManagementComponent, canActivate: [adminGuard] },
       { path: 'security', component: SecurityCenterComponent, canActivate: [adminGuard] },
+      { path: 'master-lists', component: MasterListManagementComponent, canActivate: [adminGuard] },
       { path: 'annual-closing', component: AnnualClosingComponent, canActivate: [adminGuard] },
       { path: 'change-password', component: ChangePasswordComponent },
       { path: 'profile', component: UserProfileComponent }
