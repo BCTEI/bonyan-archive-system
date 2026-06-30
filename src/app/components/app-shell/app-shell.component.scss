@@ -7,11 +7,12 @@
 
 .shell {
   display: grid;
-  grid-template-rows: 60px 1fr;
+  grid-template-rows: 60px 1fr auto;
   grid-template-columns: 1fr;
   grid-template-areas:
     "header"
-    "content";
+    "content"
+    "footer";
   width: 100%;
   height: 100%;
   background-color: var(--bg);
@@ -32,6 +33,44 @@ app-header {
   min-height: 0;
   overflow: hidden;
   transition: grid-template-columns 0.3s ease;
+}
+
+.app-footer {
+  grid-area: footer;
+  background-color: var(--card);
+  border-top: 1px solid var(--border);
+  padding: 0.6rem 1rem;
+  font-size: 0.8rem;
+  color: var(--text-light);
+  direction: rtl;
+
+  .footer-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+
+  .footer-copyright {
+    text-align: right;
+  }
+
+  .footer-credits {
+    text-align: left;
+    direction: ltr;
+    unicode-bidi: plaintext;
+  }
+
+  .footer-brand {
+    color: var(--primary);
+    font-weight: 700;
+  }
+
+  .footer-names {
+    color: var(--text);
+    font-weight: 600;
+  }
 }
 
 /* Collapsed state: sidebar width becomes 0 */
@@ -175,5 +214,16 @@ app-header {
     inset: 60px 0 0 0;
     background-color: rgba(0, 0, 0, 0.35);
     z-index: 80;
+  }
+
+  .app-footer .footer-inner {
+    flex-direction: column;
+    text-align: center;
+    gap: 0.35rem;
+  }
+
+  .app-footer .footer-copyright,
+  .app-footer .footer-credits {
+    text-align: center;
   }
 }

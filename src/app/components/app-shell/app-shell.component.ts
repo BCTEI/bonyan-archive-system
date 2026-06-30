@@ -33,6 +33,7 @@ export class AppShellComponent implements OnInit {
   router = inject(Router);
   sidebarOpen = signal(true);
   isMobile = signal(false);
+  currentYear = signal(new Date().getFullYear());
 
   ngOnInit(): void {
     this.updateViewport();
