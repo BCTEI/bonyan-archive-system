@@ -5,6 +5,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { FolderTreeComponent } from '../folder-tree/folder-tree.component';
 import { ToastComponent } from '../toast/toast.component';
 import { HeaderComponent } from '../header/header.component';
+import { FooterBarComponent } from '../footer-bar/footer-bar.component';
 import { AuthService } from '../../services/auth.service';
 import { HasPermissionDirective } from '../../directives/has-permission.directive';
 
@@ -23,6 +24,7 @@ const SIDEBAR_STATE_KEY = 'bonyan_sidebar_open';
     FolderTreeComponent,
     ToastComponent,
     HeaderComponent,
+    FooterBarComponent,
     HasPermissionDirective
   ],
   templateUrl: './app-shell.component.html',
