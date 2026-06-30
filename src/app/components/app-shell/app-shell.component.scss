@@ -23,6 +23,10 @@ app-header {
   grid-area: header;
 }
 
+app-footer-bar {
+  grid-area: footer;
+}
+
 .content-grid {
   grid-area: content;
   display: grid;
@@ -33,47 +37,6 @@ app-header {
   min-height: 0;
   overflow: hidden;
   transition: grid-template-columns 0.3s ease;
-}
-
-.app-footer {
-  grid-area: footer;
-  background-color: var(--primary);
-  color: #ffffff;
-  padding: 0.85rem 1.25rem;
-  font-size: 0.85rem;
-  direction: rtl;
-  box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.12);
-  z-index: 50;
-
-  .footer-inner {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    flex-wrap: wrap;
-    max-width: 1920px;
-    margin: 0 auto;
-  }
-
-  .footer-copyright {
-    text-align: right;
-  }
-
-  .footer-credits {
-    text-align: left;
-    direction: ltr;
-    unicode-bidi: plaintext;
-  }
-
-  .footer-brand {
-    color: #ffffff;
-    font-weight: 800;
-  }
-
-  .footer-names {
-    color: #fbbf24;
-    font-weight: 700;
-  }
 }
 
 /* Collapsed state: sidebar width becomes 0 */

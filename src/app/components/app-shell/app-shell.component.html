@@ -74,21 +74,8 @@
   @if (isMobile() && sidebarOpen()) {
     <div class="sidebar-backdrop" (click)="toggleSidebar()" aria-hidden="true"></div>
   }
+
+  <app-footer-bar></app-footer-bar>
 </div>
-
-<footer class="app-footer" dir="rtl">
-  <div class="footer-inner">
-    <div class="footer-copyright">
-      <span class="footer-brand">Al-Bayan Center for Technology and Engineering Industries - Misrata</span>
-      <span> — جميع الحقوق محفوظة © {{ currentYear() }}</span>
-    </div>
-    <div class="footer-credits">
-      <span>التطوير والتصميم:</span>
-      <span class="footer-names">Abdul Aziz Mohammed Al-Shaibani — Mohammed Fouad Bala</span>
-    </div>
-  </div>
-</footer>
-
-<app-footer-bar></app-footer-bar>
 
 <app-toast></app-toast>
