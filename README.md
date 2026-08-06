@@ -307,6 +307,7 @@ bonyan-archive-system/
 - **فريق التطوير والتصميم:**
   - **عبد العزيز محمد الشيباني** — Abdul Aziz Mohammed Al-Shaibani
   - **محمد فؤاد بالة** — Mohammed Fouad Bala
+  - **إبراهيم عبد العظیم بالة** — Ibrahim Abduladim Bala
 ---
 
 <p align="center">
