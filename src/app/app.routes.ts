@@ -9,6 +9,7 @@ import { SecurityCenterComponent } from './components/security-center/security-c
 import { DocumentTypeManagementComponent } from './components/document-type-management/document-type-management.component';
 import { FolderCategoryManagementComponent } from './components/folder-category-management/folder-category-management.component';
 import { AnnualClosingComponent } from './components/annual-closing/annual-closing.component';
+import { ArchiveBrowserComponent } from './components/archive-browser/archive-browser.component';
 import { ChangePasswordComponent } from './components/change-password/change-password.component';
 import { UserProfileComponent } from './components/user-profile/user-profile.component';
 import { MasterListManagementComponent } from './components/master-list-management/master-list-management.component';
@@ -37,6 +38,7 @@ export const routes: Routes = [
       { path: 'security', component: SecurityCenterComponent, canActivate: [adminGuard] },
       { path: 'master-lists', component: MasterListManagementComponent, canActivate: [adminGuard] },
       { path: 'annual-closing', component: AnnualClosingComponent, canActivate: [adminGuard] },
+      { path: 'annual-closing/:year', component: ArchiveBrowserComponent, canActivate: [adminGuard] },
       { path: 'change-password', component: ChangePasswordComponent },
       { path: 'profile', component: UserProfileComponent }
     ]

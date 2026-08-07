@@ -3,9 +3,15 @@ import { MatDialog } from '@angular/material/dialog';
 import { ArchiveDocument } from '../models/document.model';
 import { SecurityModalComponent } from '../components/security-modal/security-modal.component';
 import { DocumentService } from './document.service';
+import { AnnualClosingService } from './annual-closing.service';
 import { ToastService } from './toast.service';
 
 export type DocumentAction = 'view' | 'edit' | 'print';
+
+// Matches the `archive:<year>` scope the archive browser (Task 2.2) passes into
+// verifyAccess. Kept in one place so refreshTopSecretDoc and the cache key stay
+// in sync with the format the archive browser and SecurityModalComponent use.
+const ARCHIVE_SCOPE_RE = /^archive:(\d+)$/;
 
 @Injectable({
   providedIn: 'root'
@@ -13,6 +19,7 @@ export type DocumentAction = 'view' | 'edit' | 'print';
 export class DocumentAccessService {
   private dialog = inject(MatDialog);
   private documentService = inject(DocumentService);
+  private annualClosingService = inject(AnnualClosingService);
   private toast = inject(ToastService);
 
   // Cache documents verified in the current session so the user is not
@@ -38,7 +45,7 @@ export class DocumentAccessService {
       // grid reloaded its list after an edit) — re-cover it every time. If the
       // re-fetch fails, fail closed: do NOT tell the caller it's safe to render
       // a still-stripped top-secret doc as "unlocked".
-      return this.refreshTopSecretDoc(doc);
+      return this.refreshTopSecretDoc(doc, scope);
     }
 
     const ref = this.dialog.open(SecurityModalComponent, {
@@ -63,7 +70,7 @@ export class DocumentAccessService {
         // the caller must not render a still-stripped top-secret doc as
         // unlocked. The user simply retries (a fresh code, since the old one
         // is burned); that's an acceptable cost of a transient failure.
-        const refreshed = await this.refreshTopSecretDoc(doc);
+        const refreshed = await this.refreshTopSecretDoc(doc, scope);
         if (refreshed && key !== undefined) {
           this.verifiedDocs.add(key);
         }
@@ -81,16 +88,31 @@ export class DocumentAccessService {
    * stripped placeholder. Mutates `doc` in place so every holder of this
    * object reference (grid row, open dialog) sees the refreshed fields.
    *
+   * Design note (Task 2.2): `doc.id` is NOT a safe key to re-fetch against the
+   * live `documents` table when `scope` is an archive scope (`archive:<year>`).
+   * Archived rows live in `archived_documents_<year>`, a separate table — the
+   * id may not exist live at all (closeYear() deletes the row from `documents`),
+   * or worse, could coincide with an unrelated live document's id and silently
+   * merge the WRONG content into `doc`. So the fetch source is chosen by scope:
+   * an `archive:<year>` scope re-fetches via AnnualClosingService against that
+   * year's archive table; every other scope keeps the original live re-fetch.
+   * This is the single point where both the archive browser's view flow and
+   * document-view's forwarded-scope print flow get the correct source, without
+   * needing every call site to thread a separate re-fetch hook.
+   *
    * Returns whether the doc is safe to treat as unlocked: true immediately for
    * non-top-secret docs (nothing to refresh), true once the refresh succeeds,
    * false — with a toast — if the refresh fails. Callers MUST treat a false
    * return as "access denied for this attempt", not as a successful verify
    * that merely left stale content on screen.
    */
-  private async refreshTopSecretDoc(doc: ArchiveDocument): Promise<boolean> {
+  private async refreshTopSecretDoc(doc: ArchiveDocument, scope: string): Promise<boolean> {
     if (doc.confidentiality !== 'سري للغاية' || doc.id === undefined) return true;
     try {
-      const fresh = await this.documentService.getById(doc.id);
+      const archiveMatch = ARCHIVE_SCOPE_RE.exec(scope);
+      const fresh = archiveMatch
+        ? await this.annualClosingService.getArchivedDocumentById(Number(archiveMatch[1]), doc.id)
+        : await this.documentService.getById(doc.id);
       if (!fresh) throw new Error('الوثيقة غير موجودة');
       Object.assign(doc, fresh);
       return true;
