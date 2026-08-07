@@ -163,6 +163,11 @@ function activeUser(): AuthUser | null {
   try {
     const fresh = getUserById(currentUser.id);
     if (fresh && fresh.is_active !== 1) {
+      // Deactivated mid-session: same session-teardown as auth:logout — drop any
+      // top-secret unlocks and this user's rate-limit state so they can't leak
+      // into whoever logs in next in this process.
+      verifiedTopSecret.clear();
+      clearRateLimit(currentUser.id);
       currentUser = null;
       return null;
     }
@@ -332,6 +337,12 @@ function createMainWindow(): void {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+    // Window closed without going through auth:logout (e.g. Alt+F4, OS close):
+    // still tear down the session's top-secret unlocks + rate-limit state.
+    if (currentUser) {
+      verifiedTopSecret.clear();
+      clearRateLimit(currentUser.id);
+    }
     currentUser = null;
   });
 }
@@ -507,6 +518,13 @@ ipcMain.handle('auth:login', (_event: IpcMainInvokeEvent, username: string, pass
 
     const result = authenticateUser(username, password);
     if (result.success && result.user) {
+      // New session starting: verifiedTopSecret is process-global, so it must be
+      // cleared here too (not just on auth:logout) or a prior user's unlocked
+      // top-secret docs would remain unlocked for whoever logs in next in this
+      // same process. Also drop any leftover rate-limit state for whichever user
+      // was previously signed in (covers logout-less session handoffs).
+      if (currentUser) clearRateLimit(currentUser.id);
+      verifiedTopSecret.clear();
       currentUser = result.user;
       addSession(currentUser.id, currentUser.username, 'login');
       addAudit('تسجيل دخول', undefined, undefined, currentUser.username);
@@ -975,9 +993,12 @@ function applyTopSecretGate(doc: Record<string, unknown>, scopeKey: string): Rec
   return doc;
 }
 
+// json_valid guard: a NULL/'' /malformed attachments_json (legacy rows, partial
+// writes) must not make json_array_length throw "malformed JSON" for the whole
+// query — fall back to 0 instead.
 const DOCUMENT_SELECT_COLUMNS =
   "d.*, dt.name as type, dt.label as type_label, dt.color as type_color, dt.icon as type_icon, " +
-  "json_array_length(COALESCE(d.attachments_json, '[]')) as attachments_count";
+  "CASE WHEN json_valid(d.attachments_json) THEN json_array_length(d.attachments_json) ELSE 0 END as attachments_count";
 
 ipcMain.handle('document:getAll', () => {
   try {
@@ -1237,6 +1258,7 @@ ipcMain.handle('security:verifyCode', (_event: IpcMainInvokeEvent, code: string,
 
     const limitState = checkRateLimit(user.id);
     if (limitState.locked) {
+      addAudit('محاولة تحقق أثناء التأمين', undefined, documentId != null ? `الوثيقة: ${documentId}` : undefined, user.username);
       return { valid: false, error: limitState.message };
     }
 
