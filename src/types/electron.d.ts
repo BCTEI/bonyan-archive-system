@@ -5,6 +5,13 @@ import { VerificationCode, DocumentAccessLogEntry } from '../app/models/security
 import { PasswordResetRequest } from '../app/models/password-reset.model';
 import { ArchivedYear } from '../app/models/annual-closing.model';
 import { MasterListEntry, MasterListInput } from '../app/models/master-list.model';
+import { AuditEntry } from '../app/models/audit-entry.model';
+
+// `User` (from user.model.ts) doesn't carry org_unit_id yet — that model is Task 3.3's
+// to widen alongside the 5-role migration. The main process's AuthUser already returns
+// org_unit_id on every user-shaped response, so this extends the API-surface type here
+// (electron.d.ts only) without touching user.model.ts out of scope.
+export type UserWithOrgUnit = User & { org_unit_id?: number | null };
 
 export interface OrgUnit {
   id: number;
@@ -32,23 +39,25 @@ export interface ElectronAPI {
   exportData: () => Promise<string>;
   importData: (jsonData: string, mode: 'merge' | 'replace') => Promise<{ success: boolean; message: string }>;
   addAudit: (action: string, docRef?: string, details?: string) => Promise<boolean>;
+  getStats: () => Promise<{ success: boolean; stats?: { total: number; [key: string]: number }; error?: string }>;
   auditAPI: {
     clearAll: () => Promise<{ success: boolean; error?: string }>;
     addEntry: (entry: { action: string; doc_ref?: string; details?: string; username?: string }) => Promise<{ success: boolean; error?: string }>;
+    list: (limit?: number) => Promise<{ success: boolean; entries?: AuditEntry[]; error?: string }>;
   };
   print: () => Promise<{ success: boolean; message: string }>;
   openAttachment: (base64: string, name: string, ext: string) => Promise<{ success: boolean; path?: string; message?: string }>;
 
-  login: (username: string, password: string) => Promise<{ success: boolean; user?: User; error?: string; message?: string }>;
-  getCurrentUser: () => Promise<User | null>;
+  login: (username: string, password: string) => Promise<{ success: boolean; user?: UserWithOrgUnit; error?: string; message?: string }>;
+  getCurrentUser: () => Promise<UserWithOrgUnit | null>;
   logout: () => Promise<boolean>;
   verifyPassword: (username: string, password: string) => Promise<boolean>;
   getDbPath: () => Promise<{ success: boolean; path?: string; error?: string }>;
   getDbStatus: () => Promise<{ success: boolean; fallback: boolean; error: string | null }>;
 
   userAPI: {
-    getAll: () => Promise<{ success: boolean; users?: User[]; error?: string }>;
-    getById: (id: number) => Promise<{ success: boolean; user?: User; error?: string }>;
+    getAll: () => Promise<{ success: boolean; users?: UserWithOrgUnit[]; error?: string }>;
+    getById: (id: number) => Promise<{ success: boolean; user?: UserWithOrgUnit; error?: string }>;
     create: (data: unknown) => Promise<{ success: boolean; id?: number; error?: string }>;
     update: (id: number, data: unknown) => Promise<{ success: boolean; error?: string }>;
     delete: (id: number) => Promise<{ success: boolean; error?: string }>;
@@ -83,6 +92,7 @@ export interface ElectronAPI {
     create: (data: FolderInput) => Promise<{ success: boolean; id?: number; error?: string }>;
     update: (id: number, data: Partial<FolderInput>) => Promise<{ success: boolean; error?: string }>;
     delete: (id: number) => Promise<{ success: boolean; error?: string }>;
+    getAllWithCounts: () => Promise<{ success: boolean; folders?: Folder[]; error?: string }>;
   };
 
   securityAPI: {

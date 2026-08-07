@@ -85,7 +85,6 @@ import {
   clearAudit,
   exportData,
   importData,
-  getStats,
   authenticateUser,
   getInitError,
   getUsers,
@@ -191,6 +190,18 @@ function canResetPasswordOf(actor: AuthUser, target: AuthUser): boolean {
   return false;
 }
 
+// Ruled exception: a GM cannot be "administered" (canAdministerUser/canResetPasswordOf
+// keep blocking user:update/delete/toggleStatus and passwordReset:adminReset targeting
+// the GM), but the GM must still be able to use the ordinary self-service reset flow
+// (passwordReset:request, from the login screen) like anyone else, and deputy_manager+
+// must be able to approve that specific request. Every row returned by
+// getPendingPasswordResetRequests() originates from passwordReset:request, so no extra
+// "came from the request channel" check is needed beyond reading the pending row itself.
+function canApprovePasswordResetRequest(actor: AuthUser, target: AuthUser): boolean {
+  if (target.role === 'general_manager') return hasMinRole(actor, 'deputy_manager');
+  return canResetPasswordOf(actor, target);
+}
+
 // Document visibility scope ──────────────────────────────────────────────────
 
 function documentScope(user: AuthUser): { where: string; params: unknown[] } {
@@ -287,6 +298,7 @@ ipcMain.handle('db:query', (_event: IpcMainInvokeEvent, sql: string, params?: un
   console.log('[Main] Handling db:query');
   const user = activeUser();
   if (!user) throw new Error('يجب تسجيل الدخول');
+  if (!hasMinRole(user, 'deputy_manager')) throw new Error('ليس لديك صلاحية');
   return query(sql, params);
 });
 
@@ -347,9 +359,66 @@ ipcMain.handle('audit:addEntry', (_event: IpcMainInvokeEvent, entry: { action: s
   }
 });
 
+ipcMain.handle('audit:list', (_event: IpcMainInvokeEvent, limit?: number) => {
+  console.log('[Main] Handling audit:list');
+  try {
+    const user = activeUser();
+    if (!hasMinRole(user, 'section_head')) return { success: false, error: 'ليس لديك صلاحية عرض سجل التدقيق' };
+    const sql = limit
+      ? 'SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT ?'
+      : 'SELECT * FROM audit_log ORDER BY timestamp DESC';
+    const entries = query(sql, limit ? [limit] : undefined);
+    return { success: true, entries };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+// Dashboard stats scoped to the caller's document visibility (documentScope) and
+// confidentiality clearance (canAccessConfidentiality) — replaces the old unscoped
+// `db:stats` handler, which called database.ts's global getStats() and was never
+// wired through preload/d.ts (dead code, unreachable from the renderer).
 ipcMain.handle('db:stats', () => {
   console.log('[Main] Handling db:stats');
-  return getStats();
+  try {
+    const user = activeUser();
+    if (!user) return { success: false, error: 'يجب تسجيل الدخول' };
+    const scope = documentScope(user);
+    let sql = 'SELECT d.type_id, d.confidentiality, d.created_by FROM documents d';
+    if (scope.where) sql += ' WHERE ' + scope.where;
+    const rows = query(sql, scope.params) as Array<{ type_id: number; confidentiality: string; created_by: string | null }>;
+    const stats: Record<string, number> = { total: 0 };
+    for (const row of rows) {
+      if (!canAccessConfidentiality(user, row.confidentiality, row.created_by ?? undefined)) continue;
+      const typeKey = `type_${row.type_id}`;
+      stats[typeKey] = (stats[typeKey] ?? 0) + 1;
+      stats[row.confidentiality] = (stats[row.confidentiality] ?? 0) + 1;
+      stats.total += 1;
+    }
+    return { success: true, stats };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+// Folder document counts scoped to the caller's document visibility (documentScope).
+ipcMain.handle('folder:getAllWithCounts', () => {
+  console.log('[Main] Handling folder:getAllWithCounts');
+  try {
+    const user = activeUser();
+    if (!user) return { success: false, error: 'يجب تسجيل الدخول' };
+    const folders = getFolders(true);
+    const scope = documentScope(user);
+    let sql = 'SELECT d.folder_id, COUNT(*) as c FROM documents d';
+    if (scope.where) sql += ' WHERE ' + scope.where;
+    sql += ' GROUP BY d.folder_id';
+    const counts = query(sql, scope.params) as Array<{ folder_id: number; c: number }>;
+    const map = new Map(counts.map(c => [c.folder_id, c.c]));
+    const withCounts = folders.map(f => ({ ...f, document_count: map.get(f.id) ?? 0 }));
+    return { success: true, folders: withCounts };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
 });
 
 ipcMain.handle('db:getDbPath', () => {
@@ -493,8 +562,8 @@ ipcMain.handle('user:update', (_event: IpcMainInvokeEvent, id: number, data: unk
       return { success: false, error: 'ليس لديك صلاحية إدارة المستخدمين' };
     }
     const target = getUserById(id);
-    if (target && !canAdministerUser(user!, target)) {
-      return { success: false, error: 'لا يمكن تعديل حساب المدير العام' };
+    if (!target || !canAdministerUser(user!, target)) {
+      return { success: false, error: target ? 'لا يمكن تعديل حساب المدير العام' : 'المستخدم غير موجود' };
     }
     const result = updateUser(id, data as Parameters<typeof updateUser>[1], user?.id);
     if (result.success) {
@@ -515,8 +584,8 @@ ipcMain.handle('user:delete', (_event: IpcMainInvokeEvent, id: number) => {
       return { success: false, error: 'ليس لديك صلاحية إدارة المستخدمين' };
     }
     const target = getUserById(id);
-    if (target && !canAdministerUser(user!, target)) {
-      return { success: false, error: 'لا يمكن تعديل حساب المدير العام' };
+    if (!target || !canAdministerUser(user!, target)) {
+      return { success: false, error: target ? 'لا يمكن تعديل حساب المدير العام' : 'المستخدم غير موجود' };
     }
     const result = deleteUser(id, user?.id);
     if (result.success && target) {
@@ -537,8 +606,8 @@ ipcMain.handle('user:toggleStatus', (_event: IpcMainInvokeEvent, id: number, isA
       return { success: false, error: 'ليس لديك صلاحية إدارة المستخدمين' };
     }
     const target = getUserById(id);
-    if (target && !canAdministerUser(user!, target)) {
-      return { success: false, error: 'لا يمكن تعديل حساب المدير العام' };
+    if (!target || !canAdministerUser(user!, target)) {
+      return { success: false, error: target ? 'لا يمكن تعديل حساب المدير العام' : 'المستخدم غير موجود' };
     }
     const result = toggleUserStatus(id, isActive, user?.id);
     if (result.success && target) {
@@ -568,6 +637,8 @@ ipcMain.handle('user:getSessions', (_event: IpcMainInvokeEvent, userId?: number)
 ipcMain.handle('user:getTodaySessions', () => {
   console.log('[Main] Handling user:getTodaySessions');
   try {
+    const user = activeUser();
+    if (!user) return { success: false, error: 'يجب تسجيل الدخول' };
     return { success: true, sessions: getTodaySessions() };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
@@ -898,11 +969,15 @@ ipcMain.handle('document:create', (_event: IpcMainInvokeEvent, doc: Record<strin
 
     const requestedOrgUnitId = (doc.org_unit_id as number | null | undefined) ?? user.org_unit_id ?? null;
     if (!hasMinRole(user, 'deputy_manager')) {
-      if (user.role === 'dept_head' || user.role === 'section_head') {
-        if (requestedOrgUnitId == null || user.org_unit_id == null || !isUserInSubtree(user.org_unit_id, requestedOrgUnitId)) {
+      const isHead = user.role === 'dept_head' || user.role === 'section_head';
+      if (isHead && user.org_unit_id != null) {
+        // Head with an assigned unit: may only target their own subtree.
+        if (requestedOrgUnitId == null || !isUserInSubtree(user.org_unit_id, requestedOrgUnitId)) {
           return { success: false, error: 'لا يمكنك إنشاء وثيقة لوحدة تنظيمية خارج نطاق صلاحياتك' };
         }
       } else if (requestedOrgUnitId !== (user.org_unit_id ?? null)) {
+        // Employees, and heads with no assigned unit (no subtree to target),
+        // may only create documents with no explicit org unit / their own (null) unit.
         return { success: false, error: 'لا يمكنك إنشاء وثيقة لوحدة تنظيمية أخرى' };
       }
     }
@@ -1120,7 +1195,7 @@ ipcMain.handle('passwordReset:getPending', () => {
     if (!hasMinRole(user, 'section_head')) return { success: false, error: 'ليس لديك صلاحية' };
     const requests = getPendingPasswordResetRequests().filter(r => {
       const target = getUserById(r.user_id);
-      return !!target && canResetPasswordOf(user!, target);
+      return !!target && canApprovePasswordResetRequest(user!, target);
     });
     return { success: true, requests };
   } catch (err: unknown) {
@@ -1135,7 +1210,7 @@ ipcMain.handle('passwordReset:approve', (_event: IpcMainInvokeEvent, requestId: 
     const req = getPendingPasswordResetRequests().find(r => r.id === requestId);
     if (!req) return { success: false, error: 'الطلب غير موجود' };
     const target = getUserById(req.user_id);
-    if (!target || !canResetPasswordOf(user!, target)) return { success: false, error: 'ليس لديك صلاحية' };
+    if (!target || !canApprovePasswordResetRequest(user!, target)) return { success: false, error: 'ليس لديك صلاحية' };
     const result = approvePasswordReset(requestId, newPassword, user!.id);
     if (result.success) {
       addAudit('موافقة إعادة تعيين كلمة المرور', undefined, `معرف الطلب: ${requestId}`, user?.username);
@@ -1153,7 +1228,7 @@ ipcMain.handle('passwordReset:reject', (_event: IpcMainInvokeEvent, requestId: n
     const req = getPendingPasswordResetRequests().find(r => r.id === requestId);
     if (!req) return { success: false, error: 'الطلب غير موجود' };
     const target = getUserById(req.user_id);
-    if (!target || !canResetPasswordOf(user!, target)) return { success: false, error: 'ليس لديك صلاحية' };
+    if (!target || !canApprovePasswordResetRequest(user!, target)) return { success: false, error: 'ليس لديك صلاحية' };
     const result = rejectPasswordReset(requestId);
     if (result.success) {
       addAudit('رفض إعادة تعيين كلمة المرور', undefined, `معرف الطلب: ${requestId}`, user?.username);

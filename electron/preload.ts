@@ -10,9 +10,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   exportData: () => ipcRenderer.invoke('db:export'),
   importData: (jsonData: string, mode: 'merge' | 'replace') => ipcRenderer.invoke('db:import', jsonData, mode),
   addAudit: (action: string, docRef?: string, details?: string) => ipcRenderer.invoke('db:audit', action, docRef, details),
+  getStats: () => ipcRenderer.invoke('db:stats'),
   auditAPI: {
     clearAll: () => ipcRenderer.invoke('audit:clearAll'),
     addEntry: (entry: { action: string; doc_ref?: string; details?: string; username?: string }) => ipcRenderer.invoke('audit:addEntry', entry),
+    list: (limit?: number) => ipcRenderer.invoke('audit:list', limit),
   },
   print: () => ipcRenderer.invoke('app:print'),
   openAttachment: (base64: string, name: string, ext: string) => ipcRenderer.invoke('app:openAttachment', base64, name, ext),
@@ -64,6 +66,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     create: (data: unknown) => ipcRenderer.invoke('folderCategory:create', data),
     update: (id: number, data: unknown) => ipcRenderer.invoke('folderCategory:update', id, data),
     delete: (id: number) => ipcRenderer.invoke('folderCategory:delete', id),
+    getAllWithCounts: () => ipcRenderer.invoke('folder:getAllWithCounts'),
   },
 
   securityAPI: {

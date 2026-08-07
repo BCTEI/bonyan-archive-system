@@ -16,12 +16,9 @@ export class FolderService {
   }
 
   async getAllWithCounts(): Promise<Folder[]> {
-    const folders = await this.getAll();
-    const counts = await this.api.dbQuery(
-      'SELECT folder_id, COUNT(*) as c FROM documents GROUP BY folder_id'
-    ) as Array<{ folder_id: number; c: number }>;
-    const map = new Map(counts.map(c => [c.folder_id, c.c]));
-    return folders.map(f => ({ ...f, document_count: map.get(f.id) ?? 0 }));
+    const result = await this.api.folderCategoryAPI.getAllWithCounts();
+    if (!result.success) throw new Error(result.error ?? 'فشل تحميل المجلدات');
+    return result.folders ?? [];
   }
 
   groupByGroupName(folders: Folder[]): Map<string, Folder[]> {
