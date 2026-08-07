@@ -1,73 +1,110 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { VerificationCode } from '../../models/security.model';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatSelectModule } from '@angular/material/select';
+import { MatTableModule } from '@angular/material/table';
+import { CODE_STATUS_LABELS, CodeStatus, UserCodeEntry } from '../../models/security.model';
+import { User } from '../../models/user.model';
 import { SecurityService } from '../../services/security.service';
-import { AuditService } from '../../services/audit.service';
+import { UserService } from '../../services/user.service';
 import { ToastService } from '../../services/toast.service';
+import { CodeIssuedDialogComponent } from './code-issued-dialog/code-issued-dialog.component';
 
 @Component({
   selector: 'app-security-center',
   standalone: true,
   imports: [
     CommonModule,
+    FormsModule,
+    MatDialogModule,
     MatCardModule,
     MatButtonModule,
     MatIconModule,
-    MatProgressSpinnerModule
+    MatProgressSpinnerModule,
+    MatFormFieldModule,
+    MatSelectModule,
+    MatTableModule
   ],
   templateUrl: './security-center.component.html',
   styleUrl: './security-center.component.scss'
 })
 export class SecurityCenterComponent implements OnInit {
   private securityService = inject(SecurityService);
-  private auditService = inject(AuditService);
+  private userService = inject(UserService);
   private toast = inject(ToastService);
+  private dialog = inject(MatDialog);
 
-  currentCode = signal<VerificationCode | null>(null);
+  codes = signal<UserCodeEntry[]>([]);
+  users = signal<User[]>([]);
+  selectedUserId = signal<number | null>(null);
+
   loading = signal(false);
+  usersLoading = signal(false);
   generating = signal(false);
 
-  generatedCode = signal<string | null>(null);
-  generatedExpiry = signal<number | null>(null);
+  displayedColumns = ['username', 'status', 'generated_at', 'expires_at', 'generated_by_name', 'actions'];
+  statusLabels: Record<string, string> = CODE_STATUS_LABELS;
 
   async ngOnInit(): Promise<void> {
-    await this.loadCurrentCode();
+    await Promise.all([this.loadCodes(), this.loadUsers()]);
   }
 
-  async loadCurrentCode(): Promise<void> {
+  async loadCodes(): Promise<void> {
     this.loading.set(true);
     try {
-      const code = await this.securityService.getCurrentCode();
-      this.currentCode.set(code);
+      this.codes.set(await this.securityService.listCodes());
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'فشل تحميل الرمز الحالي';
+      const message = err instanceof Error ? err.message : 'فشل تحميل الرموز الصادرة';
       this.toast.show(message, 'error');
     } finally {
       this.loading.set(false);
     }
   }
 
-  async generateCode(): Promise<void> {
-    this.generating.set(true);
-    this.generatedCode.set(null);
-    this.generatedExpiry.set(null);
-
+  async loadUsers(): Promise<void> {
+    this.usersLoading.set(true);
     try {
-      const result = await this.securityService.generateCode();
-      this.generatedCode.set(result.code);
-      this.generatedExpiry.set(result.expiresAt);
-      this.currentCode.set({
-        code: result.code,
-        expires_at: result.expiresAt,
-        is_active: 1
+      // Security Center is already admin-tier gated (adminGuard on the /security
+      // route, mirrored server-side by hasMinRole(user, 'deputy_manager') on every
+      // security:* handler) so the full user list is appropriate here.
+      this.users.set(await this.userService.getAll());
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'فشل تحميل المستخدمين';
+      this.toast.show(message, 'error');
+    } finally {
+      this.usersLoading.set(false);
+    }
+  }
+
+  async generateCode(): Promise<void> {
+    const userId = this.selectedUserId();
+    if (!userId) {
+      this.toast.show('يرجى اختيار المستخدم أولاً', 'warning');
+      return;
+    }
+    const target = this.users().find(u => u.id === userId);
+
+    this.generating.set(true);
+    try {
+      const result = await this.securityService.generateCode(userId);
+
+      // Shown exactly once — the code is never written back into `codes`/the
+      // issued-codes table, only this session-local dialog ever displays it.
+      this.dialog.open(CodeIssuedDialogComponent, {
+        width: '480px',
+        maxWidth: '95vw',
+        disableClose: true,
+        data: { username: target?.username ?? '', code: result.code, expiresAt: result.expiresAt }
       });
 
-      await this.auditService.log('توليد رمز تحقق');
       this.toast.show('تم توليد رمز التحقق بنجاح', 'success');
+      await this.loadCodes();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'فشل توليد الرمز';
       this.toast.show(message, 'error');
@@ -76,31 +113,29 @@ export class SecurityCenterComponent implements OnInit {
     }
   }
 
-  async copyCode(): Promise<void> {
-    const code = this.generatedCode();
-    if (!code) return;
-
+  async revoke(entry: UserCodeEntry): Promise<void> {
+    if (!confirm(`هل أنت متأكد من إلغاء رمز المستخدم "${entry.username}"؟`)) return;
     try {
-      await navigator.clipboard.writeText(code);
-      this.toast.show('تم نسخ الرمز', 'success');
-    } catch {
-      this.toast.show('فشل نسخ الرمز', 'error');
+      await this.securityService.revokeCode(entry.id);
+      this.toast.show('تم إلغاء الرمز', 'success');
+      await this.loadCodes();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'فشل إلغاء الرمز';
+      this.toast.show(message, 'error');
     }
   }
 
-  async copyCurrentCode(): Promise<void> {
-    const code = this.currentCode()?.code;
-    if (!code) return;
-
-    try {
-      await navigator.clipboard.writeText(code);
-      this.toast.show('تم نسخ الرمز الحالي', 'success');
-    } catch {
-      this.toast.show('فشل نسخ الرمز', 'error');
+  statusClass(status: CodeStatus): string {
+    switch (status) {
+      case 'active': return 'bg-success/10 text-success';
+      case 'used': return 'bg-secondary text-text-light';
+      case 'revoked': return 'bg-danger/10 text-danger';
+      case 'expired': return 'bg-warning/10 text-warning';
+      default: return 'bg-secondary text-text';
     }
   }
 
-  formatExpiry(timestamp: number | null | undefined): string {
+  formatDate(timestamp: number | null | undefined): string {
     if (!timestamp) return '-';
     return new Date(timestamp * 1000).toLocaleString('ar-SA', {
       year: 'numeric',
