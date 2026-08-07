@@ -97,6 +97,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     update: (id: number, data: unknown) => ipcRenderer.invoke('masterList:update', id, data),
     delete: (id: number) => ipcRenderer.invoke('masterList:delete', id),
     toggleStatus: (id: number, isActive: number) => ipcRenderer.invoke('masterList:toggleStatus', id, isActive),
+  },
+
+  orgUnitAPI: {
+    getAll: (activeOnly?: boolean) => ipcRenderer.invoke('orgUnit:getAll', activeOnly),
+    create: (data: unknown) => ipcRenderer.invoke('orgUnit:create', data),
+    update: (id: number, data: unknown) => ipcRenderer.invoke('orgUnit:update', id, data),
+    delete: (id: number) => ipcRenderer.invoke('orgUnit:delete', id),
   }
 });
 

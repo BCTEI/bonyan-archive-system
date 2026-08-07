@@ -6,6 +6,24 @@ import { PasswordResetRequest } from '../app/models/password-reset.model';
 import { ArchivedYear } from '../app/models/annual-closing.model';
 import { MasterListEntry, MasterListInput } from '../app/models/master-list.model';
 
+export interface OrgUnit {
+  id: number;
+  name: string;
+  unit_type: 'administration' | 'section';
+  parent_id: number | null;
+  is_active: number;
+  created_by: number | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface OrgUnitInput {
+  name: string;
+  unit_type: 'administration' | 'section';
+  parent_id?: number | null;
+  is_active?: number;
+}
+
 export interface ElectronAPI {
   dbInit: () => Promise<boolean>;
   dbQuery: (sql: string, params?: unknown[]) => Promise<unknown[]>;
@@ -96,6 +114,13 @@ export interface ElectronAPI {
     update: (id: number, data: Partial<MasterListInput>) => Promise<{ success: boolean; error?: string }>;
     delete: (id: number) => Promise<{ success: boolean; error?: string }>;
     toggleStatus: (id: number, isActive: number) => Promise<{ success: boolean; error?: string }>;
+  };
+
+  orgUnitAPI: {
+    getAll: (activeOnly?: boolean) => Promise<{ success: boolean; units?: OrgUnit[]; error?: string }>;
+    create: (data: OrgUnitInput) => Promise<{ success: boolean; id?: number; error?: string }>;
+    update: (id: number, data: Partial<OrgUnitInput>) => Promise<{ success: boolean; error?: string }>;
+    delete: (id: number) => Promise<{ success: boolean; error?: string }>;
   };
 }
 

@@ -1420,6 +1420,21 @@ export interface FolderPermission {
   can_delete: number;
 }
 
+function defaultFolderPermissionForRole(folderId: number, role: string): FolderPermission | null {
+  // Role-tier fallback used when no explicit user_folder_permissions row exists.
+  // Maps the new 5-role hierarchy onto the old admin/editor/viewer default tiers:
+  //   general_manager, deputy_manager -> old 'admin' defaults (full access)
+  //   dept_head, section_head         -> old 'editor' defaults (view only)
+  //   employee                        -> old 'viewer' defaults (no implicit access)
+  if (role === 'general_manager' || role === 'deputy_manager') {
+    return { folder_id: folderId, can_view: 1, can_create: 1, can_edit: 1, can_delete: 1 };
+  }
+  if (role === 'dept_head' || role === 'section_head') {
+    return { folder_id: folderId, can_view: 1, can_create: 0, can_edit: 0, can_delete: 0 };
+  }
+  return null;
+}
+
 export function getFolderPermission(userId: number, folderId: number, role: string): FolderPermission | null {
   if (useMemoryFallback) {
     const perm = memoryStore.user_folder_permissions.find(p => p.user_id === userId && p.folder_id === folderId);
@@ -1432,18 +1447,14 @@ export function getFolderPermission(userId: number, folderId: number, role: stri
         can_delete: perm.can_delete
       };
     }
-    if (role === 'admin') return { folder_id: folderId, can_view: 1, can_create: 1, can_edit: 1, can_delete: 1 };
-    if (role === 'editor') return { folder_id: folderId, can_view: 1, can_create: 0, can_edit: 0, can_delete: 0 };
-    return null;
+    return defaultFolderPermissionForRole(folderId, role);
   }
 
   if (!db) throw new Error('Database not initialized');
   const perm = db.prepare('SELECT folder_id, can_view, can_create, can_edit, can_delete FROM user_folder_permissions WHERE user_id = ? AND folder_id = ?').get(userId, folderId) as FolderPermission | undefined;
   if (perm) return perm;
 
-  if (role === 'admin') return { folder_id: folderId, can_view: 1, can_create: 1, can_edit: 1, can_delete: 1 };
-  if (role === 'editor') return { folder_id: folderId, can_view: 1, can_create: 0, can_edit: 0, can_delete: 0 };
-  return null;
+  return defaultFolderPermissionForRole(folderId, role);
 }
 
 export function getUserFolderPermissions(userId: number): FolderPermission[] {
