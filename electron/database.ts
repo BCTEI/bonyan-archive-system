@@ -15,6 +15,7 @@ interface InMemoryUser {
   password_hash: string;
   full_name: string | null;
   role: string;
+  org_unit_id: number | null;
   is_active: number;
   created_at: number;
   updated_at: number;
@@ -86,6 +87,7 @@ interface InMemoryDocument {
   created_at?: number;
   updated_at?: number;
   created_by?: string;
+  org_unit_id?: number | null;
 }
 
 interface InMemoryVerificationCode {
@@ -138,6 +140,17 @@ interface InMemoryMasterList {
   created_at: number;
 }
 
+interface InMemoryOrgUnit {
+  id: number;
+  name: string;
+  unit_type: 'administration' | 'section';
+  parent_id: number | null;
+  is_active: number;
+  created_by: number | null;
+  created_at: number;
+  updated_at: number;
+}
+
 interface InMemoryStore {
   users: InMemoryUser[];
   folders: InMemoryFolder[];
@@ -152,6 +165,7 @@ interface InMemoryStore {
   password_reset_requests: InMemoryResetRequest[];
   archived_years: InMemoryArchivedYear[];
   master_lists: InMemoryMasterList[];
+  org_units: InMemoryOrgUnit[];
 }
 
 const memoryStore: InMemoryStore = {
@@ -159,8 +173,9 @@ const memoryStore: InMemoryStore = {
     id: 1,
     username: 'admin',
     password_hash: bcrypt.hashSync('admin123', 10),
-    full_name: 'المدير الافتراضي',
-    role: 'admin',
+    full_name: 'المدير العام',
+    role: 'general_manager',
+    org_unit_id: null,
     is_active: 1,
     created_at: Date.now(),
     updated_at: Date.now()
@@ -189,12 +204,14 @@ const memoryStore: InMemoryStore = {
     { id: 6, list_type: 'receiver', name: 'الإدارة العامة', name_en: null, is_active: 1, created_at: Date.now() },
     { id: 7, list_type: 'department', name: 'قسم التدريب', name_en: null, is_active: 1, created_at: Date.now() },
     { id: 8, list_type: 'department', name: 'قسم الصيانة', name_en: null, is_active: 1, created_at: Date.now() }
-  ]
+  ],
+  org_units: []
 };
 
 let useMemoryFallback = false;
 let db: Database.Database | null = null;
 let initError: string | null = null;
+let dbPath: string | null = null;
 
 export function initDb(): { success: boolean; error?: string } {
   console.log('[Database] initDb() called');
@@ -211,7 +228,7 @@ export function initDb(): { success: boolean; error?: string } {
 
   try {
     const userData = app.getPath('userData');
-    const dbPath = path.join(userData, 'archive.db');
+    dbPath = path.join(userData, 'archive.db');
     console.log('[Database] Opening SQLite DB at:', dbPath);
 
     db = new Database(dbPath);
@@ -377,6 +394,18 @@ export function initDb(): { success: boolean; error?: string } {
         created_at INTEGER DEFAULT (strftime('%s','now'))
       );
 
+      CREATE TABLE IF NOT EXISTS org_units (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        unit_type TEXT NOT NULL CHECK(unit_type IN ('administration','section')),
+        parent_id INTEGER REFERENCES org_units(id),
+        is_active INTEGER DEFAULT 1,
+        created_by INTEGER,
+        created_at INTEGER DEFAULT (strftime('%s','now')),
+        updated_at INTEGER DEFAULT (strftime('%s','now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_org_units_parent ON org_units(parent_id);
+
       CREATE INDEX IF NOT EXISTS idx_master_lists_type ON master_lists(list_type);
       CREATE INDEX IF NOT EXISTS idx_master_lists_name ON master_lists(name);
       CREATE INDEX IF NOT EXISTS idx_documents_folder ON documents(folder_id);
@@ -391,6 +420,7 @@ export function initDb(): { success: boolean; error?: string } {
     seedFolders();
     migrateUsersTable();
     migrateRoles();
+    migrateRolesV2();
     seedAdmin();
     migrateDocumentsColumns();
     seedDocumentTypes();
@@ -399,6 +429,7 @@ export function initDb(): { success: boolean; error?: string } {
     migrateDocumentConfidentiality();
     seedMasterLists();
     createPostMigrationIndexes();
+    migrateDocumentsOrgUnit();
 
     return { success: true };
   } catch (err: unknown) {
@@ -667,6 +698,81 @@ function migrateRoles(): void {
   }
 }
 
+function migrateRolesV2(): void {
+  if (!db || useMemoryFallback) return;
+
+  const tableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'").get() as { sql: string } | undefined;
+  if (tableInfo && tableInfo.sql && tableInfo.sql.includes('general_manager')) {
+    // Already migrated to the 5-role schema.
+    return;
+  }
+
+  try {
+    if (dbPath && fs.existsSync(dbPath)) {
+      const userData = app.getPath('userData');
+      const backupPath = path.join(userData, `archive_pre_roles_v2_${Date.now()}.db`);
+      fs.copyFileSync(dbPath, backupPath);
+      console.log('[Database] Backed up database before roles-v2 migration to', backupPath);
+    }
+  } catch (err) {
+    console.error('[Database] Failed to back up database before roles-v2 migration:', err instanceof Error ? err.message : err);
+  }
+
+  try {
+    const tx = db.transaction(() => {
+      db!.exec(`
+        CREATE TABLE users_v2 (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          username TEXT NOT NULL UNIQUE,
+          password_hash TEXT NOT NULL,
+          full_name TEXT,
+          role TEXT NOT NULL DEFAULT 'employee'
+            CHECK(role IN ('general_manager','deputy_manager','dept_head','section_head','employee')),
+          org_unit_id INTEGER REFERENCES org_units(id),
+          is_active INTEGER DEFAULT 1,
+          created_at INTEGER DEFAULT (strftime('%s','now')),
+          updated_at INTEGER DEFAULT (strftime('%s','now'))
+        );
+      `);
+      db!.exec(`
+        INSERT INTO users_v2 (id, username, password_hash, full_name, role, org_unit_id, is_active, created_at, updated_at)
+        SELECT id, username, password_hash, full_name,
+          CASE
+            WHEN role = 'admin' AND id = (SELECT MIN(id) FROM users WHERE role = 'admin') THEN 'general_manager'
+            WHEN role = 'admin' THEN 'deputy_manager'
+            ELSE 'employee'
+          END,
+          NULL, is_active, created_at, updated_at
+        FROM users;
+      `);
+      db!.exec('DROP TABLE users');
+      db!.exec('ALTER TABLE users_v2 RENAME TO users');
+    });
+    tx();
+    console.log('[Database] Migrated users table to 5-role hierarchy schema (roles v2)');
+  } catch (err) {
+    console.error('[Database] Failed to migrate users table to roles v2:', err instanceof Error ? err.message : err);
+  }
+}
+
+function migrateDocumentsOrgUnit(): void {
+  if (!db || useMemoryFallback) return;
+  const columns = db.prepare("PRAGMA table_info(documents)").all() as Array<{ name: string }>;
+  if (!columns.some(c => c.name === 'org_unit_id')) {
+    try {
+      db.exec('ALTER TABLE documents ADD COLUMN org_unit_id INTEGER');
+      console.log('[Database] Added documents.org_unit_id column');
+    } catch (err) {
+      console.warn('[Database] Failed to add documents.org_unit_id column:', err instanceof Error ? err.message : err);
+    }
+  }
+  try {
+    db.exec('CREATE INDEX IF NOT EXISTS idx_documents_org_unit ON documents(org_unit_id)');
+  } catch (err) {
+    console.warn('[Database] Failed to create idx_documents_org_unit index:', err instanceof Error ? err.message : err);
+  }
+}
+
 function seedAdmin(): void {
   if (useMemoryFallback) {
     console.log('[Database] Fallback store already contains admin/admin123');
@@ -684,7 +790,7 @@ function seedAdmin(): void {
     console.log('[Database] Seeding default admin user (admin / admin123)');
     db.prepare(
       "INSERT INTO users (username, password_hash, full_name, role, is_active) VALUES (?, ?, ?, ?, ?)"
-    ).run('admin', hash, 'المدير الافتراضي', 'admin', 1);
+    ).run('admin', hash, 'المدير العام', 'general_manager', 1);
     console.log('[Database] Default admin user created');
     return;
   }
@@ -696,18 +802,18 @@ function seedAdmin(): void {
     updates.push('password_hash = ?');
     values.push(hash);
   }
-  if (existing.role !== 'admin') {
+  if (existing.role !== 'general_manager') {
     updates.push('role = ?');
-    values.push('admin');
+    values.push('general_manager');
   }
   if (existing.is_active !== 1) {
     updates.push('is_active = ?');
     values.push(1);
   }
 
-  if (!existing.full_name || existing.full_name.trim() === '') {
+  if (existing.full_name !== 'المدير العام') {
     updates.push('full_name = ?');
-    values.push('المدير الافتراضي');
+    values.push('المدير العام');
   }
 
   if (updates.length > 0) {
@@ -741,6 +847,7 @@ export interface AuthUser {
   username: string;
   full_name: string | null;
   role: string;
+  org_unit_id: number | null;
   is_active: number;
 }
 
@@ -761,7 +868,7 @@ export function authenticateUser(username: string, password: string): { success:
       return { success: false, error: 'اسم المستخدم أو كلمة المرور غير صحيحة' };
     }
     console.log('[Database] User found, success=true');
-    return { success: true, user: { id: user.id, username: user.username, full_name: user.full_name, role: user.role, is_active: user.is_active } };
+    return { success: true, user: { id: user.id, username: user.username, full_name: user.full_name, role: user.role, org_unit_id: user.org_unit_id ?? null, is_active: user.is_active } };
   }
 
   if (!db) {
@@ -775,7 +882,7 @@ export function authenticateUser(username: string, password: string): { success:
       return { success: false, error: 'لم يتم تهيئة النظام' };
     }
 
-    const row = db.prepare('SELECT id, username, password_hash, full_name, role, is_active FROM users WHERE username = ?').get(username) as
+    const row = db.prepare('SELECT id, username, password_hash, full_name, role, org_unit_id, is_active FROM users WHERE username = ?').get(username) as
       (AuthUser & { password_hash: string }) | undefined;
 
     if (!row) {
@@ -810,7 +917,8 @@ export interface UserInput {
   username: string;
   full_name?: string | null;
   password?: string;
-  role: 'admin' | 'editor' | 'viewer';
+  role: 'general_manager' | 'deputy_manager' | 'dept_head' | 'section_head' | 'employee';
+  org_unit_id?: number | null;
   is_active?: number;
 }
 
@@ -819,7 +927,7 @@ export function getUsers(): AuthUser[] {
     return memoryStore.users.map(u => ({ ...u }));
   }
   if (!db) throw new Error('Database not initialized');
-  return db.prepare('SELECT id, username, full_name, role, is_active, created_at, updated_at FROM users ORDER BY id').all() as AuthUser[];
+  return db.prepare('SELECT id, username, full_name, role, org_unit_id, is_active, created_at, updated_at FROM users ORDER BY id').all() as AuthUser[];
 }
 
 export function getUserById(id: number): AuthUser | undefined {
@@ -828,7 +936,7 @@ export function getUserById(id: number): AuthUser | undefined {
     return user ? { ...user } : undefined;
   }
   if (!db) throw new Error('Database not initialized');
-  return db.prepare('SELECT id, username, full_name, role, is_active, created_at, updated_at FROM users WHERE id = ?').get(id) as AuthUser | undefined;
+  return db.prepare('SELECT id, username, full_name, role, org_unit_id, is_active, created_at, updated_at FROM users WHERE id = ?').get(id) as AuthUser | undefined;
 }
 
 export function getUserByUsername(username: string): AuthUser | undefined {
@@ -837,13 +945,22 @@ export function getUserByUsername(username: string): AuthUser | undefined {
     return user ? { ...user } : undefined;
   }
   if (!db) throw new Error('Database not initialized');
-  return db.prepare('SELECT id, username, full_name, role, is_active, created_at, updated_at FROM users WHERE username = ?').get(username) as AuthUser | undefined;
+  return db.prepare('SELECT id, username, full_name, role, org_unit_id, is_active, created_at, updated_at FROM users WHERE username = ?').get(username) as AuthUser | undefined;
 }
 
 export function createUser(input: UserInput): { success: boolean; id?: number; error?: string } {
-  const { username, full_name, password, role, is_active } = input;
+  const { username, full_name, password, role, org_unit_id, is_active } = input;
   if (!username || !password || !role) {
     return { success: false, error: 'بيانات المستخدم غير مكتملة' };
+  }
+
+  if (role === 'general_manager') {
+    const gmExists = useMemoryFallback
+      ? memoryStore.users.some(u => u.role === 'general_manager')
+      : !!db?.prepare("SELECT id FROM users WHERE role = 'general_manager'").get();
+    if (gmExists) {
+      return { success: false, error: 'يوجد مدير عام واحد فقط في النظام' };
+    }
   }
 
   const hash = bcrypt.hashSync(password, 10);
@@ -859,6 +976,7 @@ export function createUser(input: UserInput): { success: boolean; id?: number; e
       password_hash: hash,
       full_name: full_name ?? null,
       role,
+      org_unit_id: org_unit_id ?? null,
       is_active: is_active ?? 1,
       created_at: Date.now(),
       updated_at: Date.now()
@@ -869,8 +987,8 @@ export function createUser(input: UserInput): { success: boolean; id?: number; e
   if (!db) return { success: false, error: 'قاعدة البيانات غير موجودة' };
   try {
     const result = db.prepare(
-      "INSERT INTO users (username, password_hash, full_name, role, is_active) VALUES (?, ?, ?, ?, ?)"
-    ).run(username, hash, full_name ?? null, role, is_active ?? 1);
+      "INSERT INTO users (username, password_hash, full_name, role, org_unit_id, is_active) VALUES (?, ?, ?, ?, ?, ?)"
+    ).run(username, hash, full_name ?? null, role, org_unit_id ?? null, is_active ?? 1);
     return { success: true, id: Number(result.lastInsertRowid) };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
@@ -888,10 +1006,15 @@ export function updateUser(id: number, input: UserInput, actorId?: number): { su
     if (input.username && memoryStore.users.some(u => u.username === input.username && u.id !== id)) {
       return { success: false, error: 'اسم المستخدم مستخدم مسبقاً' };
     }
+    const oldUsername = user.username;
     if (input.username) user.username = input.username;
     if (input.full_name !== undefined) user.full_name = input.full_name ?? null;
+    if (input.org_unit_id !== undefined) user.org_unit_id = input.org_unit_id ?? null;
     if (input.role) {
-      if (id === actorId && input.role !== 'admin') return { success: false, error: 'لا يمكن خفض صلاحيات حسابك الخاص' };
+      if (id === actorId && input.role !== 'general_manager') return { success: false, error: 'لا يمكن خفض صلاحيات حسابك الخاص' };
+      if (input.role === 'general_manager' && memoryStore.users.some(u => u.role === 'general_manager' && u.id !== id)) {
+        return { success: false, error: 'يوجد مدير عام واحد فقط في النظام' };
+      }
       user.role = input.role;
     }
     if (input.is_active !== undefined) {
@@ -900,31 +1023,48 @@ export function updateUser(id: number, input: UserInput, actorId?: number): { su
     }
     if (input.password) user.password_hash = bcrypt.hashSync(input.password, 10);
     user.updated_at = Date.now();
+    if (input.username && input.username !== oldUsername) {
+      for (const doc of memoryStore.documents) {
+        if (doc.created_by === oldUsername) doc.created_by = input.username;
+      }
+    }
     return { success: true };
   }
 
   if (!db) return { success: false, error: 'قاعدة البيانات غير موجودة' };
-  const existing = db.prepare('SELECT id, role FROM users WHERE id = ?').get(id) as { id: number; role: string } | undefined;
+  const existing = db.prepare('SELECT id, username, role FROM users WHERE id = ?').get(id) as { id: number; username: string; role: string } | undefined;
   if (!existing) return { success: false, error: 'المستخدم غير موجود' };
 
   const sets: string[] = [];
   const values: unknown[] = [];
+  let newUsername: string | undefined;
 
   if (input.username !== undefined) {
     sets.push('username = ?');
     values.push(input.username);
+    newUsername = input.username;
   }
   if (input.full_name !== undefined) {
     sets.push('full_name = ?');
     values.push(input.full_name ?? null);
+  }
+  if (input.org_unit_id !== undefined) {
+    sets.push('org_unit_id = ?');
+    values.push(input.org_unit_id ?? null);
   }
   if (input.password) {
     sets.push('password_hash = ?');
     values.push(bcrypt.hashSync(input.password, 10));
   }
   if (input.role) {
-    if (id === actorId && input.role !== 'admin') {
+    if (id === actorId && input.role !== 'general_manager') {
       return { success: false, error: 'لا يمكن خفض صلاحيات حسابك الخاص' };
+    }
+    if (input.role === 'general_manager') {
+      const gmExists = db.prepare("SELECT id FROM users WHERE role = 'general_manager' AND id != ?").get(id);
+      if (gmExists) {
+        return { success: false, error: 'يوجد مدير عام واحد فقط في النظام' };
+      }
     }
     sets.push('role = ?');
     values.push(input.role);
@@ -943,7 +1083,13 @@ export function updateUser(id: number, input: UserInput, actorId?: number): { su
   values.push(id);
 
   try {
-    db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+    const tx = db.transaction(() => {
+      db!.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+      if (newUsername !== undefined && newUsername !== existing.username) {
+        db!.prepare('UPDATE documents SET created_by = ? WHERE created_by = ?').run(newUsername, existing.username);
+      }
+    });
+    tx();
     return { success: true };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
@@ -962,9 +1108,8 @@ export function deleteUser(id: number, actorId?: number): { success: boolean; er
   if (useMemoryFallback) {
     const idx = memoryStore.users.findIndex(u => u.id === id);
     if (idx === -1) return { success: false, error: 'المستخدم غير موجود' };
-    const admins = memoryStore.users.filter(u => u.role === 'admin');
-    if (memoryStore.users[idx].role === 'admin' && admins.length <= 1) {
-      return { success: false, error: 'لا يمكن حذف آخر مدير في النظام' };
+    if (memoryStore.users[idx].role === 'general_manager') {
+      return { success: false, error: 'لا يمكن حذف حساب المدير العام' };
     }
     memoryStore.users.splice(idx, 1);
     return { success: true };
@@ -974,11 +1119,8 @@ export function deleteUser(id: number, actorId?: number): { success: boolean; er
   const user = db.prepare('SELECT role FROM users WHERE id = ?').get(id) as { role: string } | undefined;
   if (!user) return { success: false, error: 'المستخدم غير موجود' };
 
-  if (user.role === 'admin') {
-    const adminCount = db.prepare("SELECT COUNT(*) as c FROM users WHERE role = 'admin'").get() as { c: number };
-    if (adminCount.c <= 1) {
-      return { success: false, error: 'لا يمكن حذف آخر مدير في النظام' };
-    }
+  if (user.role === 'general_manager') {
+    return { success: false, error: 'لا يمكن حذف حساب المدير العام' };
   }
 
   db.prepare('DELETE FROM users WHERE id = ?').run(id);
@@ -1034,6 +1176,236 @@ export function getSessions(userId?: number): InMemorySession[] {
     return db.prepare('SELECT * FROM user_sessions WHERE user_id = ? ORDER BY timestamp DESC').all(userId) as InMemorySession[];
   }
   return db.prepare('SELECT * FROM user_sessions ORDER BY timestamp DESC').all() as InMemorySession[];
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Organizational units (hierarchy)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface OrgUnit {
+  id: number;
+  name: string;
+  unit_type: 'administration' | 'section';
+  parent_id: number | null;
+  is_active: number;
+  created_by: number | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface OrgUnitInput {
+  name: string;
+  unit_type: 'administration' | 'section';
+  parent_id?: number | null;
+  is_active?: number;
+}
+
+function findOrgUnit(id: number): OrgUnit | undefined {
+  if (useMemoryFallback) {
+    const unit = memoryStore.org_units.find(u => u.id === id);
+    return unit ? { ...unit } : undefined;
+  }
+  if (!db) return undefined;
+  return db.prepare('SELECT * FROM org_units WHERE id = ?').get(id) as OrgUnit | undefined;
+}
+
+function orgUnitNameConflict(name: string, parentId: number | null, excludeId?: number): boolean {
+  if (useMemoryFallback) {
+    return memoryStore.org_units.some(u => u.name === name && u.parent_id === parentId && u.id !== excludeId);
+  }
+  if (!db) return false;
+  const row = parentId === null
+    ? db.prepare('SELECT id FROM org_units WHERE name = ? AND parent_id IS NULL AND id != ?').get(name, excludeId ?? -1)
+    : db.prepare('SELECT id FROM org_units WHERE name = ? AND parent_id = ? AND id != ?').get(name, parentId, excludeId ?? -1);
+  return !!row;
+}
+
+export function getOrgUnits(activeOnly = false): OrgUnit[] {
+  if (useMemoryFallback) {
+    let units = memoryStore.org_units.map(u => ({ ...u }));
+    if (activeOnly) units = units.filter(u => u.is_active === 1);
+    return units;
+  }
+  if (!db) throw new Error('Database not initialized');
+  const sql = activeOnly
+    ? 'SELECT * FROM org_units WHERE is_active = 1 ORDER BY id'
+    : 'SELECT * FROM org_units ORDER BY id';
+  return db.prepare(sql).all() as OrgUnit[];
+}
+
+export function createOrgUnit(input: OrgUnitInput, createdBy?: number): { success: boolean; id?: number; error?: string } {
+  const name = input.name?.trim();
+  if (!name) return { success: false, error: 'اسم الوحدة مطلوب' };
+  if (input.unit_type !== 'administration' && input.unit_type !== 'section') {
+    return { success: false, error: 'نوع الوحدة غير صالح' };
+  }
+
+  let parentId: number | null = input.parent_id ?? null;
+
+  if (input.unit_type === 'administration') {
+    parentId = null;
+  } else {
+    if (!parentId) return { success: false, error: 'القسم يجب أن يتبع لوحدة رئيسية' };
+    const parent = findOrgUnit(parentId);
+    if (!parent) return { success: false, error: 'الوحدة الرئيسية غير موجودة' };
+    if (parent.is_active !== 1) return { success: false, error: 'الوحدة الرئيسية غير نشطة' };
+  }
+
+  if (orgUnitNameConflict(name, parentId)) {
+    return { success: false, error: 'توجد وحدة بنفس الاسم ضمن نفس الوحدة الرئيسية' };
+  }
+
+  if (useMemoryFallback) {
+    const id = Math.max(0, ...memoryStore.org_units.map(u => u.id)) + 1;
+    const now = Date.now();
+    memoryStore.org_units.push({
+      id,
+      name,
+      unit_type: input.unit_type,
+      parent_id: parentId,
+      is_active: input.is_active ?? 1,
+      created_by: createdBy ?? null,
+      created_at: now,
+      updated_at: now
+    });
+    return { success: true, id };
+  }
+
+  if (!db) return { success: false, error: 'قاعدة البيانات غير موجودة' };
+  try {
+    const result = db.prepare(
+      'INSERT INTO org_units (name, unit_type, parent_id, is_active, created_by) VALUES (?, ?, ?, ?, ?)'
+    ).run(name, input.unit_type, parentId, input.is_active ?? 1, createdBy ?? null);
+    return { success: true, id: Number(result.lastInsertRowid) };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'فشل إنشاء الوحدة' };
+  }
+}
+
+export function updateOrgUnit(id: number, input: Partial<OrgUnitInput>): { success: boolean; error?: string } {
+  const existing = findOrgUnit(id);
+  if (!existing) return { success: false, error: 'الوحدة غير موجودة' };
+
+  const unitType = input.unit_type ?? existing.unit_type;
+  if (unitType !== 'administration' && unitType !== 'section') {
+    return { success: false, error: 'نوع الوحدة غير صالح' };
+  }
+
+  let parentId: number | null = input.parent_id !== undefined ? input.parent_id : existing.parent_id;
+
+  if (unitType === 'administration') {
+    parentId = null;
+  } else {
+    if (!parentId) return { success: false, error: 'القسم يجب أن يتبع لوحدة رئيسية' };
+    if (parentId === id) return { success: false, error: 'لا يمكن أن تكون الوحدة تابعة لنفسها' };
+    const parent = findOrgUnit(parentId);
+    if (!parent) return { success: false, error: 'الوحدة الرئيسية غير موجودة' };
+    if (parent.is_active !== 1) return { success: false, error: 'الوحدة الرئيسية غير نشطة' };
+
+    // Cycle check: walk ancestors of the new parent and make sure this unit isn't among them.
+    let cursor: number | null = parentId;
+    const seen = new Set<number>();
+    while (cursor !== null) {
+      if (cursor === id) return { success: false, error: 'لا يمكن نقل الوحدة إلى أحد فروعها' };
+      if (seen.has(cursor)) break;
+      seen.add(cursor);
+      const cur = findOrgUnit(cursor);
+      cursor = cur ? cur.parent_id : null;
+    }
+  }
+
+  const name = input.name !== undefined ? input.name.trim() : existing.name;
+  if (!name) return { success: false, error: 'اسم الوحدة مطلوب' };
+
+  if (orgUnitNameConflict(name, parentId, id)) {
+    return { success: false, error: 'توجد وحدة بنفس الاسم ضمن نفس الوحدة الرئيسية' };
+  }
+
+  if (useMemoryFallback) {
+    const unit = memoryStore.org_units.find(u => u.id === id)!;
+    unit.name = name;
+    unit.unit_type = unitType;
+    unit.parent_id = parentId;
+    if (input.is_active !== undefined) unit.is_active = input.is_active;
+    unit.updated_at = Date.now();
+    return { success: true };
+  }
+
+  if (!db) return { success: false, error: 'قاعدة البيانات غير موجودة' };
+  const sets: string[] = ['name = ?', 'unit_type = ?', 'parent_id = ?'];
+  const values: unknown[] = [name, unitType, parentId];
+  if (input.is_active !== undefined) {
+    sets.push('is_active = ?');
+    values.push(input.is_active);
+  }
+  sets.push("updated_at = strftime('%s','now')");
+  values.push(id);
+  try {
+    db.prepare(`UPDATE org_units SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+    return { success: true };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'فشل تحديث الوحدة' };
+  }
+}
+
+export function deleteOrgUnit(id: number): { success: boolean; error?: string } {
+  const existing = findOrgUnit(id);
+  if (!existing) return { success: false, error: 'الوحدة غير موجودة' };
+
+  if (useMemoryFallback) {
+    if (memoryStore.org_units.some(u => u.parent_id === id)) {
+      return { success: false, error: 'لا يمكن حذف الوحدة لوجود وحدات فرعية تابعة لها' };
+    }
+    if (memoryStore.users.some(u => u.org_unit_id === id)) {
+      return { success: false, error: 'لا يمكن حذف الوحدة لوجود مستخدمين مرتبطين بها' };
+    }
+    if (memoryStore.documents.some(d => d.org_unit_id === id)) {
+      return { success: false, error: 'لا يمكن حذف الوحدة لوجود وثائق مرتبطة بها' };
+    }
+    memoryStore.org_units = memoryStore.org_units.filter(u => u.id !== id);
+    return { success: true };
+  }
+
+  if (!db) return { success: false, error: 'قاعدة البيانات غير موجودة' };
+  const childCount = db.prepare('SELECT COUNT(*) as c FROM org_units WHERE parent_id = ?').get(id) as { c: number };
+  if (childCount.c > 0) return { success: false, error: 'لا يمكن حذف الوحدة لوجود وحدات فرعية تابعة لها' };
+  const userCount = db.prepare('SELECT COUNT(*) as c FROM users WHERE org_unit_id = ?').get(id) as { c: number };
+  if (userCount.c > 0) return { success: false, error: 'لا يمكن حذف الوحدة لوجود مستخدمين مرتبطين بها' };
+  const docCount = db.prepare('SELECT COUNT(*) as c FROM documents WHERE org_unit_id = ?').get(id) as { c: number };
+  if (docCount.c > 0) return { success: false, error: 'لا يمكن حذف الوحدة لوجود وثائق مرتبطة بها' };
+  db.prepare('DELETE FROM org_units WHERE id = ?').run(id);
+  return { success: true };
+}
+
+export function getOrgUnitSubtreeIds(rootId: number): number[] {
+  if (useMemoryFallback) {
+    const result: number[] = [];
+    const stack = [rootId];
+    while (stack.length) {
+      const cur = stack.pop()!;
+      result.push(cur);
+      for (const unit of memoryStore.org_units) {
+        if (unit.parent_id === cur) stack.push(unit.id);
+      }
+    }
+    return result;
+  }
+  if (!db) throw new Error('Database not initialized');
+  // Deliberately includes inactive units — documents in a deactivated section must not vanish from visibility.
+  const rows = db.prepare(`
+    WITH RECURSIVE subtree(id) AS (
+      SELECT id FROM org_units WHERE id = ?
+      UNION ALL
+      SELECT o.id FROM org_units o JOIN subtree s ON o.parent_id = s.id
+    )
+    SELECT id FROM subtree
+  `).all(rootId) as Array<{ id: number }>;
+  return rows.map(r => r.id);
+}
+
+export function isUserInSubtree(actorUnitId: number, targetUnitId: number | null): boolean {
+  if (targetUnitId === null || targetUnitId === undefined) return false;
+  return getOrgUnitSubtreeIds(actorUnitId).includes(targetUnitId);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
