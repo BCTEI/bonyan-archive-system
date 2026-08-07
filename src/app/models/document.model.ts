@@ -48,4 +48,5 @@ export interface ArchiveDocument {
   created_at?: string;
   updated_at?: string;
   created_by?: string;
+  org_unit_id?: number | null;
 }

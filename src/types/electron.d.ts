@@ -7,11 +7,10 @@ import { ArchivedYear } from '../app/models/annual-closing.model';
 import { MasterListEntry, MasterListInput } from '../app/models/master-list.model';
 import { AuditEntry } from '../app/models/audit-entry.model';
 
-// `User` (from user.model.ts) doesn't carry org_unit_id yet — that model is Task 3.3's
-// to widen alongside the 5-role migration. The main process's AuthUser already returns
-// org_unit_id on every user-shaped response, so this extends the API-surface type here
-// (electron.d.ts only) without touching user.model.ts out of scope.
-export type UserWithOrgUnit = User & { org_unit_id?: number | null };
+// `User` (from user.model.ts) now carries org_unit_id directly (Task 3.3, 5-role
+// migration), so this alias is just a stable name for the API-surface type — kept so
+// existing call sites (login/getCurrentUser/userAPI) don't need to change.
+export type UserWithOrgUnit = User;
 
 export interface OrgUnit {
   id: number;

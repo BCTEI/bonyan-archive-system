@@ -44,6 +44,18 @@
       }
     </mat-form-field>
 
+    <mat-form-field class="w-full" appearance="outline">
+      <mat-label>الوحدة التنظيمية</mat-label>
+      <mat-select [(ngModel)]="orgUnitId">
+        <mat-option [value]="NO_ORG_UNIT_VALUE">بدون وحدة</mat-option>
+        @for (row of orgUnitOptions(); track row.unit.id) {
+          <mat-option [value]="row.unit.id">
+            {{ '— '.repeat(row.depth) }}{{ row.unit.name }}
+          </mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
     <div class="flex items-center justify-between">
       <span>الحالة</span>
       <mat-slide-toggle [(ngModel)]="isActive" color="primary">

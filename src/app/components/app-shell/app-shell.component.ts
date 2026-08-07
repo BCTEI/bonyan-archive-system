@@ -59,6 +59,7 @@ export class AppShellComponent implements OnInit {
     if (url.includes('/documents')) crumbs.push({ label: 'الوثائق' });
     if (url.includes('/audit')) crumbs.push({ label: 'سجل التدقيق' });
     if (url.includes('/users')) crumbs.push({ label: 'إدارة المستخدمين' });
+    if (url.includes('/org-units')) crumbs.push({ label: 'الهيكل التنظيمي' });
     if (url.includes('/document-types')) crumbs.push({ label: 'أنواع الوثائق' });
     if (url.includes('/master-lists')) crumbs.push({ label: 'القوائم الرئيسية' });
     if (url.includes('/folder-categories')) crumbs.push({ label: 'إدارة التصنيفات' });

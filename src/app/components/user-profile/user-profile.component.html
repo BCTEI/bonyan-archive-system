@@ -10,7 +10,7 @@
         <mat-icon class="text-4xl">account_circle</mat-icon>
       </div>
       <mat-card-title>{{ auth.currentUser()?.full_name || auth.currentUser()?.username }}</mat-card-title>
-      <mat-card-subtitle>{{ roleLabels[auth.currentUser()?.role ?? 'viewer'] }}</mat-card-subtitle>
+      <mat-card-subtitle>{{ roleLabels[auth.currentUser()?.role ?? 'employee'] }}</mat-card-subtitle>
     </mat-card-header>
     <mat-card-content class="p-6">
       <div class="space-y-4">
@@ -24,7 +24,7 @@
         </div>
         <div class="flex justify-between border-b border-border pb-2">
           <span class="text-text-light">الصلاحية</span>
-          <span class="font-semibold">{{ roleLabels[auth.currentUser()?.role ?? 'viewer'] }}</span>
+          <span class="font-semibold">{{ roleLabels[auth.currentUser()?.role ?? 'employee'] }}</span>
         </div>
         <div class="flex justify-between border-b border-border pb-2">
           <span class="text-text-light">تاريخ الإنشاء</span>
