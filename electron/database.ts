@@ -100,6 +100,20 @@ interface InMemoryVerificationCode {
   generated_by: number;
 }
 
+interface InMemoryUserVerificationCode {
+  id: number;
+  user_id: number;
+  code_hash: string;
+  status: 'active' | 'used' | 'revoked';
+  generated_by: number | null;
+  generated_at: number;
+  expires_at: number;
+  used_at: number | null;
+  used_document_id: number | null;
+  revoked_by: number | null;
+  revoked_at: number | null;
+}
+
 interface InMemoryAccessLog {
   id: number;
   document_id: number;
@@ -161,6 +175,7 @@ interface InMemoryStore {
   user_sessions: InMemorySession[];
   user_folder_permissions: InMemoryFolderPermission[];
   system_verification_codes: InMemoryVerificationCode[];
+  user_verification_codes: InMemoryUserVerificationCode[];
   document_access_log: InMemoryAccessLog[];
   password_reset_requests: InMemoryResetRequest[];
   archived_years: InMemoryArchivedYear[];
@@ -192,6 +207,7 @@ const memoryStore: InMemoryStore = {
   user_sessions: [],
   user_folder_permissions: [],
   system_verification_codes: [],
+  user_verification_codes: [],
   document_access_log: [],
   password_reset_requests: [],
   archived_years: [],
@@ -350,6 +366,22 @@ export function initDb(): { success: boolean; error?: string } {
         generated_by INTEGER,
         FOREIGN KEY (generated_by) REFERENCES users(id)
       );
+
+      CREATE TABLE IF NOT EXISTS user_verification_codes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        code_hash TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','used','revoked')),
+        generated_by INTEGER,
+        generated_at INTEGER DEFAULT (strftime('%s','now')),
+        expires_at INTEGER NOT NULL,
+        used_at INTEGER,
+        used_document_id INTEGER,
+        revoked_by INTEGER,
+        revoked_at INTEGER,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_uvc_user_status ON user_verification_codes(user_id, status);
 
       CREATE TABLE IF NOT EXISTS document_access_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -1855,48 +1887,55 @@ export function deleteFolder(id: number): { success: boolean; error?: string } {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Security / verification codes
+// Security / per-user single-use verification codes
 // ─────────────────────────────────────────────────────────────────────────────
+// Replaces the old global system_verification_codes flow (left in place as dead
+// data — see the CREATE TABLE above). Each code is minted for one target user,
+// stored only as a bcrypt hash, valid 24h, single-use, and at most one active
+// code per user (generating a new one revokes the prior active one).
 
-export interface VerificationCode {
-  id?: number;
-  code?: string;
-  code_hash?: string;
-  generated_at?: number;
-  expires_at?: number;
-  is_active?: number;
-  generated_by?: number;
+export interface UserCodeEntry {
+  id: number;
+  user_id: number;
+  username: string;
+  full_name: string | null;
+  status: 'active' | 'used' | 'revoked' | 'expired';
+  generated_by: number | null;
+  generated_by_name: string | null;
+  generated_at: number;
+  expires_at: number;
+  used_at: number | null;
+  used_document_id: number | null;
+  revoked_by: number | null;
+  revoked_at: number | null;
 }
 
-export function getCurrentVerificationCode(): VerificationCode | null {
+export function generateUserCode(targetUserId: number, issuedBy: number): { success: boolean; code?: string; expiresAt?: number; error?: string } {
+  const code = crypto.randomInt(0, 1_000_000).toString().padStart(6, '0');
+  const codeHash = bcrypt.hashSync(code, 10);
   const now = Math.floor(Date.now() / 1000);
-  if (useMemoryFallback) {
-    return memoryStore.system_verification_codes
-      .filter(c => c.is_active === 1 && c.expires_at > now)
-      .sort((a, b) => b.generated_at - a.generated_at)[0] ?? null;
-  }
-  if (!db) throw new Error('Database not initialized');
-  return db.prepare(
-    'SELECT * FROM system_verification_codes WHERE is_active = 1 AND expires_at > ? ORDER BY generated_at DESC LIMIT 1'
-  ).get(now) as VerificationCode | null;
-}
-
-export function generateVerificationCode(adminId: number): { success: boolean; code?: string; error?: string; expiresAt?: number } {
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
-  const codeHash = crypto.createHash('sha256').update(code).digest('hex');
-  const now = Math.floor(Date.now() / 1000);
-  const expiresAt = now + (24 * 60 * 60);
+  const expiresAt = now + 86400;
 
   if (useMemoryFallback) {
-    for (const c of memoryStore.system_verification_codes) c.is_active = 0;
-    memoryStore.system_verification_codes.push({
-      id: memoryStore.system_verification_codes.length + 1,
-      code,
+    for (const c of memoryStore.user_verification_codes) {
+      if (c.user_id === targetUserId && c.status === 'active') {
+        c.status = 'revoked';
+        c.revoked_by = issuedBy;
+        c.revoked_at = now;
+      }
+    }
+    memoryStore.user_verification_codes.push({
+      id: memoryStore.user_verification_codes.length + 1,
+      user_id: targetUserId,
       code_hash: codeHash,
+      status: 'active',
+      generated_by: issuedBy,
       generated_at: now,
       expires_at: expiresAt,
-      is_active: 1,
-      generated_by: adminId
+      used_at: null,
+      used_document_id: null,
+      revoked_by: null,
+      revoked_at: null
     });
     return { success: true, code, expiresAt };
   }
@@ -1904,11 +1943,12 @@ export function generateVerificationCode(adminId: number): { success: boolean; c
   if (!db) return { success: false, error: 'قاعدة البيانات غير موجودة' };
   try {
     const tx = db.transaction(() => {
-      db!.prepare('UPDATE system_verification_codes SET is_active = 0').run();
-      // Store plaintext code for admin display and hash for secure verification.
       db!.prepare(
-        'INSERT INTO system_verification_codes (code, code_hash, generated_at, expires_at, is_active, generated_by) VALUES (?, ?, ?, ?, ?, ?)'
-      ).run(code, codeHash, now, expiresAt, 1, adminId);
+        `UPDATE user_verification_codes SET status = 'revoked', revoked_by = ?, revoked_at = ? WHERE user_id = ? AND status = 'active'`
+      ).run(issuedBy, now, targetUserId);
+      db!.prepare(
+        `INSERT INTO user_verification_codes (user_id, code_hash, status, generated_by, generated_at, expires_at) VALUES (?, ?, 'active', ?, ?, ?)`
+      ).run(targetUserId, codeHash, issuedBy, now, expiresAt);
     });
     tx();
     return { success: true, code, expiresAt };
@@ -1917,23 +1957,117 @@ export function generateVerificationCode(adminId: number): { success: boolean; c
   }
 }
 
-export function verifySystemCode(code: string): { valid: boolean; error?: string } {
-  if (!code || code.length !== 6) return { valid: false, error: 'الرمز يجب أن يكون 6 أرقام' };
-  const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+export function listUserCodes(): UserCodeEntry[] {
   const now = Math.floor(Date.now() / 1000);
 
   if (useMemoryFallback) {
-    const found = memoryStore.system_verification_codes.find(
-      c => c.is_active === 1 && c.expires_at > now && c.code_hash === codeHash
-    );
-    return { valid: !!found, error: found ? undefined : 'الرمز غير صحيح أو منتهي الصلاحية' };
+    return memoryStore.user_verification_codes
+      .slice()
+      .sort((a, b) => b.generated_at - a.generated_at)
+      .slice(0, 200)
+      .map(c => {
+        const targetUser = memoryStore.users.find(u => u.id === c.user_id);
+        const generator = c.generated_by != null ? memoryStore.users.find(u => u.id === c.generated_by) : undefined;
+        const status: UserCodeEntry['status'] = c.status === 'active' && c.expires_at <= now ? 'expired' : c.status;
+        return {
+          id: c.id,
+          user_id: c.user_id,
+          username: targetUser?.username ?? '',
+          full_name: targetUser?.full_name ?? null,
+          status,
+          generated_by: c.generated_by,
+          generated_by_name: generator?.full_name ?? generator?.username ?? null,
+          generated_at: c.generated_at,
+          expires_at: c.expires_at,
+          used_at: c.used_at,
+          used_document_id: c.used_document_id,
+          revoked_by: c.revoked_by,
+          revoked_at: c.revoked_at
+        };
+      });
   }
 
-  if (!db) return { valid: false, error: 'قاعدة البيانات غير موجودة' };
-  const found = db.prepare(
-    'SELECT id FROM system_verification_codes WHERE is_active = 1 AND expires_at > ? AND code_hash = ?'
-  ).get(now, codeHash);
-  return { valid: !!found, error: found ? undefined : 'الرمز غير صحيح أو منتهي الصلاحية' };
+  if (!db) throw new Error('Database not initialized');
+  const rows = db.prepare(`
+    SELECT
+      uvc.id, uvc.user_id, u.username, u.full_name,
+      CASE WHEN uvc.status = 'active' AND uvc.expires_at <= ? THEN 'expired' ELSE uvc.status END as status,
+      uvc.generated_by, gu.full_name as generated_by_full_name, gu.username as generated_by_username,
+      uvc.generated_at, uvc.expires_at, uvc.used_at, uvc.used_document_id, uvc.revoked_by, uvc.revoked_at
+    FROM user_verification_codes uvc
+    JOIN users u ON u.id = uvc.user_id
+    LEFT JOIN users gu ON gu.id = uvc.generated_by
+    ORDER BY uvc.generated_at DESC
+    LIMIT 200
+  `).all(now) as Array<Record<string, unknown>>;
+
+  return rows.map(r => ({
+    id: r.id as number,
+    user_id: r.user_id as number,
+    username: r.username as string,
+    full_name: (r.full_name as string | null) ?? null,
+    status: r.status as UserCodeEntry['status'],
+    generated_by: (r.generated_by as number | null) ?? null,
+    generated_by_name: (r.generated_by_full_name as string | null) ?? (r.generated_by_username as string | null) ?? null,
+    generated_at: r.generated_at as number,
+    expires_at: r.expires_at as number,
+    used_at: (r.used_at as number | null) ?? null,
+    used_document_id: (r.used_document_id as number | null) ?? null,
+    revoked_by: (r.revoked_by as number | null) ?? null,
+    revoked_at: (r.revoked_at as number | null) ?? null
+  }));
+}
+
+export function revokeUserCode(codeId: number, revokedBy: number): { success: boolean; error?: string } {
+  const now = Math.floor(Date.now() / 1000);
+
+  if (useMemoryFallback) {
+    const c = memoryStore.user_verification_codes.find(entry => entry.id === codeId);
+    if (!c) return { success: false, error: 'الرمز غير موجود' };
+    if (c.status !== 'active') return { success: false, error: 'الرمز غير نشط' };
+    c.status = 'revoked';
+    c.revoked_by = revokedBy;
+    c.revoked_at = now;
+    return { success: true };
+  }
+
+  if (!db) return { success: false, error: 'قاعدة البيانات غير موجودة' };
+  const result = db.prepare(
+    `UPDATE user_verification_codes SET status = 'revoked', revoked_by = ?, revoked_at = ? WHERE id = ? AND status = 'active'`
+  ).run(revokedBy, now, codeId);
+  if (result.changes === 0) return { success: false, error: 'الرمز غير موجود أو غير نشط' };
+  return { success: true };
+}
+
+export function verifyAndConsumeUserCode(userId: number, code: string, documentId?: number): { success: boolean; error?: string } {
+  const now = Math.floor(Date.now() / 1000);
+  const invalidError = 'الرمز غير صحيح أو منتهي الصلاحية';
+
+  if (useMemoryFallback) {
+    const c = memoryStore.user_verification_codes
+      .filter(entry => entry.user_id === userId && entry.status === 'active' && entry.expires_at > now)
+      .sort((a, b) => b.generated_at - a.generated_at)[0];
+    if (!c || !bcrypt.compareSync(code, c.code_hash)) return { success: false, error: invalidError };
+    c.status = 'used';
+    c.used_at = now;
+    c.used_document_id = documentId ?? null;
+    return { success: true };
+  }
+
+  if (!db) return { success: false, error: 'قاعدة البيانات غير موجودة' };
+  const row = db.prepare(
+    `SELECT id, code_hash FROM user_verification_codes WHERE user_id = ? AND status = 'active' AND expires_at > ? ORDER BY generated_at DESC LIMIT 1`
+  ).get(userId, now) as { id: number; code_hash: string } | undefined;
+  if (!row || !bcrypt.compareSync(code, row.code_hash)) return { success: false, error: invalidError };
+
+  const tx = db.transaction(() => {
+    return db!.prepare(
+      `UPDATE user_verification_codes SET status = 'used', used_at = ?, used_document_id = ? WHERE id = ? AND status = 'active'`
+    ).run(now, documentId ?? null, row.id);
+  });
+  const result = tx();
+  if (result.changes === 0) return { success: false, error: invalidError };
+  return { success: true };
 }
 
 export function logDocumentAccess(documentId: number, userId: number, username: string, accessType: 'view' | 'edit', confidentiality: string, method?: string): void {

@@ -1,7 +1,7 @@
 import { User, UserSession, UserFolderPermission } from '../app/models/user.model';
 import { ArchiveDocument, DocumentTypeEntry } from '../app/models/document.model';
 import { Folder, FolderInput } from '../app/models/folder.model';
-import { VerificationCode, DocumentAccessLogEntry } from '../app/models/security.model';
+import { DocumentAccessLogEntry } from '../app/models/security.model';
 import { PasswordResetRequest } from '../app/models/password-reset.model';
 import { ArchivedYear } from '../app/models/annual-closing.model';
 import { MasterListEntry, MasterListInput } from '../app/models/master-list.model';
@@ -28,6 +28,22 @@ export interface OrgUnitInput {
   unit_type: 'administration' | 'section';
   parent_id?: number | null;
   is_active?: number;
+}
+
+export interface UserCodeEntry {
+  id: number;
+  user_id: number;
+  username: string;
+  full_name: string | null;
+  status: 'active' | 'used' | 'revoked' | 'expired';
+  generated_by: number | null;
+  generated_by_name: string | null;
+  generated_at: number;
+  expires_at: number;
+  used_at: number | null;
+  used_document_id: number | null;
+  revoked_by: number | null;
+  revoked_at: number | null;
 }
 
 export interface ElectronAPI {
@@ -95,10 +111,11 @@ export interface ElectronAPI {
   };
 
   securityAPI: {
-    getCurrentCode: () => Promise<{ success: boolean; code?: VerificationCode | null; error?: string }>;
-    generateCode: () => Promise<{ success: boolean; code?: string; expiresAt?: number; error?: string }>;
-    verifyCode: (code: string) => Promise<{ valid: boolean; error?: string }>;
-    verifyPassword: (username: string, password: string) => Promise<{ valid: boolean; error?: string }>;
+    listCodes: () => Promise<{ success: boolean; codes?: UserCodeEntry[]; error?: string }>;
+    generateCode: (targetUserId: number) => Promise<{ success: boolean; code?: string; expiresAt?: number; error?: string }>;
+    revokeCode: (codeId: number) => Promise<{ success: boolean; error?: string }>;
+    verifyCode: (code: string, documentId?: number, scope?: string) => Promise<{ valid: boolean; error?: string }>;
+    verifyPassword: (password: string, documentId?: number, scope?: string) => Promise<{ valid: boolean; error?: string }>;
     logAccess: (documentId: number, accessType: 'view' | 'edit', confidentiality: string, method?: string) => Promise<{ success: boolean; error?: string }>;
   };
 

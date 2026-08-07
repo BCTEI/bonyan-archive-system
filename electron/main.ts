@@ -111,9 +111,10 @@ import {
   createFolder,
   updateFolder,
   deleteFolder,
-  getCurrentVerificationCode,
-  generateVerificationCode,
-  verifySystemCode,
+  generateUserCode,
+  listUserCodes,
+  revokeUserCode,
+  verifyAndConsumeUserCode,
   logDocumentAccess,
   requestPasswordReset,
   getPendingPasswordResetRequests,
@@ -231,6 +232,55 @@ function canAccessConfidentiality(user: AuthUser, conf: string, docCreatedBy?: s
   if (conf === 'سري') return ROLE_LEVEL[user.role] >= ROLE_LEVEL['section_head'];
   if (conf === 'سري للغاية') return ROLE_LEVEL[user.role] >= ROLE_LEVEL['dept_head'];
   return false;
+}
+
+// Main-process confidentiality gate ──────────────────────────────────────────
+// Documents/scopes the active session has unlocked with a single-use code or
+// password re-verification this session. Keys look like 'live:<docId>' or
+// 'archive:<year>:<docId>'. Cleared wholesale on auth:logout.
+const verifiedTopSecret = new Set<string>();
+
+// Per-user in-memory rate limiter for security:verifyCode — 5 failures within a
+// 15-minute window locks that user out of further attempts for 15 minutes.
+interface CodeAttemptState {
+  failures: number;
+  firstFailureAt: number;
+  lockedUntil: number | null;
+}
+const codeAttempts = new Map<number, CodeAttemptState>();
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
+const RATE_LIMIT_MAX_FAILURES = 5;
+const RATE_LIMIT_LOCK_MS = 15 * 60 * 1000;
+
+function checkRateLimit(userId: number): { locked: boolean; message?: string } {
+  const entry = codeAttempts.get(userId);
+  if (!entry) return { locked: false };
+  const now = Date.now();
+  if (entry.lockedUntil != null) {
+    if (entry.lockedUntil > now) {
+      const minutesLeft = Math.max(1, Math.ceil((entry.lockedUntil - now) / 60000));
+      return { locked: true, message: `تم تأمين التحقق مؤقتاً، حاول بعد ${minutesLeft} دقائق` };
+    }
+    codeAttempts.delete(userId);
+  }
+  return { locked: false };
+}
+
+function recordFailedCodeAttempt(userId: number): void {
+  const now = Date.now();
+  let entry = codeAttempts.get(userId);
+  if (!entry || now - entry.firstFailureAt > RATE_LIMIT_WINDOW_MS) {
+    entry = { failures: 0, firstFailureAt: now, lockedUntil: null };
+  }
+  entry.failures += 1;
+  if (entry.failures >= RATE_LIMIT_MAX_FAILURES) {
+    entry.lockedUntil = now + RATE_LIMIT_LOCK_MS;
+  }
+  codeAttempts.set(userId, entry);
+}
+
+function clearRateLimit(userId: number): void {
+  codeAttempts.delete(userId);
 }
 
 function createLoginWindow(): void {
@@ -485,7 +535,9 @@ ipcMain.handle('auth:logout', () => {
   if (currentUser) {
     addSession(currentUser.id, currentUser.username, 'logout');
     addAudit('تسجيل خروج', undefined, undefined, currentUser.username);
+    clearRateLimit(currentUser.id);
   }
+  verifiedTopSecret.clear();
   currentUser = null;
   createLoginWindow();
   if (mainWindow) mainWindow.close();
@@ -910,16 +962,36 @@ ipcMain.handle('folderCategory:delete', (_event: IpcMainInvokeEvent, id: number)
 // Document handlers with confidentiality enforcement
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Strips the heavy/sensitive fields of a top-secret (سري للغاية) row and marks
+// it locked, unless this session already unlocked it via code/password verify
+// (verifiedTopSecret). Mutates and returns the row for convenience.
+function applyTopSecretGate(doc: Record<string, unknown>, scopeKey: string): Record<string, unknown> {
+  if (doc.confidentiality === 'سري للغاية' && !verifiedTopSecret.has(scopeKey)) {
+    doc.body = '';
+    doc.attachments_json = '[]';
+    doc.signature_base64 = null;
+    doc.locked = true;
+  }
+  return doc;
+}
+
+const DOCUMENT_SELECT_COLUMNS =
+  "d.*, dt.name as type, dt.label as type_label, dt.color as type_color, dt.icon as type_icon, " +
+  "json_array_length(COALESCE(d.attachments_json, '[]')) as attachments_count";
+
 ipcMain.handle('document:getAll', () => {
   try {
     const user = activeUser();
     if (!user) return { success: false, error: 'يجب تسجيل الدخول' };
     const scope = documentScope(user);
-    let sql = 'SELECT d.*, dt.name as type, dt.label as type_label, dt.color as type_color, dt.icon as type_icon FROM documents d JOIN document_types dt ON d.type_id = dt.id';
+    let sql = `SELECT ${DOCUMENT_SELECT_COLUMNS} FROM documents d JOIN document_types dt ON d.type_id = dt.id`;
     if (scope.where) sql += ' WHERE ' + scope.where;
     sql += ' ORDER BY d.created_at DESC';
     const docs = query(sql, scope.params) as Array<Record<string, unknown>>;
     const visible = docs.filter(d => canAccessConfidentiality(user, d.confidentiality as string, (d.created_by as string) ?? undefined));
+    for (const d of visible) {
+      applyTopSecretGate(d, `live:${d.id}`);
+    }
     return { success: true, documents: visible };
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
@@ -930,7 +1002,7 @@ ipcMain.handle('document:getById', (_event: IpcMainInvokeEvent, id: number) => {
   try {
     const user = activeUser();
     if (!user) return { success: false, error: 'يجب تسجيل الدخول' };
-    const sql = 'SELECT d.*, dt.name as type, dt.label as type_label, dt.color as type_color, dt.icon as type_icon FROM documents d JOIN document_types dt ON d.type_id = dt.id WHERE d.id = ?';
+    const sql = `SELECT ${DOCUMENT_SELECT_COLUMNS} FROM documents d JOIN document_types dt ON d.type_id = dt.id WHERE d.id = ?`;
     const rows = query(sql, [id]) as Array<Record<string, unknown>>;
     if (rows.length === 0) return { success: false, error: 'الوثيقة غير موجودة' };
     const doc = rows[0];
@@ -941,6 +1013,7 @@ ipcMain.handle('document:getById', (_event: IpcMainInvokeEvent, id: number) => {
     if (!canAccessConfidentiality(user, conf, (doc.created_by as string) ?? undefined)) {
       return { success: false, error: 'ليس لديك صلاحية الوصول لهذه الوثيقة' };
     }
+    applyTopSecretGate(doc, `live:${id}`);
     return { success: true, document: doc };
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
@@ -1117,24 +1190,25 @@ ipcMain.handle('document:delete', (_event: IpcMainInvokeEvent, id: number) => {
 // Security handlers
 // ─────────────────────────────────────────────────────────────────────────────
 
-ipcMain.handle('security:getCurrentCode', () => {
+ipcMain.handle('security:listCodes', () => {
   try {
     const user = activeUser();
     if (!hasMinRole(user, 'deputy_manager')) return { success: false, error: 'ليس لديك صلاحية' };
-    const code = getCurrentVerificationCode();
-    return { success: true, code };
+    return { success: true, codes: listUserCodes() };
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
   }
 });
 
-ipcMain.handle('security:generateCode', () => {
+ipcMain.handle('security:generateCode', (_event: IpcMainInvokeEvent, targetUserId: number) => {
   try {
     const user = activeUser();
     if (!hasMinRole(user, 'deputy_manager')) return { success: false, error: 'ليس لديك صلاحية' };
-    const result = generateVerificationCode(user!.id);
+    const target = getUserById(targetUserId);
+    if (!target) return { success: false, error: 'المستخدم غير موجود' };
+    const result = generateUserCode(targetUserId, user!.id);
     if (result.success) {
-      addAudit('توليد رمز تحقق', undefined, 'تم توليد رمز جديد لمركز الأمان', user?.username);
+      addAudit('توليد رمز تحقق', undefined, `للمستخدم: ${target.username}`, user?.username);
     }
     return result;
   } catch (err: unknown) {
@@ -1142,21 +1216,57 @@ ipcMain.handle('security:generateCode', () => {
   }
 });
 
-ipcMain.handle('security:verifyCode', (_event: IpcMainInvokeEvent, code: string) => {
+ipcMain.handle('security:revokeCode', (_event: IpcMainInvokeEvent, codeId: number) => {
   try {
-    return verifySystemCode(code);
+    const user = activeUser();
+    if (!hasMinRole(user, 'deputy_manager')) return { success: false, error: 'ليس لديك صلاحية' };
+    const result = revokeUserCode(codeId, user!.id);
+    if (result.success) {
+      addAudit('إلغاء رمز تحقق', undefined, `المعرف: ${codeId}`, user?.username);
+    }
+    return result;
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('security:verifyCode', (_event: IpcMainInvokeEvent, code: string, documentId?: number, scope: string = 'live') => {
+  try {
+    const user = activeUser();
+    if (!user) return { valid: false, error: 'يجب تسجيل الدخول' };
+
+    const limitState = checkRateLimit(user.id);
+    if (limitState.locked) {
+      return { valid: false, error: limitState.message };
+    }
+
+    const result = verifyAndConsumeUserCode(user.id, code, documentId);
+    if (result.success) {
+      clearRateLimit(user.id);
+      addAudit('تحقق رمز سري ناجح', undefined, documentId != null ? `الوثيقة: ${documentId}` : undefined, user.username);
+      if (documentId != null) {
+        verifiedTopSecret.add(`${scope}:${documentId}`);
+      }
+      return { valid: true };
+    }
+
+    recordFailedCodeAttempt(user.id);
+    addAudit('محاولة تحقق رمز فاشلة', undefined, documentId != null ? `الوثيقة: ${documentId}` : undefined, user.username);
+    return { valid: false, error: result.error };
   } catch (err: unknown) {
     return { valid: false, error: err instanceof Error ? err.message : 'Unknown error' };
   }
 });
 
-ipcMain.handle('security:verifyPassword', (_event: IpcMainInvokeEvent, username: string, password: string) => {
+ipcMain.handle('security:verifyPassword', (_event: IpcMainInvokeEvent, password: string, documentId?: number, scope: string = 'live') => {
   try {
     const user = activeUser();
     if (!user) return { valid: false, error: 'يجب تسجيل الدخول' };
-    if (username !== user.username) return { valid: false, error: 'ليس لديك صلاحية' };
     initDb();
-    const result = authenticateUser(username, password);
+    const result = authenticateUser(user.username, password);
+    if (result.success && documentId != null) {
+      verifiedTopSecret.add(`${scope}:${documentId}`);
+    }
     return { valid: result.success, error: result.error };
   } catch (err: unknown) {
     return { valid: false, error: err instanceof Error ? err.message : 'Unknown error' };

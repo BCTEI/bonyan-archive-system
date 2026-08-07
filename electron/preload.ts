@@ -70,10 +70,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
 
   securityAPI: {
-    getCurrentCode: () => ipcRenderer.invoke('security:getCurrentCode'),
-    generateCode: () => ipcRenderer.invoke('security:generateCode'),
-    verifyCode: (code: string) => ipcRenderer.invoke('security:verifyCode', code),
-    verifyPassword: (username: string, password: string) => ipcRenderer.invoke('security:verifyPassword', username, password),
+    listCodes: () => ipcRenderer.invoke('security:listCodes'),
+    generateCode: (targetUserId: number) => ipcRenderer.invoke('security:generateCode', targetUserId),
+    revokeCode: (codeId: number) => ipcRenderer.invoke('security:revokeCode', codeId),
+    verifyCode: (code: string, documentId?: number, scope?: string) => ipcRenderer.invoke('security:verifyCode', code, documentId, scope),
+    verifyPassword: (password: string, documentId?: number, scope?: string) => ipcRenderer.invoke('security:verifyPassword', password, documentId, scope),
     logAccess: (documentId: number, accessType: 'view' | 'edit', confidentiality: string, method?: string) =>
       ipcRenderer.invoke('document:logAccess', documentId, accessType, confidentiality, method),
   },
