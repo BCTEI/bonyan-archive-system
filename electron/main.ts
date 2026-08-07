@@ -125,6 +125,7 @@ import {
   getArchivedYears,
   closeYear,
   getArchivedDocuments,
+  getArchivedDocumentById,
   getMasterLists,
   createMasterList,
   updateMasterList,
@@ -1434,6 +1435,19 @@ ipcMain.handle('annualClosing:getArchivedDocuments', (_event: IpcMainInvokeEvent
     const user = activeUser();
     if (!hasMinRole(user, 'deputy_manager')) return { success: false, error: 'ليس لديك صلاحية' };
     return { success: true, documents: getArchivedDocuments(year) };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('annualClosing:getArchivedDocumentById', (_event: IpcMainInvokeEvent, year: number, id: number) => {
+  try {
+    const user = activeUser();
+    if (!hasMinRole(user, 'deputy_manager')) return { success: false, error: 'ليس لديك صلاحية' };
+    const doc = getArchivedDocumentById(year, id);
+    if (!doc) return { success: false, error: 'الوثيقة غير موجودة' };
+    applyTopSecretGate(doc, `archive:${year}:${id}`);
+    return { success: true, document: doc };
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
   }

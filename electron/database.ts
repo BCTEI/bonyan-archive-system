@@ -2416,12 +2416,67 @@ export function closeYear(year: number, adminId: number): { success: boolean; me
   }
 }
 
+// Validates a year before it is ever interpolated into an `archived_documents_${year}`
+// table name: must be an integer, and must be a year actually registered in
+// archived_years (i.e. a table that closeYear() really created). This is the sole
+// gate that keeps the table-name interpolation below from being an injection hole.
+function assertArchivedYear(year: number): void {
+  if (!Number.isInteger(year)) {
+    throw new Error('سنة غير صالحة');
+  }
+  if (useMemoryFallback) {
+    const exists = memoryStore.archived_years.some(y => y.year === year);
+    if (!exists) throw new Error('لا يوجد أرشيف لهذه السنة');
+    return;
+  }
+  if (!db) throw new Error('Database not initialized');
+  const row = db.prepare('SELECT 1 FROM archived_years WHERE year = ?').get(year);
+  if (!row) throw new Error('لا يوجد أرشيف لهذه السنة');
+}
+
+// List view: explicit column list excludes body/attachments_json/signature_base64
+// (heavy + potentially sensitive fields). Pre-hierarchy year tables are frozen
+// column snapshots taken before org_unit_id existed on documents, so we probe
+// with PRAGMA table_info and substitute NULL when the column is absent.
 export function getArchivedDocuments(year: number): unknown[] {
+  assertArchivedYear(year);
   if (useMemoryFallback) {
     return [];
   }
   if (!db) throw new Error('Database not initialized');
-  return db.prepare(`SELECT * FROM archived_documents_${year} ORDER BY created_at DESC`).all();
+  const columns = db.prepare(`PRAGMA table_info(archived_documents_${year})`).all() as Array<{ name: string }>;
+  const orgUnitCol = columns.some(c => c.name === 'org_unit_id') ? 'd.org_unit_id' : 'NULL AS org_unit_id';
+  return db.prepare(`
+    SELECT
+      d.id, d.ref_number, d.type_id, d.folder_id, d.confidentiality, d.subject, d.sender, d.receiver,
+      d.author, d.address, d.target, d.content, d.input_method, d.date, d.notes, d.status,
+      d.created_at, d.updated_at, d.created_by, ${orgUnitCol},
+      dt.name as type, dt.label as type_label, dt.color as type_color, dt.icon as type_icon,
+      CASE WHEN json_valid(d.attachments_json) THEN json_array_length(d.attachments_json) ELSE 0 END as attachments_count
+    FROM archived_documents_${year} d
+    LEFT JOIN document_types dt ON d.type_id = dt.id
+    ORDER BY d.created_at DESC
+  `).all();
+}
+
+// Detail view: full row (incl. body/attachments_json/signature_base64) — caller
+// (main.ts handler) is responsible for applying the top-secret gate before this
+// reaches the renderer.
+export function getArchivedDocumentById(year: number, id: number): Record<string, unknown> | undefined {
+  assertArchivedYear(year);
+  if (useMemoryFallback) {
+    return undefined;
+  }
+  if (!db) throw new Error('Database not initialized');
+  const columns = db.prepare(`PRAGMA table_info(archived_documents_${year})`).all() as Array<{ name: string }>;
+  const orgUnitSelect = columns.some(c => c.name === 'org_unit_id') ? '' : ', NULL AS org_unit_id';
+  return db.prepare(`
+    SELECT d.*, dt.name as type, dt.label as type_label, dt.color as type_color, dt.icon as type_icon,
+      CASE WHEN json_valid(d.attachments_json) THEN json_array_length(d.attachments_json) ELSE 0 END as attachments_count${orgUnitSelect}
+    FROM archived_documents_${year} d
+    LEFT JOIN document_types dt ON d.type_id = dt.id
+    WHERE d.id = ?
+  `).get(id) as Record<string, unknown> | undefined;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
