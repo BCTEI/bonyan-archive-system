@@ -2494,7 +2494,13 @@ export function exportData(): string {
       users: memoryStore.users,
       document_access_log: memoryStore.document_access_log,
       password_reset_requests: memoryStore.password_reset_requests,
-      archived_years: memoryStore.archived_years
+      archived_years: memoryStore.archived_years,
+      // Org-unit scoping is the authoritative authorization model (hierarchy
+      // feature) — must round-trip through backup/restore or a replace-mode
+      // import collapses every user/document to NULL org_unit_id, losing all
+      // visibility scoping. memoryStore.users/documents already carry
+      // org_unit_id as a plain field, so they need no extra handling here.
+      org_units: memoryStore.org_units
     }, null, 2);
   }
   if (!db) throw new Error('Database not initialized');
@@ -2508,10 +2514,17 @@ export function exportData(): string {
   const password_reset_requests = query('SELECT * FROM password_reset_requests');
   const archived_years = query('SELECT * FROM archived_years');
   const master_lists = query('SELECT * FROM master_lists');
+  // Org-unit scoping is the authoritative authorization model (hierarchy
+  // feature) — org_units itself, plus users.org_unit_id and
+  // documents.org_unit_id (both already included via SELECT *), must all
+  // round-trip through backup/restore or a replace-mode import collapses
+  // every user/document to NULL org_unit_id, losing all visibility scoping.
+  const org_units = query('SELECT * FROM org_units');
 
   return JSON.stringify({
     folders, documents, document_types, counters, audit_log, users,
-    document_access_log, password_reset_requests, archived_years, master_lists
+    document_access_log, password_reset_requests, archived_years, master_lists,
+    org_units
   }, null, 2);
 }
 
@@ -2533,6 +2546,7 @@ export function importData(jsonData: string, mode: 'merge' | 'replace'): { succe
       password_reset_requests?: Array<Record<string, unknown>>;
       archived_years?: Array<Record<string, unknown>>;
       master_lists?: Array<Record<string, unknown>>;
+      org_units?: Array<Record<string, unknown>>;
     };
 
     if (mode === 'replace') {
@@ -2548,20 +2562,22 @@ export function importData(jsonData: string, mode: 'merge' | 'replace'): { succe
         DELETE FROM document_types;
         DELETE FROM folders;
         DELETE FROM users;
+        DELETE FROM org_units;
       `);
     }
 
     const insertFolder = db.prepare('INSERT OR REPLACE INTO folders (id, name, group_name, is_system, is_active, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
     const insertDocType = db.prepare('INSERT OR REPLACE INTO document_types (id, name, label, color, icon, prefix, is_active, is_system, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const insertOrgUnit = db.prepare('INSERT OR REPLACE INTO org_units (id, name, unit_type, parent_id, is_active, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
     const insertDoc = db.prepare(`
       INSERT OR REPLACE INTO documents (
         id, ref_number, type_id, folder_id, confidentiality, subject, sender, receiver, author, address, target, content, input_method,
-        date, body, notes, status, signature_base64, attachments_json, created_at, updated_at, created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        date, body, notes, status, signature_base64, attachments_json, created_at, updated_at, created_by, org_unit_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const insertCounter = db.prepare('INSERT OR REPLACE INTO counters (key, value) VALUES (?, ?)');
     const insertAudit = db.prepare('INSERT OR REPLACE INTO audit_log (id, action, doc_ref, details, username, timestamp) VALUES (?, ?, ?, ?, ?, ?)');
-    const insertUser = db.prepare('INSERT OR REPLACE INTO users (id, username, password_hash, full_name, role, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    const insertUser = db.prepare('INSERT OR REPLACE INTO users (id, username, password_hash, full_name, role, org_unit_id, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
     const insertMasterList = db.prepare('INSERT OR REPLACE INTO master_lists (id, list_type, name, name_en, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?)');
 
     const tx = db.transaction(() => {
@@ -2594,6 +2610,25 @@ export function importData(jsonData: string, mode: 'merge' | 'replace'): { succe
           );
         }
       }
+      // org_units must be inserted before documents/users so their
+      // org_unit_id FK references resolve (best-effort — foreign_keys
+      // enforcement is off, but this keeps insertion order sensible).
+      // Tolerant of old backups that predate the hierarchy feature: absent
+      // org_units array just means no rows to restore, not a throw.
+      if (data.org_units) {
+        for (const item of data.org_units) {
+          insertOrgUnit.run(
+            (item.id as number | undefined) ?? null,
+            item.name,
+            item.unit_type,
+            (item.parent_id as number | undefined) ?? null,
+            item.is_active ?? 1,
+            (item.created_by as number | undefined) ?? null,
+            item.created_at ?? new Date().toISOString(),
+            item.updated_at ?? new Date().toISOString()
+          );
+        }
+      }
       if (data.documents) {
         for (const item of data.documents) {
           insertDoc.run(
@@ -2618,7 +2653,8 @@ export function importData(jsonData: string, mode: 'merge' | 'replace'): { succe
             item.attachments_json ?? '[]',
             item.created_at ?? new Date().toISOString(),
             item.updated_at ?? new Date().toISOString(),
-            item.created_by ?? null
+            item.created_by ?? null,
+            (item.org_unit_id as number | undefined) ?? null
           );
         }
       }
@@ -2659,6 +2695,7 @@ export function importData(jsonData: string, mode: 'merge' | 'replace'): { succe
             item.password_hash,
             item.full_name ?? null,
             item.role,
+            (item.org_unit_id as number | undefined) ?? null,
             item.is_active ?? 1,
             item.created_at ?? new Date().toISOString(),
             item.updated_at ?? new Date().toISOString()

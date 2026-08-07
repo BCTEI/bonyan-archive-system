@@ -1287,9 +1287,11 @@ ipcMain.handle('security:verifyPassword', (_event: IpcMainInvokeEvent, password:
     if (!user) return { valid: false, error: 'يجب تسجيل الدخول' };
     initDb();
     const result = authenticateUser(user.username, password);
-    if (result.success && documentId != null) {
-      verifiedTopSecret.add(`${scope}:${documentId}`);
-    }
+    // NOTE: password verification alone must NOT unlock سري للغاية (top-secret)
+    // documents — that would collapse the two-factor requirement (password +
+    // GM/deputy-issued single-use code) down to one factor, since the
+    // security-modal runs this step before the code step. Unlocking
+    // verifiedTopSecret is the sole responsibility of security:verifyCode.
     return { valid: result.success, error: result.error };
   } catch (err: unknown) {
     return { valid: false, error: err instanceof Error ? err.message : 'Unknown error' };
