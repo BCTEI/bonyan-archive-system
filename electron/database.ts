@@ -1920,7 +1920,6 @@ export function exportData(): string {
       counters: memoryStore.counters,
       audit_log: memoryStore.audit_log,
       users: memoryStore.users,
-      system_verification_codes: memoryStore.system_verification_codes,
       document_access_log: memoryStore.document_access_log,
       password_reset_requests: memoryStore.password_reset_requests,
       archived_years: memoryStore.archived_years
@@ -1933,7 +1932,6 @@ export function exportData(): string {
   const counters = query('SELECT * FROM counters');
   const audit_log = query('SELECT * FROM audit_log');
   const users = query('SELECT * FROM users');
-  const system_verification_codes = query('SELECT * FROM system_verification_codes');
   const document_access_log = query('SELECT * FROM document_access_log');
   const password_reset_requests = query('SELECT * FROM password_reset_requests');
   const archived_years = query('SELECT * FROM archived_years');
@@ -1941,7 +1939,7 @@ export function exportData(): string {
 
   return JSON.stringify({
     folders, documents, document_types, counters, audit_log, users,
-    system_verification_codes, document_access_log, password_reset_requests, archived_years, master_lists
+    document_access_log, password_reset_requests, archived_years, master_lists
   }, null, 2);
 }
 

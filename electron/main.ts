@@ -236,6 +236,8 @@ ipcMain.handle('db:init', () => {
 
 ipcMain.handle('db:query', (_event: IpcMainInvokeEvent, sql: string, params?: unknown[]) => {
   console.log('[Main] Handling db:query');
+  const user = activeUser();
+  if (!user) throw new Error('يجب تسجيل الدخول');
   return query(sql, params);
 });
 
@@ -280,6 +282,9 @@ ipcMain.handle('db:audit', (_event: IpcMainInvokeEvent, action: string, docRef?:
 
 ipcMain.handle('audit:clearAll', () => {
   console.log('[Main] Handling audit:clearAll');
+  const user = activeUser();
+  if (!user) return { success: false, error: 'يجب تسجيل الدخول' };
+  if (!hasPermission(user, ['admin'])) return { success: false, error: 'ليس لديك صلاحية' };
   return clearAudit();
 });
 
@@ -970,6 +975,9 @@ ipcMain.handle('security:verifyCode', (_event: IpcMainInvokeEvent, code: string)
 
 ipcMain.handle('security:verifyPassword', (_event: IpcMainInvokeEvent, username: string, password: string) => {
   try {
+    const user = activeUser();
+    if (!user) return { valid: false, error: 'يجب تسجيل الدخول' };
+    if (username !== user.username) return { valid: false, error: 'ليس لديك صلاحية' };
     initDb();
     const result = authenticateUser(username, password);
     return { valid: result.success, error: result.error };

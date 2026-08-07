@@ -102,7 +102,7 @@ export class SecurityCenterComponent implements OnInit {
 
   formatExpiry(timestamp: number | null | undefined): string {
     if (!timestamp) return '-';
-    return new Date(timestamp).toLocaleString('ar-SA', {
+    return new Date(timestamp * 1000).toLocaleString('ar-SA', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
