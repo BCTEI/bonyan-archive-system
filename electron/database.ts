@@ -751,6 +751,15 @@ function migrateRolesV2(): void {
     console.error('[Database] Failed to back up database before roles-v2 migration:', err instanceof Error ? err.message : err);
   }
 
+  // Disable foreign keys for the duration of the table rebuild. This
+  // better-sqlite3 build enables foreign_keys by default, so `DROP TABLE users`
+  // performs an implicit DELETE of every row, which violates child tables that
+  // reference users(id) without ON DELETE CASCADE (user_folder_permissions,
+  // password_reset_requests, ...) and raises "FOREIGN KEY constraint failed".
+  // PRAGMA foreign_keys is a silent no-op inside a transaction, so it must be
+  // toggled outside — this is SQLite's official table-rebuild recipe.
+  const fkWasOn = db.pragma('foreign_keys', { simple: true }) === 1;
+  if (fkWasOn) db.pragma('foreign_keys = OFF');
   try {
     const tx = db.transaction(() => {
       db!.exec(`
@@ -767,10 +776,14 @@ function migrateRolesV2(): void {
           updated_at INTEGER DEFAULT (strftime('%s','now'))
         );
       `);
+      // Preserve already-valid 5-role values (idempotent re-runs, and recovery
+      // from a half-applied migration where seedAdmin already stamped a new
+      // role); map the legacy admin/editor/viewer model otherwise.
       db!.exec(`
         INSERT INTO users_v2 (id, username, password_hash, full_name, role, org_unit_id, is_active, created_at, updated_at)
         SELECT id, username, password_hash, full_name,
           CASE
+            WHEN role IN ('general_manager','deputy_manager','dept_head','section_head','employee') THEN role
             WHEN role = 'admin' AND id = (SELECT MIN(id) FROM users WHERE role = 'admin') THEN 'general_manager'
             WHEN role = 'admin' THEN 'deputy_manager'
             ELSE 'employee'
@@ -785,6 +798,8 @@ function migrateRolesV2(): void {
     console.log('[Database] Migrated users table to 5-role hierarchy schema (roles v2)');
   } catch (err) {
     console.error('[Database] Failed to migrate users table to roles v2:', err instanceof Error ? err.message : err);
+  } finally {
+    if (fkWasOn) db.pragma('foreign_keys = ON');
   }
 }
 
