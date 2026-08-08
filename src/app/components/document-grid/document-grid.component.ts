@@ -123,7 +123,7 @@ export class DocumentGridComponent implements OnInit {
     const sender = this.selectedSender();
     const receiver = this.selectedReceiver();
     const department = this.selectedDepartment();
-    const term = this.search().trim();
+    const term = this.search().trim().toLowerCase();
 
     if (typeId !== 'الكل') {
       list = list.filter(d => d.type_id === typeId);
@@ -147,12 +147,21 @@ export class DocumentGridComponent implements OnInit {
       list = list.filter(d => d.sender === department || d.receiver === department);
     }
     if (term) {
-      list = list.filter(d =>
-        d.subject.includes(term) ||
-        d.ref_number.includes(term) ||
-        (d.sender?.includes(term) ?? false) ||
-        (d.receiver?.includes(term) ?? false)
-      );
+      list = list.filter(d => {
+        const searchable = [
+          d.subject,
+          d.ref_number,
+          d.sender,
+          d.receiver,
+          d.author,
+          d.writer_name,
+          d.content,
+          d.address,
+          d.notes
+        ].filter((value): value is string => Boolean(value));
+
+        return searchable.some(value => value.toLowerCase().includes(term));
+      });
     }
     this.filtered.set(list);
   }

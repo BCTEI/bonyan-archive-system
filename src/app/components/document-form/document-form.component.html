@@ -69,8 +69,9 @@
 
   <div class="mb-4">
     <label class="block text-sm font-medium mb-1">الموضوع *</label>
-    <input [ngModel]="doc().subject" (ngModelChange)="updateDoc('subject', $event)"
-           class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary">
+    <input type="text" [value]="doc().subject" (input)="updateDoc('subject', $any($event.target).value)"
+           class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary"
+           placeholder="اكتب الموضوع هنا">
   </div>
 
   @if (typeName(doc().type_id) === 'صادر') {
@@ -110,6 +111,23 @@
         </div>
       </div>
     </div>
+    <div class="mb-4">
+      <label class="block text-sm font-medium mb-1">اسم المنشئ / معد الملف *</label>
+      <div class="flex gap-2">
+        <mat-form-field class="flex-1" appearance="outline">
+          <input matInput [ngModel]="doc().author" (ngModelChange)="updateDoc('author', $event); filterAuthors($event)"
+                 [matAutocomplete]="authorAuto" placeholder="اختر أو اكتب...">
+          <mat-autocomplete #authorAuto="matAutocomplete">
+            @for (item of filteredAuthors(); track item.id) {
+              <mat-option [value]="item.name">{{ item.name }}</mat-option>
+            }
+          </mat-autocomplete>
+        </mat-form-field>
+        <button mat-stroked-button type="button" (click)="openQuickAdd('author', doc().author ?? '')" class="!min-w-[44px]">
+          <mat-icon>add</mat-icon>
+        </button>
+      </div>
+    </div>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
       <div>
         <label class="block text-sm font-medium mb-1">تاريخ الإصدار *</label>
@@ -117,21 +135,10 @@
                class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary">
       </div>
       <div>
-        <label class="block text-sm font-medium mb-1">اسم المؤلف / معد الملف *</label>
-        <div class="flex gap-2">
-          <mat-form-field class="flex-1" appearance="outline">
-            <input matInput [ngModel]="doc().author" (ngModelChange)="updateDoc('author', $event); filterAuthors($event)"
-                   [matAutocomplete]="authorAuto" placeholder="اختر أو اكتب...">
-            <mat-autocomplete #authorAuto="matAutocomplete">
-              @for (item of filteredAuthors(); track item.id) {
-                <mat-option [value]="item.name">{{ item.name }}</mat-option>
-              }
-            </mat-autocomplete>
-          </mat-form-field>
-          <button mat-stroked-button type="button" (click)="openQuickAdd('author', doc().author ?? '')" class="!min-w-[44px]">
-            <mat-icon>add</mat-icon>
-          </button>
-        </div>
+        <label class="block text-sm font-medium mb-1">اسم كاتب الوثيقة</label>
+        <input [ngModel]="doc().writer_name" (ngModelChange)="updateDoc('writer_name', $event)"
+               class="w-full px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary"
+               placeholder="  ... اكتب">
       </div>
     </div>
   }
@@ -253,7 +260,7 @@
   </div>
 
   <div class="mb-4">
-    <label class="block text-sm font-medium mb-1">التوقيع *</label>
+    <label class="block text-sm font-medium mb-1">التوقيع (اختياري)</label>
     <canvas #sigCanvas width="600" height="150" class="w-full border border-border rounded-lg bg-white cursor-crosshair touch-none"
             (mousedown)="startDraw($event)" (mousemove)="draw($event)" (mouseup)="endDraw()" (mouseleave)="endDraw()"
             (touchstart)="startDraw($event)" (touchmove)="draw($event)" (touchend)="endDraw()"></canvas>

@@ -131,6 +131,7 @@ export class DocumentFormComponent implements OnInit {
       subject: '',
       sender: '',
       receiver: '',
+      writer_name: '',
       date: this.today,
       status: 'قيد الاعتماد',
       attachments_json: '[]'
@@ -375,10 +376,6 @@ export class DocumentFormComponent implements OnInit {
     }
     if (type.name === 'مراسلات' && !d.receiver) {
       this.toast.show('يرجى ملء القسم المستهدف', 'warning');
-      return;
-    }
-    if (!d.signature_base64) {
-      this.toast.show('التوقيع مطلوب', 'warning');
       return;
     }
 

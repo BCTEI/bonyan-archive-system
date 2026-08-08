@@ -73,6 +73,7 @@ interface InMemoryDocument {
   sender?: string;
   receiver?: string;
   author?: string;
+  writer_name?: string;
   address?: string;
   target?: string;
   content?: string;
@@ -418,7 +419,7 @@ export function getInitError(): string | null {
 
 function migrateDocumentsColumns(): void {
   if (!db || useMemoryFallback) return;
-  const columns = ['author', 'address', 'target', 'content', 'input_method', 'status', 'created_by'];
+  const columns = ['author', 'writer_name', 'address', 'target', 'content', 'input_method', 'status', 'created_by'];
   for (const col of columns) {
     try {
       db.exec(`ALTER TABLE documents ADD COLUMN ${col} TEXT`);

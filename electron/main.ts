@@ -831,9 +831,9 @@ ipcMain.handle('document:create', (_event: IpcMainInvokeEvent, doc: Record<strin
 
     const result = run(`
       INSERT INTO documents (
-        ref_number, type_id, folder_id, confidentiality, subject, sender, receiver, author, address, target, content, input_method,
+        ref_number, type_id, folder_id, confidentiality, subject, sender, receiver, author, writer_name, address, target, content, input_method,
         date, body, notes, status, signature_base64, attachments_json, created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       doc.ref_number,
       doc.type_id,
@@ -843,6 +843,7 @@ ipcMain.handle('document:create', (_event: IpcMainInvokeEvent, doc: Record<strin
       doc.sender ?? null,
       doc.receiver ?? null,
       doc.author ?? null,
+      doc.writer_name ?? null,
       doc.address ?? null,
       doc.target ?? null,
       doc.content ?? null,
@@ -880,7 +881,7 @@ ipcMain.handle('document:update', (_event: IpcMainInvokeEvent, doc: Record<strin
     run(`
       UPDATE documents SET
         ref_number = ?, type_id = ?, folder_id = ?, confidentiality = ?, subject = ?, sender = ?, receiver = ?,
-        author = ?, address = ?, target = ?, content = ?, input_method = ?,
+        author = ?, writer_name = ?, address = ?, target = ?, content = ?, input_method = ?,
         date = ?, body = ?, notes = ?, status = ?, signature_base64 = ?, attachments_json = ?,
         updated_at = strftime('%s','now')
       WHERE id = ?
@@ -893,6 +894,7 @@ ipcMain.handle('document:update', (_event: IpcMainInvokeEvent, doc: Record<strin
       doc.sender ?? null,
       doc.receiver ?? null,
       doc.author ?? null,
+      doc.writer_name ?? null,
       doc.address ?? null,
       doc.target ?? null,
       doc.content ?? null,
