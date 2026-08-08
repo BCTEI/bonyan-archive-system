@@ -75,11 +75,16 @@ export class AppShellComponent implements OnInit, OnDestroy {
     if (url.includes('/documents')) crumbs.push({ label: 'الوثائق' });
     if (url.includes('/audit')) crumbs.push({ label: 'سجل التدقيق' });
     if (url.includes('/users')) crumbs.push({ label: 'إدارة المستخدمين' });
+    if (url.includes('/org-units')) crumbs.push({ label: 'الهيكل التنظيمي' });
     if (url.includes('/document-types')) crumbs.push({ label: 'أنواع الوثائق' });
     if (url.includes('/master-lists')) crumbs.push({ label: 'القوائم الرئيسية' });
     if (url.includes('/folder-categories')) crumbs.push({ label: 'إدارة التصنيفات' });
     if (url.includes('/security')) crumbs.push({ label: 'مركز الأمان' });
-    if (url.includes('/annual-closing')) crumbs.push({ label: 'الجرد السنوي' });
+    if (url.includes('/annual-closing')) {
+      const hasYear = /\/annual-closing\/\d+/.test(url);
+      crumbs.push({ label: 'الجرد السنوي', link: hasYear ? '/main/annual-closing' : undefined });
+      if (hasYear) crumbs.push({ label: 'تصفح الأرشيف' });
+    }
     if (url.includes('/change-password')) crumbs.push({ label: 'تغيير كلمة المرور' });
     if (url.includes('/profile')) crumbs.push({ label: 'الملف الشخصي' });
     return crumbs;

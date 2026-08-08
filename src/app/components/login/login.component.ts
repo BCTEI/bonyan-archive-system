@@ -1,4 +1,5 @@
 import { Component, inject } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { MatIconModule } from '@angular/material/icon';
@@ -10,7 +11,7 @@ import { PasswordResetRequestComponent } from '../password-reset-request/passwor
 @Component({
   selector: 'app-login',
   standalone: true,
-  imports: [FormsModule, MatIconModule, MatDialogModule],
+  imports: [CommonModule, FormsModule, MatIconModule, MatDialogModule],
   templateUrl: './login.component.html',
   styleUrl: './login.component.scss'
 })

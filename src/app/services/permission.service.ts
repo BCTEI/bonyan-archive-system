@@ -10,7 +10,7 @@ export class PermissionService {
 
   get rolePermissions(): RolePermissions {
     const role = this.auth.currentUser()?.role;
-    return getRolePermissions(role ?? 'viewer');
+    return getRolePermissions(role ?? 'employee');
   }
 
   hasPermission(key: keyof RolePermissions): boolean {

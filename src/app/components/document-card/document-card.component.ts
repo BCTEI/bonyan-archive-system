@@ -20,6 +20,11 @@ export class DocumentCardComponent {
   doc = input.required<ArchiveDocument>();
   folderName = input<string>('');
   highlight = input('');
+  // Task 2.2: the archive browser reuses this card for closed-year documents
+  // but must not expose edit/delete affordances (closed years are read-only).
+  // When true, the edit/delete menu items are not rendered at all — not just
+  // unbound — so there is no dead button that emits into nothing.
+  readOnly = input(false);
 
   view = output<ArchiveDocument>();
   edit = output<ArchiveDocument>();
@@ -31,6 +36,11 @@ export class DocumentCardComponent {
   documentService = inject(DocumentService);
 
   attachmentsCount(): number {
+    // Prefer the backend's attachments_count shim: attachments_json is either
+    // stripped (unverified top-secret rows, live and archive) or entirely absent
+    // (archive list rows), so parsing it directly under-counts in both cases.
+    const count = this.doc().attachments_count;
+    if (typeof count === 'number') return count;
     return this.documentService.parseAttachments(this.doc()).length;
   }
 

@@ -9,9 +9,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   exportData: () => ipcRenderer.invoke('db:export'),
   importData: (jsonData: string, mode: 'merge' | 'replace') => ipcRenderer.invoke('db:import', jsonData, mode),
   addAudit: (action: string, docRef?: string, details?: string) => ipcRenderer.invoke('db:audit', action, docRef, details),
+  getStats: () => ipcRenderer.invoke('db:stats'),
   auditAPI: {
     clearAll: () => ipcRenderer.invoke('audit:clearAll'),
     addEntry: (entry: { action: string; doc_ref?: string; details?: string; username?: string }) => ipcRenderer.invoke('audit:addEntry', entry),
+    list: (limit?: number) => ipcRenderer.invoke('audit:list', limit),
   },
   print: () => ipcRenderer.invoke('app:print'),
   openAttachment: (base64: string, name: string, ext: string) => ipcRenderer.invoke('app:openAttachment', base64, name, ext),
@@ -64,13 +66,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     create: (data: unknown) => ipcRenderer.invoke('folderCategory:create', data),
     update: (id: number, data: unknown) => ipcRenderer.invoke('folderCategory:update', id, data),
     delete: (id: number) => ipcRenderer.invoke('folderCategory:delete', id),
+    getAllWithCounts: () => ipcRenderer.invoke('folder:getAllWithCounts'),
   },
 
   securityAPI: {
-    getCurrentCode: () => ipcRenderer.invoke('security:getCurrentCode'),
-    generateCode: () => ipcRenderer.invoke('security:generateCode'),
-    verifyCode: (code: string) => ipcRenderer.invoke('security:verifyCode', code),
-    verifyPassword: (username: string, password: string) => ipcRenderer.invoke('security:verifyPassword', username, password),
+    listCodes: () => ipcRenderer.invoke('security:listCodes'),
+    generateCode: (targetUserId: number) => ipcRenderer.invoke('security:generateCode', targetUserId),
+    revokeCode: (codeId: number) => ipcRenderer.invoke('security:revokeCode', codeId),
+    verifyCode: (code: string, documentId?: number, scope?: string) => ipcRenderer.invoke('security:verifyCode', code, documentId, scope),
+    verifyPassword: (password: string, documentId?: number, scope?: string) => ipcRenderer.invoke('security:verifyPassword', password, documentId, scope),
     logAccess: (documentId: number, accessType: 'view' | 'edit', confidentiality: string, method?: string) =>
       ipcRenderer.invoke('document:logAccess', documentId, accessType, confidentiality, method),
   },
@@ -89,6 +93,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getArchivedYears: () => ipcRenderer.invoke('annualClosing:getArchivedYears'),
     closeYear: (year: number) => ipcRenderer.invoke('annualClosing:closeYear', year),
     getArchivedDocuments: (year: number) => ipcRenderer.invoke('annualClosing:getArchivedDocuments', year),
+    getArchivedDocumentById: (year: number, id: number) => ipcRenderer.invoke('annualClosing:getArchivedDocumentById', year, id),
   },
 
   masterListAPI: {
@@ -97,6 +102,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     update: (id: number, data: unknown) => ipcRenderer.invoke('masterList:update', id, data),
     delete: (id: number) => ipcRenderer.invoke('masterList:delete', id),
     toggleStatus: (id: number, isActive: number) => ipcRenderer.invoke('masterList:toggleStatus', id, isActive),
+  },
+
+  orgUnitAPI: {
+    getAll: (activeOnly?: boolean) => ipcRenderer.invoke('orgUnit:getAll', activeOnly),
+    create: (data: unknown) => ipcRenderer.invoke('orgUnit:create', data),
+    update: (id: number, data: unknown) => ipcRenderer.invoke('orgUnit:update', id, data),
+    delete: (id: number) => ipcRenderer.invoke('orgUnit:delete', id),
   }
 });
 

@@ -9,12 +9,14 @@ import { MatInputModule } from '@angular/material/input';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { ArchiveDocument, DocumentTypeEntry, Attachment, ConfidentialityLevel } from '../../models/document.model';
 import { Folder } from '../../models/folder.model';
+import { FlatOrgUnit } from '../../models/org-unit.model';
 import { DocumentService } from '../../services/document.service';
 import { DocumentTypeService } from '../../services/document-type.service';
 import { FolderService } from '../../services/folder.service';
 import { MasterListService } from '../../services/master-list.service';
 import { AuditService } from '../../services/audit.service';
 import { AuthService } from '../../services/auth.service';
+import { OrgUnitService } from '../../services/org-unit.service';
 import { SignatureService } from '../../services/signature.service';
 import { ToastService } from '../../services/toast.service';
 import { MasterListEntry, MasterListType } from '../../models/master-list.model';
@@ -35,6 +37,7 @@ export class DocumentFormComponent implements OnInit {
   private masterListService = inject(MasterListService);
   private auditService = inject(AuditService);
   private auth = inject(AuthService);
+  private orgUnitService = inject(OrgUnitService);
   private signatureService = inject(SignatureService);
   private toast = inject(ToastService);
 
@@ -63,6 +66,8 @@ export class DocumentFormComponent implements OnInit {
   quickAddType = signal<MasterListType | null>(null);
   quickAddName = signal('');
 
+  orgUnitOptions = signal<FlatOrgUnit[]>([]);
+
   confidentialityLevels: ConfidentialityLevel[] = ['عادي', 'سري', 'سري للغاية'];
 
   allowedTypes = [
@@ -80,7 +85,8 @@ export class DocumentFormComponent implements OnInit {
     const [types, fldrs] = await Promise.all([
       this.documentTypeService.getAll(true),
       this.folderService.getAll(),
-      this.loadMasterLists()
+      this.loadMasterLists(),
+      this.loadOrgUnitOptions()
     ]);
     this.documentTypes.set(types);
     this.folders.set(fldrs);
@@ -97,6 +103,25 @@ export class DocumentFormComponent implements OnInit {
       // ref_number stays empty for a new document — the main process allocates
       // it from the yearly archive sequence at the moment document:create runs,
       // so it is never pre-fetched (and never wasted on an abandoned form).
+    }
+  }
+
+  /** Org-unit selection is offered to section_head and above; employees never see it (server stamps their own unit). */
+  showOrgUnitControl(): boolean {
+    return this.auth.currentUser()?.role !== 'employee';
+  }
+
+  isHeadRole(): boolean {
+    const role = this.auth.currentUser()?.role;
+    return role === 'dept_head' || role === 'section_head';
+  }
+
+  async loadOrgUnitOptions(): Promise<void> {
+    if (!this.showOrgUnitControl()) return;
+    try {
+      this.orgUnitOptions.set(await this.orgUnitService.getFlatTree(true));
+    } catch {
+      // Non-fatal: the field will just be empty; the server still defaults org_unit_id.
     }
   }
 
@@ -130,9 +155,11 @@ export class DocumentFormComponent implements OnInit {
       subject: '',
       sender: '',
       receiver: '',
+      writer_name: '',
       date: this.today,
       status: 'قيد الاعتماد',
-      attachments_json: '[]'
+      attachments_json: '[]',
+      org_unit_id: this.auth.currentUser()?.org_unit_id ?? null
     };
   }
 
@@ -356,10 +383,6 @@ export class DocumentFormComponent implements OnInit {
     }
     if (type.name === 'مراسلات' && !d.receiver) {
       this.toast.show('يرجى ملء القسم المستهدف', 'warning');
-      return;
-    }
-    if (!d.signature_base64) {
-      this.toast.show('التوقيع مطلوب', 'warning');
       return;
     }
 

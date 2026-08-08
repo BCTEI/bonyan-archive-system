@@ -37,6 +37,7 @@
     </div>
   </div>
 
+<<<<<<< HEAD
   <div class="doc-view-body">
     <div class="doc-view-main">
       <section class="doc-section">
@@ -64,6 +65,22 @@
           </div>
         </div>
       </section>
+=======
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 text-sm">
+    <div><span class="font-bold text-primary">الموضوع:</span> {{ doc.subject }}</div>
+    <div><span class="font-bold text-primary">التاريخ:</span> {{ doc.date }}</div>
+    @if (doc.sender) { <div><span class="font-bold text-primary">المرسل:</span> {{ doc.sender }}</div> }
+    @if (doc.receiver) { <div><span class="font-bold text-primary">المستلم:</span> {{ doc.receiver }}</div> }
+    @if (doc.author || doc.writer_name) { <div><span class="font-bold text-primary">المنشئ:</span> {{ doc.author || doc.writer_name }}</div> }
+    @if (doc.writer_name) { <div><span class="font-bold text-primary">اسم كاتب الوثيقة:</span> {{ doc.writer_name }}</div> }
+    @if (doc.input_method) { <div><span class="font-bold text-primary">طريقة الاستلام:</span> {{ inputMethodLabel(doc.input_method) }}</div> }
+    @if (doc.address) { <div><span class="font-bold text-primary">العنوان / الوصف:</span> {{ doc.address }}</div> }
+    @if (doc.content) { <div><span class="font-bold text-primary">المحتوى / الملخص:</span> {{ doc.content }}</div> }
+    @if (doc.body) { <div><span class="font-bold text-primary">المضمون:</span> {{ doc.body }}</div> }
+    <div><span class="font-bold text-primary">المجلد:</span> {{ folder?.name ?? '' }}</div>
+    <div><span class="font-bold text-primary">أنشئ بواسطة:</span> {{ doc.created_by ?? '-' }}</div>
+  </div>
+>>>>>>> 3b3136ae18bc5ea33852723c975be1b023f7b2f0
 
       @if (doc.sender || doc.receiver || doc.author || doc.input_method) {
         <section class="doc-section">

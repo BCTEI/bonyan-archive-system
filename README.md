@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.1.0-blue" alt="Version 1.1.0">
+  <img src="https://img.shields.io/badge/version-1.2.4-blue" alt="Version 1.2.4">
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey" alt="Platform">
   <img src="https://img.shields.io/badge/license-Proprietary-red" alt="License: Proprietary">
   <img src="https://img.shields.io/badge/language-Arabic%20RTL-green" alt="Arabic RTL">
@@ -19,6 +19,7 @@
 ---
 
 ## 📋 نظرة عامة
+  
 
 **نظام الأرشيف الإلكتروني** هو تطبيق سطح مكتب احترافي مبني بأحدث التقنيات لتلبية احتياجات **مركز البنيان لتقنية والصناعيات الهندسية** في مصراتة. يتيح النظام إدارة 177+ تصنيف من الوثائق مع مستويات سرية، أنواع وثائق ديناميكية، إدارة المستخدمين، الجرد السنوي، والتدقيق الكامل — كل ذلك يعمل بشكل كامل دون الحاجة إلى اتصال بالإنترنت.
 
@@ -300,6 +301,7 @@ bonyan-archive-system/
 - **فريق التطوير والتصميم:**
   - **عبد العزيز محمد الشيباني** — Abdul Aziz Mohammed Al-Shaibani
   - **محمد فؤاد بالة** — Mohammed Fouad Bala
+  - **إبراهيم عبد العظیم بالة** — Ibrahim Abduladim Bala
 ---
 
 <p align="center">

@@ -1,0 +1,35 @@
+<div class="p-6 w-full max-w-md text-center" dir="rtl">
+  <div class="flex items-center justify-between mb-4">
+    <h2 class="text-xl font-bold text-primary flex items-center gap-2">
+      <mat-icon>vpn_key</mat-icon>
+      رمز تحقق جديد
+    </h2>
+    <button mat-icon-button (click)="close()" aria-label="إغلاق">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <p class="text-sm text-text-light mb-3">
+    للمستخدم: <strong class="text-text">{{ data.username }}</strong>
+  </p>
+
+  <div class="code-box mb-4">
+    <span class="code-number">{{ data.code }}</span>
+  </div>
+
+  <div class="flex justify-center mb-4">
+    <button mat-raised-button color="primary" (click)="copy()">
+      <mat-icon>content_copy</mat-icon>
+      نسخ الرمز
+    </button>
+  </div>
+
+  <p class="text-sm text-text-light mb-4">تاريخ الانتهاء: {{ expiryLabel }}</p>
+
+  <p class="warning text-sm text-danger font-medium flex items-center justify-center gap-2 mb-6">
+    <mat-icon class="!text-base">warning</mat-icon>
+    احفظ هذا الرمز الآن — لن يتم عرضه مرة أخرى
+  </p>
+
+  <button mat-stroked-button (click)="close()" class="w-full">إغلاق</button>
+</div>

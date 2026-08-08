@@ -13,6 +13,8 @@ import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTabsModule } from '@angular/material/tabs';
 import { User, ROLE_LABELS, UserRole } from '../../models/user.model';
+import { OrgUnit } from '../../models/org-unit.model';
+import { OrgUnitService } from '../../services/org-unit.service';
 import { PasswordResetRequest } from '../../models/password-reset.model';
 import { UserService } from '../../services/user.service';
 import { PasswordResetService } from '../../services/password-reset.service';
@@ -46,6 +48,7 @@ import { FolderPermissionsComponent } from '../folder-permissions/folder-permiss
 export class UserManagementComponent implements OnInit {
   private userService = inject(UserService);
   private passwordResetService = inject(PasswordResetService);
+  private orgUnitService = inject(OrgUnitService);
   private auth = inject(AuthService);
   private toast = inject(ToastService);
   private dialog = inject(MatDialog);
@@ -53,6 +56,7 @@ export class UserManagementComponent implements OnInit {
   users = signal<User[]>([]);
   filtered = signal<User[]>([]);
   pendingRequests = signal<PasswordResetRequest[]>([]);
+  orgUnits = signal<OrgUnit[]>([]);
   search = signal('');
   roleFilter = signal<'all' | UserRole>('all');
   statusFilter = signal<'all' | 'active' | 'inactive'>('all');
@@ -61,17 +65,23 @@ export class UserManagementComponent implements OnInit {
 
   pageSize = signal(10);
   pageIndex = signal(0);
-  displayedColumns = ['id', 'username', 'full_name', 'role', 'is_active', 'created_at', 'actions'];
+  displayedColumns = ['id', 'username', 'full_name', 'role', 'org_unit', 'is_active', 'created_at', 'actions'];
   requestColumns = ['username', 'request_date', 'status', 'actions'];
   roleLabels: Record<string, string> = ROLE_LABELS;
+  roleEntries = Object.entries(ROLE_LABELS) as [UserRole, string][];
 
-  adminCount = 0;
-  editorCount = 0;
-  viewerCount = 0;
+  roleCounts: Record<UserRole, number> = {
+    general_manager: 0,
+    deputy_manager: 0,
+    dept_head: 0,
+    section_head: 0,
+    employee: 0
+  };
 
   async ngOnInit(): Promise<void> {
     await this.loadUsers();
     await this.loadPendingRequests();
+    await this.loadOrgUnits();
   }
 
   async loadUsers(): Promise<void> {
@@ -89,6 +99,19 @@ export class UserManagementComponent implements OnInit {
     }
   }
 
+  async loadOrgUnits(): Promise<void> {
+    try {
+      this.orgUnits.set(await this.orgUnitService.getAll());
+    } catch {
+      // Non-fatal: org-unit column will just show "-" if this fails.
+    }
+  }
+
+  orgUnitName(user: User): string {
+    if (user.org_unit_id == null) return 'بدون وحدة';
+    return this.orgUnits().find(u => u.id === user.org_unit_id)?.name ?? '-';
+  }
+
   async loadPendingRequests(): Promise<void> {
     this.requestsLoading.set(true);
     try {
@@ -103,9 +126,17 @@ export class UserManagementComponent implements OnInit {
   }
 
   private updateCounts(): void {
-    this.adminCount = this.users().filter(u => u.role === 'admin').length;
-    this.editorCount = this.users().filter(u => u.role === 'editor').length;
-    this.viewerCount = this.users().filter(u => u.role === 'viewer').length;
+    const counts: Record<UserRole, number> = {
+      general_manager: 0,
+      deputy_manager: 0,
+      dept_head: 0,
+      section_head: 0,
+      employee: 0
+    };
+    for (const u of this.users()) {
+      counts[u.role] = (counts[u.role] ?? 0) + 1;
+    }
+    this.roleCounts = counts;
   }
 
   applyFilters(): void {
@@ -251,5 +282,17 @@ export class UserManagementComponent implements OnInit {
 
   canManage(): boolean {
     return this.auth.isAdmin();
+  }
+
+  /**
+   * Destructive actions (edit/delete/toggle/reset-password) on a general_manager
+   * row are hidden for a deputy_manager actor — the server enforces this too
+   * (canAdministerUser/canResetPasswordOf), this just keeps the UI from offering
+   * an action that will bounce with an error.
+   */
+  canManageTarget(user: User): boolean {
+    const actorRole = this.auth.currentUser()?.role;
+    if (actorRole === 'deputy_manager' && user.role === 'general_manager') return false;
+    return true;
   }
 }

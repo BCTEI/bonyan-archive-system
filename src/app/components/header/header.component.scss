@@ -20,9 +20,11 @@
   background-color: rgba(255, 255, 255, 0.25);
 }
 
-.role-admin { background-color: #dc2626; }
-.role-editor { background-color: #d97706; }
-.role-viewer { background-color: #059669; }
+.role-general_manager { background-color: #dc2626; }
+.role-deputy_manager { background-color: #ea580c; }
+.role-dept_head { background-color: #d97706; }
+.role-section_head { background-color: #2563eb; }
+.role-employee { background-color: #059669; }
 
 .home-btn,
 .header-btn {

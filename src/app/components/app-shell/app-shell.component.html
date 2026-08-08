@@ -27,6 +27,10 @@
             <mat-icon>manage_accounts</mat-icon>
             <span>إدارة المستخدمين</span>
           </a>
+          <a *appHasPermission="'canManageOrgUnits'" routerLink="/main/org-units" routerLinkActive="active" class="nav-link">
+            <mat-icon>account_tree</mat-icon>
+            <span>الهيكل التنظيمي</span>
+          </a>
           <a *appHasPermission="'canManageDocumentTypes'" routerLink="/main/document-types" routerLinkActive="active" class="nav-link">
             <mat-icon>class</mat-icon>
             <span>أنواع الوثائق</span>

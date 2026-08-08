@@ -31,14 +31,16 @@
         <mat-icon>visibility</mat-icon>
         <span>عرض</span>
       </button>
-      <button *appHasPermission="'canEditDocument'" mat-menu-item (click)="edit.emit(doc())">
-        <mat-icon>edit</mat-icon>
-        <span>تعديل</span>
-      </button>
-      <button *appHasPermission="'canDeleteDocument'" mat-menu-item (click)="delete.emit(doc())">
-        <mat-icon>delete</mat-icon>
-        <span>حذف</span>
-      </button>
+      @if (!readOnly()) {
+        <button *appHasPermission="'canEditDocument'" mat-menu-item (click)="edit.emit(doc())">
+          <mat-icon>edit</mat-icon>
+          <span>تعديل</span>
+        </button>
+        <button *appHasPermission="'canDeleteDocument'" mat-menu-item (click)="delete.emit(doc())">
+          <mat-icon>delete</mat-icon>
+          <span>حذف</span>
+        </button>
+      }
       <button mat-menu-item (click)="print.emit(doc())">
         <mat-icon>print</mat-icon>
         <span>طباعة</span>

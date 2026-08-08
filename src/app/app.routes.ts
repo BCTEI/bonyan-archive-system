@@ -9,10 +9,15 @@ import { SecurityCenterComponent } from './components/security-center/security-c
 import { DocumentTypeManagementComponent } from './components/document-type-management/document-type-management.component';
 import { FolderCategoryManagementComponent } from './components/folder-category-management/folder-category-management.component';
 import { AnnualClosingComponent } from './components/annual-closing/annual-closing.component';
+import { ArchiveBrowserComponent } from './components/archive-browser/archive-browser.component';
 import { ChangePasswordComponent } from './components/change-password/change-password.component';
 import { UserProfileComponent } from './components/user-profile/user-profile.component';
 import { MasterListManagementComponent } from './components/master-list-management/master-list-management.component';
+<<<<<<< HEAD
 import { DocumentBriefViewerComponent } from './components/document-brief-viewer/document-brief-viewer.component';
+=======
+import { OrgUnitManagementComponent } from './components/org-unit-management/org-unit-management.component';
+>>>>>>> 3b3136ae18bc5ea33852723c975be1b023f7b2f0
 import { authGuard } from './guards/auth.guard';
 import { adminGuard } from './guards/admin.guard';
 import { permissionGuard } from './guards/permission.guard';
@@ -32,11 +37,13 @@ export const routes: Routes = [
       { path: 'documents/edit/:id', component: DocumentGridComponent, canActivate: [permissionGuard], data: { permission: 'canEditDocument' } },
       { path: 'audit', component: AuditTrailComponent, canActivate: [permissionGuard], data: { permission: 'canViewAudit' } },
       { path: 'users', component: UserManagementComponent, canActivate: [adminGuard] },
+      { path: 'org-units', component: OrgUnitManagementComponent, canActivate: [adminGuard] },
       { path: 'document-types', component: DocumentTypeManagementComponent, canActivate: [adminGuard] },
       { path: 'folder-categories', component: FolderCategoryManagementComponent, canActivate: [adminGuard] },
       { path: 'security', component: SecurityCenterComponent, canActivate: [adminGuard] },
       { path: 'master-lists', component: MasterListManagementComponent, canActivate: [adminGuard] },
       { path: 'annual-closing', component: AnnualClosingComponent, canActivate: [adminGuard] },
+      { path: 'annual-closing/:year', component: ArchiveBrowserComponent, canActivate: [adminGuard] },
       { path: 'change-password', component: ChangePasswordComponent },
       { path: 'profile', component: UserProfileComponent }
     ]

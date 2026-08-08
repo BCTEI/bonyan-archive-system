@@ -83,7 +83,8 @@ export class AuthService {
   }
 
   isAdmin(): boolean {
-    return this.currentUser()?.role === 'admin';
+    const role = this.currentUser()?.role;
+    return role === 'general_manager' || role === 'deputy_manager';
   }
 
   can(required: UserRole | UserRole[]): boolean {
