@@ -35,6 +35,7 @@ export interface ArchiveDocument {
   sender?: string;
   receiver?: string;
   author?: string;
+  writer_name?: string;
   address?: string;
   target?: string;
   content?: string;

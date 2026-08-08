@@ -29,7 +29,8 @@
     <div><span class="font-bold text-primary">التاريخ:</span> {{ doc.date }}</div>
     @if (doc.sender) { <div><span class="font-bold text-primary">المرسل:</span> {{ doc.sender }}</div> }
     @if (doc.receiver) { <div><span class="font-bold text-primary">المستلم:</span> {{ doc.receiver }}</div> }
-    @if (doc.author) { <div><span class="font-bold text-primary">المؤلف / معد الملف:</span> {{ doc.author }}</div> }
+    @if (doc.author || doc.writer_name) { <div><span class="font-bold text-primary">المنشئ:</span> {{ doc.author || doc.writer_name }}</div> }
+    @if (doc.writer_name) { <div><span class="font-bold text-primary">اسم كاتب الوثيقة:</span> {{ doc.writer_name }}</div> }
     @if (doc.input_method) { <div><span class="font-bold text-primary">طريقة الاستلام:</span> {{ inputMethodLabel(doc.input_method) }}</div> }
     @if (doc.address) { <div><span class="font-bold text-primary">العنوان / الوصف:</span> {{ doc.address }}</div> }
     @if (doc.content) { <div><span class="font-bold text-primary">المحتوى / الملخص:</span> {{ doc.content }}</div> }

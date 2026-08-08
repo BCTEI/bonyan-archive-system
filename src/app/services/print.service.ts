@@ -36,12 +36,14 @@ export class PrintService {
     const confidentialityEmoji = doc.confidentiality === 'عادي' ? '🟢' : doc.confidentiality === 'سري' ? '🟡' : '🔴';
     const statusEmoji = doc.status === 'معتمد' ? '✅' : '⏳';
     const printedAt = new Date().toLocaleString('ar-LY');
+    const baseHref = window.location.origin;
 
     return `
       <!DOCTYPE html>
       <html dir="rtl">
       <head>
         <meta charset="UTF-8">
+        <base href="${baseHref}/">
         <title>تقرير وثيقة - ${doc.ref_number}</title>
         <style>
           @page { size: A4; margin: 15mm; }
@@ -49,6 +51,7 @@ export class PrintService {
           body { font-family: 'Tajawal', Arial, sans-serif; font-size: 12pt; line-height: 1.6; color: #1e293b; background: #f1f5f9; }
           .page { width: 210mm; min-height: 297mm; padding: 20mm; margin: 0 auto; background: white; }
           .header { text-align: center; border-bottom: 3px solid #1e3a5f; padding-bottom: 15px; margin-bottom: 20px; }
+          .print-logo { width: 120px; max-width: 28%; height: auto; margin-bottom: 12px; }
           .header h1 { font-size: 18pt; color: #1e3a5f; margin-bottom: 5px; }
           .header h2 { font-size: 14pt; color: #64748b; font-weight: 400; }
           .section { border: 1px solid #cbd5e1; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
@@ -77,6 +80,7 @@ export class PrintService {
       <body>
         <div class="page">
           <div class="header">
+            <img src="assets/images/bonyan-logo.png" alt="شعار مركز البنيان" class="print-logo">
             <h1>🏛️ مركز البنيان لتقنية والصناعيات الهندسية</h1>
             <h2>📋 نظام الأرشيف الإلكتروني — مصراتة</h2>
           </div>
@@ -115,8 +119,9 @@ export class PrintService {
             <div class="field-row"><span class="field-label">📤 المرسل:</span><span class="field-value">${doc.sender || '—'}</span></div>
             <div class="field-row"><span class="field-label">📥 المستلم:</span><span class="field-value">${doc.receiver || '—'}</span></div>
             <div class="field-row"><span class="field-label">📝 الموضوع:</span><span class="field-value">${doc.subject}</span></div>
-            <div class="field-row"><span class="field-label">✍️ المؤلف:</span><span class="field-value">${doc.author || '—'}</span></div>
-            <div class="field-row"><span class="field-label">📁 المجلد:</span><span class="field-value">${folderName}</span></div>
+            <div class="field-row"><span class="field-label">✍️ المنشئ:</span><span class="field-value">${doc.author || '—'}</span></div>
+            <div class="field-row"><span class="field-label">�️ كاتب الوثيقة:</span><span class="field-value">${doc.writer_name || '—'}</span></div>
+            <div class="field-row"><span class="field-label">�📁 المجلد:</span><span class="field-value">${folderName}</span></div>
           </div>
 
           ${doc.notes ? `

@@ -1,0 +1,11 @@
+<div [class]="'brand-logo brand-' + size + ' theme-' + theme">
+  <div class="logo-wrapper">
+    <img src="assets/images/bonyan-logo.png" alt="شعار مركز البنيان" class="logo-image">
+  </div>
+  @if (showText) {
+    <div class="brand-text">
+      <h3 class="brand-title">{{ title }}</h3>
+      <p class="brand-subtitle">{{ subtitle }}</p>
+    </div>
+  }
+</div>
