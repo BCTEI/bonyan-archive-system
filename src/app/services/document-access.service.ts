@@ -2,44 +2,124 @@ import { Injectable, inject } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { ArchiveDocument } from '../models/document.model';
 import { SecurityModalComponent } from '../components/security-modal/security-modal.component';
+import { DocumentService } from './document.service';
+import { AnnualClosingService } from './annual-closing.service';
+import { ToastService } from './toast.service';
 
 export type DocumentAction = 'view' | 'edit' | 'print';
+
+// Matches the `archive:<year>` scope the archive browser (Task 2.2) passes into
+// verifyAccess. Kept in one place so refreshTopSecretDoc and the cache key stay
+// in sync with the format the archive browser and SecurityModalComponent use.
+const ARCHIVE_SCOPE_RE = /^archive:(\d+)$/;
 
 @Injectable({
   providedIn: 'root'
 })
 export class DocumentAccessService {
   private dialog = inject(MatDialog);
+  private documentService = inject(DocumentService);
+  private annualClosingService = inject(AnnualClosingService);
+  private toast = inject(ToastService);
 
   // Cache documents verified in the current session so the user is not
   // prompted repeatedly for view/print/edit of the same secret document.
-  private verifiedDocs = new Set<number>();
+  // Keyed `${scope}:${doc.id}` to match the main process's verifiedTopSecret
+  // set (electron/main.ts) — scope distinguishes the live archive from a
+  // future closed-year archive browser so unlocking a document in one scope
+  // never leaks into the other.
+  private verifiedDocs = new Set<string>();
 
   /**
    * Ensures the current user is allowed to perform an action on a document.
    * Normal documents pass immediately. Secret documents show the security
-   * modal once per session.
+   * modal once per session (per scope).
    */
-  async verifyAccess(doc: ArchiveDocument, action: DocumentAction): Promise<boolean> {
+  async verifyAccess(doc: ArchiveDocument, action: DocumentAction, scope: string = 'live'): Promise<boolean> {
     if (doc.confidentiality === 'عادي') return true;
-    if (doc.id !== undefined && this.verifiedDocs.has(doc.id)) return true;
+
+    const key = doc.id !== undefined ? `${scope}:${doc.id}` : undefined;
+    if (key !== undefined && this.verifiedDocs.has(key)) {
+      // Already verified this session, but the `doc` instance handed to us
+      // this time may be a freshly reloaded, still-stripped object (e.g. the
+      // grid reloaded its list after an edit) — re-cover it every time. If the
+      // re-fetch fails, fail closed: do NOT tell the caller it's safe to render
+      // a still-stripped top-secret doc as "unlocked".
+      return this.refreshTopSecretDoc(doc, scope);
+    }
 
     const ref = this.dialog.open(SecurityModalComponent, {
       width: '480px',
       maxWidth: '95vw',
       disableClose: true,
-      data: { doc, accessType: action === 'edit' ? 'edit' : 'view' }
+      data: { doc, accessType: action === 'edit' ? 'edit' : 'view', scope }
     });
 
     return new Promise<boolean>(resolve => {
-      ref.afterClosed().subscribe(result => {
+      ref.afterClosed().subscribe(async result => {
         const verified = result?.verified === true;
-        if (verified && doc.id !== undefined) {
-          this.verifiedDocs.add(doc.id);
+        if (!verified) {
+          resolve(false);
+          return;
         }
-        resolve(verified);
+
+        // The password/code was already verified (and, for the code step,
+        // already consumed server-side) at this point. If the follow-up
+        // re-fetch of the full document fails, fail closed: don't cache this
+        // key as verified and don't tell the caller it's safe to proceed —
+        // the caller must not render a still-stripped top-secret doc as
+        // unlocked. The user simply retries (a fresh code, since the old one
+        // is burned); that's an acceptable cost of a transient failure.
+        const refreshed = await this.refreshTopSecretDoc(doc, scope);
+        if (refreshed && key !== undefined) {
+          this.verifiedDocs.add(key);
+        }
+        resolve(refreshed);
       });
     });
+  }
+
+  /**
+   * The main process strips body/attachments/signature from سري للغاية rows
+   * unless this session already unlocked them (applyTopSecretGate in
+   * electron/main.ts). documentAPI.getAll()-sourced doc objects are stripped;
+   * once verification succeeds we must re-fetch the full row by id so callers
+   * (document-grid, document-view) render the real content instead of the
+   * stripped placeholder. Mutates `doc` in place so every holder of this
+   * object reference (grid row, open dialog) sees the refreshed fields.
+   *
+   * Design note (Task 2.2): `doc.id` is NOT a safe key to re-fetch against the
+   * live `documents` table when `scope` is an archive scope (`archive:<year>`).
+   * Archived rows live in `archived_documents_<year>`, a separate table — the
+   * id may not exist live at all (closeYear() deletes the row from `documents`),
+   * or worse, could coincide with an unrelated live document's id and silently
+   * merge the WRONG content into `doc`. So the fetch source is chosen by scope:
+   * an `archive:<year>` scope re-fetches via AnnualClosingService against that
+   * year's archive table; every other scope keeps the original live re-fetch.
+   * This is the single point where both the archive browser's view flow and
+   * document-view's forwarded-scope print flow get the correct source, without
+   * needing every call site to thread a separate re-fetch hook.
+   *
+   * Returns whether the doc is safe to treat as unlocked: true immediately for
+   * non-top-secret docs (nothing to refresh), true once the refresh succeeds,
+   * false — with a toast — if the refresh fails. Callers MUST treat a false
+   * return as "access denied for this attempt", not as a successful verify
+   * that merely left stale content on screen.
+   */
+  private async refreshTopSecretDoc(doc: ArchiveDocument, scope: string): Promise<boolean> {
+    if (doc.confidentiality !== 'سري للغاية' || doc.id === undefined) return true;
+    try {
+      const archiveMatch = ARCHIVE_SCOPE_RE.exec(scope);
+      const fresh = archiveMatch
+        ? await this.annualClosingService.getArchivedDocumentById(Number(archiveMatch[1]), doc.id)
+        : await this.documentService.getById(doc.id);
+      if (!fresh) throw new Error('الوثيقة غير موجودة');
+      Object.assign(doc, fresh);
+      return true;
+    } catch {
+      this.toast.show('تعذر تحميل محتوى الوثيقة، حاول مرة أخرى', 'error');
+      return false;
+    }
   }
 
   /**

@@ -13,6 +13,7 @@ import { AuthService } from '../../services/auth.service';
 interface SecurityModalData {
   doc: ArchiveDocument;
   accessType: 'view' | 'edit';
+  scope?: string;
 }
 
 const LOCKOUT_DURATION_MS = 5 * 60 * 1000;
@@ -41,6 +42,7 @@ export class SecurityModalComponent implements OnInit {
 
   doc = this.data.doc;
   accessType = this.data.accessType;
+  scope = this.data.scope ?? 'live';
 
   step = signal<'password' | 'code'>('password');
   password = signal('');
@@ -84,7 +86,10 @@ export class SecurityModalComponent implements OnInit {
     this.errorMessage.set('');
 
     try {
-      const valid = await this.securityService.verifyPassword(user.username, pwd);
+      // documentId is always passed (even for the password-only سري step) so the
+      // main process's verifiedTopSecret unlock is keyed to this document, not
+      // left session-wide/document-agnostic.
+      const valid = await this.securityService.verifyPassword(pwd, this.doc.id, this.scope);
       if (valid) {
         this.failedAttempts = 0;
         this.firstFailureTime = null;
@@ -96,12 +101,11 @@ export class SecurityModalComponent implements OnInit {
           await this.securityService.logAccess(this.doc.id!, this.accessType, 'سري', 'password');
           this.dialogRef.close({ verified: true, method: 'password' });
         }
-      } else {
-        this.handleFailedAttempt('كلمة المرور غير صحيحة');
       }
     } catch (err: unknown) {
+      // Server message surfaced verbatim (wrong password, disabled account, etc.).
       const message = err instanceof Error ? err.message : 'فشل التحقق من كلمة المرور';
-      this.errorMessage.set(message);
+      this.handleFailedAttempt(message);
     } finally {
       this.loading.set(false);
     }
@@ -118,14 +122,16 @@ export class SecurityModalComponent implements OnInit {
     this.errorMessage.set('');
 
     try {
-      const valid = await this.securityService.verifyCode(codeValue);
+      // Code is single-use and consumed by the main process on this call
+      // regardless of outcome — documentId must be the real document id so the
+      // unlock lands on `${scope}:${doc.id}`, not thrown away unlinked.
+      const valid = await this.securityService.verifyCode(codeValue, this.doc.id, this.scope);
       if (valid) {
         await this.securityService.logAccess(this.doc.id!, this.accessType, 'سري للغاية', 'password+code');
         this.dialogRef.close({ verified: true, method: 'password+code' });
-      } else {
-        this.errorMessage.set('رمز التحقق غير صحيح');
       }
     } catch (err: unknown) {
+      // Server message surfaced verbatim, including the rate-limit lockout text.
       const message = err instanceof Error ? err.message : 'فشل التحقق من الرمز';
       this.errorMessage.set(message);
     } finally {

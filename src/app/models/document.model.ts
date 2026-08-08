@@ -45,7 +45,14 @@ export interface ArchiveDocument {
   status: DocumentStatus;
   signature_base64?: string;
   attachments_json: string;
+  // Shim added by the backend SELECT (document:getAll, annualClosing:getArchivedDocuments/
+  // getArchivedDocumentById) so callers can show an accurate attachment count even when
+  // attachments_json itself is stripped (unverified top-secret rows) or omitted entirely
+  // (archive list rows never include attachments_json — see AnnualClosingService).
+  attachments_count?: number;
   created_at?: string;
   updated_at?: string;
   created_by?: string;
+  org_unit_id?: number | null;
+  locked?: boolean;
 }

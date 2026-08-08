@@ -15,6 +15,7 @@ interface InMemoryUser {
   password_hash: string;
   full_name: string | null;
   role: string;
+  org_unit_id: number | null;
   is_active: number;
   created_at: number;
   updated_at: number;
@@ -86,6 +87,7 @@ interface InMemoryDocument {
   created_at?: number;
   updated_at?: number;
   created_by?: string;
+  org_unit_id?: number | null;
 }
 
 interface InMemoryVerificationCode {
@@ -96,6 +98,20 @@ interface InMemoryVerificationCode {
   expires_at: number;
   is_active: number;
   generated_by: number;
+}
+
+interface InMemoryUserVerificationCode {
+  id: number;
+  user_id: number;
+  code_hash: string;
+  status: 'active' | 'used' | 'revoked';
+  generated_by: number | null;
+  generated_at: number;
+  expires_at: number;
+  used_at: number | null;
+  used_document_id: number | null;
+  revoked_by: number | null;
+  revoked_at: number | null;
 }
 
 interface InMemoryAccessLog {
@@ -138,6 +154,17 @@ interface InMemoryMasterList {
   created_at: number;
 }
 
+interface InMemoryOrgUnit {
+  id: number;
+  name: string;
+  unit_type: 'administration' | 'section';
+  parent_id: number | null;
+  is_active: number;
+  created_by: number | null;
+  created_at: number;
+  updated_at: number;
+}
+
 interface InMemoryStore {
   users: InMemoryUser[];
   folders: InMemoryFolder[];
@@ -148,10 +175,12 @@ interface InMemoryStore {
   user_sessions: InMemorySession[];
   user_folder_permissions: InMemoryFolderPermission[];
   system_verification_codes: InMemoryVerificationCode[];
+  user_verification_codes: InMemoryUserVerificationCode[];
   document_access_log: InMemoryAccessLog[];
   password_reset_requests: InMemoryResetRequest[];
   archived_years: InMemoryArchivedYear[];
   master_lists: InMemoryMasterList[];
+  org_units: InMemoryOrgUnit[];
 }
 
 const memoryStore: InMemoryStore = {
@@ -159,8 +188,9 @@ const memoryStore: InMemoryStore = {
     id: 1,
     username: 'admin',
     password_hash: bcrypt.hashSync('admin123', 10),
-    full_name: 'المدير الافتراضي',
-    role: 'admin',
+    full_name: 'المدير العام',
+    role: 'general_manager',
+    org_unit_id: null,
     is_active: 1,
     created_at: Date.now(),
     updated_at: Date.now()
@@ -177,6 +207,7 @@ const memoryStore: InMemoryStore = {
   user_sessions: [],
   user_folder_permissions: [],
   system_verification_codes: [],
+  user_verification_codes: [],
   document_access_log: [],
   password_reset_requests: [],
   archived_years: [],
@@ -189,12 +220,14 @@ const memoryStore: InMemoryStore = {
     { id: 6, list_type: 'receiver', name: 'الإدارة العامة', name_en: null, is_active: 1, created_at: Date.now() },
     { id: 7, list_type: 'department', name: 'قسم التدريب', name_en: null, is_active: 1, created_at: Date.now() },
     { id: 8, list_type: 'department', name: 'قسم الصيانة', name_en: null, is_active: 1, created_at: Date.now() }
-  ]
+  ],
+  org_units: []
 };
 
 let useMemoryFallback = false;
 let db: Database.Database | null = null;
 let initError: string | null = null;
+let dbPath: string | null = null;
 
 export function initDb(): { success: boolean; error?: string } {
   console.log('[Database] initDb() called');
@@ -211,7 +244,7 @@ export function initDb(): { success: boolean; error?: string } {
 
   try {
     const userData = app.getPath('userData');
-    const dbPath = path.join(userData, 'archive.db');
+    dbPath = path.join(userData, 'archive.db');
     console.log('[Database] Opening SQLite DB at:', dbPath);
 
     db = new Database(dbPath);
@@ -334,6 +367,22 @@ export function initDb(): { success: boolean; error?: string } {
         FOREIGN KEY (generated_by) REFERENCES users(id)
       );
 
+      CREATE TABLE IF NOT EXISTS user_verification_codes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        code_hash TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active','used','revoked')),
+        generated_by INTEGER,
+        generated_at INTEGER DEFAULT (strftime('%s','now')),
+        expires_at INTEGER NOT NULL,
+        used_at INTEGER,
+        used_document_id INTEGER,
+        revoked_by INTEGER,
+        revoked_at INTEGER,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
+      CREATE INDEX IF NOT EXISTS idx_uvc_user_status ON user_verification_codes(user_id, status);
+
       CREATE TABLE IF NOT EXISTS document_access_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         document_id INTEGER NOT NULL,
@@ -377,6 +426,18 @@ export function initDb(): { success: boolean; error?: string } {
         created_at INTEGER DEFAULT (strftime('%s','now'))
       );
 
+      CREATE TABLE IF NOT EXISTS org_units (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        unit_type TEXT NOT NULL CHECK(unit_type IN ('administration','section')),
+        parent_id INTEGER REFERENCES org_units(id),
+        is_active INTEGER DEFAULT 1,
+        created_by INTEGER,
+        created_at INTEGER DEFAULT (strftime('%s','now')),
+        updated_at INTEGER DEFAULT (strftime('%s','now'))
+      );
+      CREATE INDEX IF NOT EXISTS idx_org_units_parent ON org_units(parent_id);
+
       CREATE INDEX IF NOT EXISTS idx_master_lists_type ON master_lists(list_type);
       CREATE INDEX IF NOT EXISTS idx_master_lists_name ON master_lists(name);
       CREATE INDEX IF NOT EXISTS idx_documents_folder ON documents(folder_id);
@@ -391,6 +452,7 @@ export function initDb(): { success: boolean; error?: string } {
     seedFolders();
     migrateUsersTable();
     migrateRoles();
+    migrateRolesV2();
     seedAdmin();
     migrateDocumentsColumns();
     seedDocumentTypes();
@@ -399,6 +461,7 @@ export function initDb(): { success: boolean; error?: string } {
     migrateDocumentConfidentiality();
     seedMasterLists();
     createPostMigrationIndexes();
+    migrateDocumentsOrgUnit();
 
     return { success: true };
   } catch (err: unknown) {
@@ -667,6 +730,81 @@ function migrateRoles(): void {
   }
 }
 
+function migrateRolesV2(): void {
+  if (!db || useMemoryFallback) return;
+
+  const tableInfo = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'").get() as { sql: string } | undefined;
+  if (tableInfo && tableInfo.sql && tableInfo.sql.includes('general_manager')) {
+    // Already migrated to the 5-role schema.
+    return;
+  }
+
+  try {
+    if (dbPath && fs.existsSync(dbPath)) {
+      const userData = app.getPath('userData');
+      const backupPath = path.join(userData, `archive_pre_roles_v2_${Date.now()}.db`);
+      fs.copyFileSync(dbPath, backupPath);
+      console.log('[Database] Backed up database before roles-v2 migration to', backupPath);
+    }
+  } catch (err) {
+    console.error('[Database] Failed to back up database before roles-v2 migration:', err instanceof Error ? err.message : err);
+  }
+
+  try {
+    const tx = db.transaction(() => {
+      db!.exec(`
+        CREATE TABLE users_v2 (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          username TEXT NOT NULL UNIQUE,
+          password_hash TEXT NOT NULL,
+          full_name TEXT,
+          role TEXT NOT NULL DEFAULT 'employee'
+            CHECK(role IN ('general_manager','deputy_manager','dept_head','section_head','employee')),
+          org_unit_id INTEGER REFERENCES org_units(id),
+          is_active INTEGER DEFAULT 1,
+          created_at INTEGER DEFAULT (strftime('%s','now')),
+          updated_at INTEGER DEFAULT (strftime('%s','now'))
+        );
+      `);
+      db!.exec(`
+        INSERT INTO users_v2 (id, username, password_hash, full_name, role, org_unit_id, is_active, created_at, updated_at)
+        SELECT id, username, password_hash, full_name,
+          CASE
+            WHEN role = 'admin' AND id = (SELECT MIN(id) FROM users WHERE role = 'admin') THEN 'general_manager'
+            WHEN role = 'admin' THEN 'deputy_manager'
+            ELSE 'employee'
+          END,
+          NULL, is_active, created_at, updated_at
+        FROM users;
+      `);
+      db!.exec('DROP TABLE users');
+      db!.exec('ALTER TABLE users_v2 RENAME TO users');
+    });
+    tx();
+    console.log('[Database] Migrated users table to 5-role hierarchy schema (roles v2)');
+  } catch (err) {
+    console.error('[Database] Failed to migrate users table to roles v2:', err instanceof Error ? err.message : err);
+  }
+}
+
+function migrateDocumentsOrgUnit(): void {
+  if (!db || useMemoryFallback) return;
+  const columns = db.prepare("PRAGMA table_info(documents)").all() as Array<{ name: string }>;
+  if (!columns.some(c => c.name === 'org_unit_id')) {
+    try {
+      db.exec('ALTER TABLE documents ADD COLUMN org_unit_id INTEGER');
+      console.log('[Database] Added documents.org_unit_id column');
+    } catch (err) {
+      console.warn('[Database] Failed to add documents.org_unit_id column:', err instanceof Error ? err.message : err);
+    }
+  }
+  try {
+    db.exec('CREATE INDEX IF NOT EXISTS idx_documents_org_unit ON documents(org_unit_id)');
+  } catch (err) {
+    console.warn('[Database] Failed to create idx_documents_org_unit index:', err instanceof Error ? err.message : err);
+  }
+}
+
 function seedAdmin(): void {
   if (useMemoryFallback) {
     console.log('[Database] Fallback store already contains admin/admin123');
@@ -684,7 +822,7 @@ function seedAdmin(): void {
     console.log('[Database] Seeding default admin user (admin / admin123)');
     db.prepare(
       "INSERT INTO users (username, password_hash, full_name, role, is_active) VALUES (?, ?, ?, ?, ?)"
-    ).run('admin', hash, 'المدير الافتراضي', 'admin', 1);
+    ).run('admin', hash, 'المدير العام', 'general_manager', 1);
     console.log('[Database] Default admin user created');
     return;
   }
@@ -696,18 +834,18 @@ function seedAdmin(): void {
     updates.push('password_hash = ?');
     values.push(hash);
   }
-  if (existing.role !== 'admin') {
+  if (existing.role !== 'general_manager') {
     updates.push('role = ?');
-    values.push('admin');
+    values.push('general_manager');
   }
   if (existing.is_active !== 1) {
     updates.push('is_active = ?');
     values.push(1);
   }
 
-  if (!existing.full_name || existing.full_name.trim() === '') {
+  if (existing.full_name !== 'المدير العام') {
     updates.push('full_name = ?');
-    values.push('المدير الافتراضي');
+    values.push('المدير العام');
   }
 
   if (updates.length > 0) {
@@ -741,6 +879,7 @@ export interface AuthUser {
   username: string;
   full_name: string | null;
   role: string;
+  org_unit_id: number | null;
   is_active: number;
 }
 
@@ -761,7 +900,7 @@ export function authenticateUser(username: string, password: string): { success:
       return { success: false, error: 'اسم المستخدم أو كلمة المرور غير صحيحة' };
     }
     console.log('[Database] User found, success=true');
-    return { success: true, user: { id: user.id, username: user.username, full_name: user.full_name, role: user.role, is_active: user.is_active } };
+    return { success: true, user: { id: user.id, username: user.username, full_name: user.full_name, role: user.role, org_unit_id: user.org_unit_id ?? null, is_active: user.is_active } };
   }
 
   if (!db) {
@@ -775,7 +914,7 @@ export function authenticateUser(username: string, password: string): { success:
       return { success: false, error: 'لم يتم تهيئة النظام' };
     }
 
-    const row = db.prepare('SELECT id, username, password_hash, full_name, role, is_active FROM users WHERE username = ?').get(username) as
+    const row = db.prepare('SELECT id, username, password_hash, full_name, role, org_unit_id, is_active FROM users WHERE username = ?').get(username) as
       (AuthUser & { password_hash: string }) | undefined;
 
     if (!row) {
@@ -810,7 +949,8 @@ export interface UserInput {
   username: string;
   full_name?: string | null;
   password?: string;
-  role: 'admin' | 'editor' | 'viewer';
+  role: 'general_manager' | 'deputy_manager' | 'dept_head' | 'section_head' | 'employee';
+  org_unit_id?: number | null;
   is_active?: number;
 }
 
@@ -819,7 +959,7 @@ export function getUsers(): AuthUser[] {
     return memoryStore.users.map(u => ({ ...u }));
   }
   if (!db) throw new Error('Database not initialized');
-  return db.prepare('SELECT id, username, full_name, role, is_active, created_at, updated_at FROM users ORDER BY id').all() as AuthUser[];
+  return db.prepare('SELECT id, username, full_name, role, org_unit_id, is_active, created_at, updated_at FROM users ORDER BY id').all() as AuthUser[];
 }
 
 export function getUserById(id: number): AuthUser | undefined {
@@ -828,7 +968,7 @@ export function getUserById(id: number): AuthUser | undefined {
     return user ? { ...user } : undefined;
   }
   if (!db) throw new Error('Database not initialized');
-  return db.prepare('SELECT id, username, full_name, role, is_active, created_at, updated_at FROM users WHERE id = ?').get(id) as AuthUser | undefined;
+  return db.prepare('SELECT id, username, full_name, role, org_unit_id, is_active, created_at, updated_at FROM users WHERE id = ?').get(id) as AuthUser | undefined;
 }
 
 export function getUserByUsername(username: string): AuthUser | undefined {
@@ -837,13 +977,22 @@ export function getUserByUsername(username: string): AuthUser | undefined {
     return user ? { ...user } : undefined;
   }
   if (!db) throw new Error('Database not initialized');
-  return db.prepare('SELECT id, username, full_name, role, is_active, created_at, updated_at FROM users WHERE username = ?').get(username) as AuthUser | undefined;
+  return db.prepare('SELECT id, username, full_name, role, org_unit_id, is_active, created_at, updated_at FROM users WHERE username = ?').get(username) as AuthUser | undefined;
 }
 
 export function createUser(input: UserInput): { success: boolean; id?: number; error?: string } {
-  const { username, full_name, password, role, is_active } = input;
+  const { username, full_name, password, role, org_unit_id, is_active } = input;
   if (!username || !password || !role) {
     return { success: false, error: 'بيانات المستخدم غير مكتملة' };
+  }
+
+  if (role === 'general_manager') {
+    const gmExists = useMemoryFallback
+      ? memoryStore.users.some(u => u.role === 'general_manager')
+      : !!db?.prepare("SELECT id FROM users WHERE role = 'general_manager'").get();
+    if (gmExists) {
+      return { success: false, error: 'يوجد مدير عام واحد فقط في النظام' };
+    }
   }
 
   const hash = bcrypt.hashSync(password, 10);
@@ -859,6 +1008,7 @@ export function createUser(input: UserInput): { success: boolean; id?: number; e
       password_hash: hash,
       full_name: full_name ?? null,
       role,
+      org_unit_id: org_unit_id ?? null,
       is_active: is_active ?? 1,
       created_at: Date.now(),
       updated_at: Date.now()
@@ -869,8 +1019,8 @@ export function createUser(input: UserInput): { success: boolean; id?: number; e
   if (!db) return { success: false, error: 'قاعدة البيانات غير موجودة' };
   try {
     const result = db.prepare(
-      "INSERT INTO users (username, password_hash, full_name, role, is_active) VALUES (?, ?, ?, ?, ?)"
-    ).run(username, hash, full_name ?? null, role, is_active ?? 1);
+      "INSERT INTO users (username, password_hash, full_name, role, org_unit_id, is_active) VALUES (?, ?, ?, ?, ?, ?)"
+    ).run(username, hash, full_name ?? null, role, org_unit_id ?? null, is_active ?? 1);
     return { success: true, id: Number(result.lastInsertRowid) };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
@@ -888,10 +1038,15 @@ export function updateUser(id: number, input: UserInput, actorId?: number): { su
     if (input.username && memoryStore.users.some(u => u.username === input.username && u.id !== id)) {
       return { success: false, error: 'اسم المستخدم مستخدم مسبقاً' };
     }
+    const oldUsername = user.username;
     if (input.username) user.username = input.username;
     if (input.full_name !== undefined) user.full_name = input.full_name ?? null;
+    if (input.org_unit_id !== undefined) user.org_unit_id = input.org_unit_id ?? null;
     if (input.role) {
-      if (id === actorId && input.role !== 'admin') return { success: false, error: 'لا يمكن خفض صلاحيات حسابك الخاص' };
+      if (id === actorId && input.role !== 'general_manager') return { success: false, error: 'لا يمكن خفض صلاحيات حسابك الخاص' };
+      if (input.role === 'general_manager' && memoryStore.users.some(u => u.role === 'general_manager' && u.id !== id)) {
+        return { success: false, error: 'يوجد مدير عام واحد فقط في النظام' };
+      }
       user.role = input.role;
     }
     if (input.is_active !== undefined) {
@@ -900,31 +1055,48 @@ export function updateUser(id: number, input: UserInput, actorId?: number): { su
     }
     if (input.password) user.password_hash = bcrypt.hashSync(input.password, 10);
     user.updated_at = Date.now();
+    if (input.username && input.username !== oldUsername) {
+      for (const doc of memoryStore.documents) {
+        if (doc.created_by === oldUsername) doc.created_by = input.username;
+      }
+    }
     return { success: true };
   }
 
   if (!db) return { success: false, error: 'قاعدة البيانات غير موجودة' };
-  const existing = db.prepare('SELECT id, role FROM users WHERE id = ?').get(id) as { id: number; role: string } | undefined;
+  const existing = db.prepare('SELECT id, username, role FROM users WHERE id = ?').get(id) as { id: number; username: string; role: string } | undefined;
   if (!existing) return { success: false, error: 'المستخدم غير موجود' };
 
   const sets: string[] = [];
   const values: unknown[] = [];
+  let newUsername: string | undefined;
 
   if (input.username !== undefined) {
     sets.push('username = ?');
     values.push(input.username);
+    newUsername = input.username;
   }
   if (input.full_name !== undefined) {
     sets.push('full_name = ?');
     values.push(input.full_name ?? null);
+  }
+  if (input.org_unit_id !== undefined) {
+    sets.push('org_unit_id = ?');
+    values.push(input.org_unit_id ?? null);
   }
   if (input.password) {
     sets.push('password_hash = ?');
     values.push(bcrypt.hashSync(input.password, 10));
   }
   if (input.role) {
-    if (id === actorId && input.role !== 'admin') {
+    if (id === actorId && input.role !== 'general_manager') {
       return { success: false, error: 'لا يمكن خفض صلاحيات حسابك الخاص' };
+    }
+    if (input.role === 'general_manager') {
+      const gmExists = db.prepare("SELECT id FROM users WHERE role = 'general_manager' AND id != ?").get(id);
+      if (gmExists) {
+        return { success: false, error: 'يوجد مدير عام واحد فقط في النظام' };
+      }
     }
     sets.push('role = ?');
     values.push(input.role);
@@ -943,7 +1115,13 @@ export function updateUser(id: number, input: UserInput, actorId?: number): { su
   values.push(id);
 
   try {
-    db.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+    const tx = db.transaction(() => {
+      db!.prepare(`UPDATE users SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+      if (newUsername !== undefined && newUsername !== existing.username) {
+        db!.prepare('UPDATE documents SET created_by = ? WHERE created_by = ?').run(newUsername, existing.username);
+      }
+    });
+    tx();
     return { success: true };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
@@ -962,9 +1140,8 @@ export function deleteUser(id: number, actorId?: number): { success: boolean; er
   if (useMemoryFallback) {
     const idx = memoryStore.users.findIndex(u => u.id === id);
     if (idx === -1) return { success: false, error: 'المستخدم غير موجود' };
-    const admins = memoryStore.users.filter(u => u.role === 'admin');
-    if (memoryStore.users[idx].role === 'admin' && admins.length <= 1) {
-      return { success: false, error: 'لا يمكن حذف آخر مدير في النظام' };
+    if (memoryStore.users[idx].role === 'general_manager') {
+      return { success: false, error: 'لا يمكن حذف حساب المدير العام' };
     }
     memoryStore.users.splice(idx, 1);
     return { success: true };
@@ -974,11 +1151,8 @@ export function deleteUser(id: number, actorId?: number): { success: boolean; er
   const user = db.prepare('SELECT role FROM users WHERE id = ?').get(id) as { role: string } | undefined;
   if (!user) return { success: false, error: 'المستخدم غير موجود' };
 
-  if (user.role === 'admin') {
-    const adminCount = db.prepare("SELECT COUNT(*) as c FROM users WHERE role = 'admin'").get() as { c: number };
-    if (adminCount.c <= 1) {
-      return { success: false, error: 'لا يمكن حذف آخر مدير في النظام' };
-    }
+  if (user.role === 'general_manager') {
+    return { success: false, error: 'لا يمكن حذف حساب المدير العام' };
   }
 
   db.prepare('DELETE FROM users WHERE id = ?').run(id);
@@ -1037,6 +1211,236 @@ export function getSessions(userId?: number): InMemorySession[] {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Organizational units (hierarchy)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface OrgUnit {
+  id: number;
+  name: string;
+  unit_type: 'administration' | 'section';
+  parent_id: number | null;
+  is_active: number;
+  created_by: number | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface OrgUnitInput {
+  name: string;
+  unit_type: 'administration' | 'section';
+  parent_id?: number | null;
+  is_active?: number;
+}
+
+function findOrgUnit(id: number): OrgUnit | undefined {
+  if (useMemoryFallback) {
+    const unit = memoryStore.org_units.find(u => u.id === id);
+    return unit ? { ...unit } : undefined;
+  }
+  if (!db) return undefined;
+  return db.prepare('SELECT * FROM org_units WHERE id = ?').get(id) as OrgUnit | undefined;
+}
+
+function orgUnitNameConflict(name: string, parentId: number | null, excludeId?: number): boolean {
+  if (useMemoryFallback) {
+    return memoryStore.org_units.some(u => u.name === name && u.parent_id === parentId && u.id !== excludeId);
+  }
+  if (!db) return false;
+  const row = parentId === null
+    ? db.prepare('SELECT id FROM org_units WHERE name = ? AND parent_id IS NULL AND id != ?').get(name, excludeId ?? -1)
+    : db.prepare('SELECT id FROM org_units WHERE name = ? AND parent_id = ? AND id != ?').get(name, parentId, excludeId ?? -1);
+  return !!row;
+}
+
+export function getOrgUnits(activeOnly = false): OrgUnit[] {
+  if (useMemoryFallback) {
+    let units = memoryStore.org_units.map(u => ({ ...u }));
+    if (activeOnly) units = units.filter(u => u.is_active === 1);
+    return units;
+  }
+  if (!db) throw new Error('Database not initialized');
+  const sql = activeOnly
+    ? 'SELECT * FROM org_units WHERE is_active = 1 ORDER BY id'
+    : 'SELECT * FROM org_units ORDER BY id';
+  return db.prepare(sql).all() as OrgUnit[];
+}
+
+export function createOrgUnit(input: OrgUnitInput, createdBy?: number): { success: boolean; id?: number; error?: string } {
+  const name = input.name?.trim();
+  if (!name) return { success: false, error: 'اسم الوحدة مطلوب' };
+  if (input.unit_type !== 'administration' && input.unit_type !== 'section') {
+    return { success: false, error: 'نوع الوحدة غير صالح' };
+  }
+
+  let parentId: number | null = input.parent_id ?? null;
+
+  if (input.unit_type === 'administration') {
+    parentId = null;
+  } else {
+    if (!parentId) return { success: false, error: 'القسم يجب أن يتبع لوحدة رئيسية' };
+    const parent = findOrgUnit(parentId);
+    if (!parent) return { success: false, error: 'الوحدة الرئيسية غير موجودة' };
+    if (parent.is_active !== 1) return { success: false, error: 'الوحدة الرئيسية غير نشطة' };
+  }
+
+  if (orgUnitNameConflict(name, parentId)) {
+    return { success: false, error: 'توجد وحدة بنفس الاسم ضمن نفس الوحدة الرئيسية' };
+  }
+
+  if (useMemoryFallback) {
+    const id = Math.max(0, ...memoryStore.org_units.map(u => u.id)) + 1;
+    const now = Date.now();
+    memoryStore.org_units.push({
+      id,
+      name,
+      unit_type: input.unit_type,
+      parent_id: parentId,
+      is_active: input.is_active ?? 1,
+      created_by: createdBy ?? null,
+      created_at: now,
+      updated_at: now
+    });
+    return { success: true, id };
+  }
+
+  if (!db) return { success: false, error: 'قاعدة البيانات غير موجودة' };
+  try {
+    const result = db.prepare(
+      'INSERT INTO org_units (name, unit_type, parent_id, is_active, created_by) VALUES (?, ?, ?, ?, ?)'
+    ).run(name, input.unit_type, parentId, input.is_active ?? 1, createdBy ?? null);
+    return { success: true, id: Number(result.lastInsertRowid) };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'فشل إنشاء الوحدة' };
+  }
+}
+
+export function updateOrgUnit(id: number, input: Partial<OrgUnitInput>): { success: boolean; error?: string } {
+  const existing = findOrgUnit(id);
+  if (!existing) return { success: false, error: 'الوحدة غير موجودة' };
+
+  const unitType = input.unit_type ?? existing.unit_type;
+  if (unitType !== 'administration' && unitType !== 'section') {
+    return { success: false, error: 'نوع الوحدة غير صالح' };
+  }
+
+  let parentId: number | null = input.parent_id !== undefined ? input.parent_id : existing.parent_id;
+
+  if (unitType === 'administration') {
+    parentId = null;
+  } else {
+    if (!parentId) return { success: false, error: 'القسم يجب أن يتبع لوحدة رئيسية' };
+    if (parentId === id) return { success: false, error: 'لا يمكن أن تكون الوحدة تابعة لنفسها' };
+    const parent = findOrgUnit(parentId);
+    if (!parent) return { success: false, error: 'الوحدة الرئيسية غير موجودة' };
+    if (parent.is_active !== 1) return { success: false, error: 'الوحدة الرئيسية غير نشطة' };
+
+    // Cycle check: walk ancestors of the new parent and make sure this unit isn't among them.
+    let cursor: number | null = parentId;
+    const seen = new Set<number>();
+    while (cursor !== null) {
+      if (cursor === id) return { success: false, error: 'لا يمكن نقل الوحدة إلى أحد فروعها' };
+      if (seen.has(cursor)) break;
+      seen.add(cursor);
+      const cur = findOrgUnit(cursor);
+      cursor = cur ? cur.parent_id : null;
+    }
+  }
+
+  const name = input.name !== undefined ? input.name.trim() : existing.name;
+  if (!name) return { success: false, error: 'اسم الوحدة مطلوب' };
+
+  if (orgUnitNameConflict(name, parentId, id)) {
+    return { success: false, error: 'توجد وحدة بنفس الاسم ضمن نفس الوحدة الرئيسية' };
+  }
+
+  if (useMemoryFallback) {
+    const unit = memoryStore.org_units.find(u => u.id === id)!;
+    unit.name = name;
+    unit.unit_type = unitType;
+    unit.parent_id = parentId;
+    if (input.is_active !== undefined) unit.is_active = input.is_active;
+    unit.updated_at = Date.now();
+    return { success: true };
+  }
+
+  if (!db) return { success: false, error: 'قاعدة البيانات غير موجودة' };
+  const sets: string[] = ['name = ?', 'unit_type = ?', 'parent_id = ?'];
+  const values: unknown[] = [name, unitType, parentId];
+  if (input.is_active !== undefined) {
+    sets.push('is_active = ?');
+    values.push(input.is_active);
+  }
+  sets.push("updated_at = strftime('%s','now')");
+  values.push(id);
+  try {
+    db.prepare(`UPDATE org_units SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+    return { success: true };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'فشل تحديث الوحدة' };
+  }
+}
+
+export function deleteOrgUnit(id: number): { success: boolean; error?: string } {
+  const existing = findOrgUnit(id);
+  if (!existing) return { success: false, error: 'الوحدة غير موجودة' };
+
+  if (useMemoryFallback) {
+    if (memoryStore.org_units.some(u => u.parent_id === id)) {
+      return { success: false, error: 'لا يمكن حذف الوحدة لوجود وحدات فرعية تابعة لها' };
+    }
+    if (memoryStore.users.some(u => u.org_unit_id === id)) {
+      return { success: false, error: 'لا يمكن حذف الوحدة لوجود مستخدمين مرتبطين بها' };
+    }
+    if (memoryStore.documents.some(d => d.org_unit_id === id)) {
+      return { success: false, error: 'لا يمكن حذف الوحدة لوجود وثائق مرتبطة بها' };
+    }
+    memoryStore.org_units = memoryStore.org_units.filter(u => u.id !== id);
+    return { success: true };
+  }
+
+  if (!db) return { success: false, error: 'قاعدة البيانات غير موجودة' };
+  const childCount = db.prepare('SELECT COUNT(*) as c FROM org_units WHERE parent_id = ?').get(id) as { c: number };
+  if (childCount.c > 0) return { success: false, error: 'لا يمكن حذف الوحدة لوجود وحدات فرعية تابعة لها' };
+  const userCount = db.prepare('SELECT COUNT(*) as c FROM users WHERE org_unit_id = ?').get(id) as { c: number };
+  if (userCount.c > 0) return { success: false, error: 'لا يمكن حذف الوحدة لوجود مستخدمين مرتبطين بها' };
+  const docCount = db.prepare('SELECT COUNT(*) as c FROM documents WHERE org_unit_id = ?').get(id) as { c: number };
+  if (docCount.c > 0) return { success: false, error: 'لا يمكن حذف الوحدة لوجود وثائق مرتبطة بها' };
+  db.prepare('DELETE FROM org_units WHERE id = ?').run(id);
+  return { success: true };
+}
+
+export function getOrgUnitSubtreeIds(rootId: number): number[] {
+  if (useMemoryFallback) {
+    const result: number[] = [];
+    const stack = [rootId];
+    while (stack.length) {
+      const cur = stack.pop()!;
+      result.push(cur);
+      for (const unit of memoryStore.org_units) {
+        if (unit.parent_id === cur) stack.push(unit.id);
+      }
+    }
+    return result;
+  }
+  if (!db) throw new Error('Database not initialized');
+  // Deliberately includes inactive units — documents in a deactivated section must not vanish from visibility.
+  const rows = db.prepare(`
+    WITH RECURSIVE subtree(id) AS (
+      SELECT id FROM org_units WHERE id = ?
+      UNION ALL
+      SELECT o.id FROM org_units o JOIN subtree s ON o.parent_id = s.id
+    )
+    SELECT id FROM subtree
+  `).all(rootId) as Array<{ id: number }>;
+  return rows.map(r => r.id);
+}
+
+export function isUserInSubtree(actorUnitId: number, targetUnitId: number | null): boolean {
+  if (targetUnitId === null || targetUnitId === undefined) return false;
+  return getOrgUnitSubtreeIds(actorUnitId).includes(targetUnitId);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Documents / misc
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -1046,6 +1450,21 @@ export interface FolderPermission {
   can_create: number;
   can_edit: number;
   can_delete: number;
+}
+
+function defaultFolderPermissionForRole(folderId: number, role: string): FolderPermission | null {
+  // Role-tier fallback used when no explicit user_folder_permissions row exists.
+  // Maps the new 5-role hierarchy onto the old admin/editor/viewer default tiers:
+  //   general_manager, deputy_manager -> old 'admin' defaults (full access)
+  //   dept_head, section_head         -> old 'editor' defaults (view only)
+  //   employee                        -> old 'viewer' defaults (no implicit access)
+  if (role === 'general_manager' || role === 'deputy_manager') {
+    return { folder_id: folderId, can_view: 1, can_create: 1, can_edit: 1, can_delete: 1 };
+  }
+  if (role === 'dept_head' || role === 'section_head') {
+    return { folder_id: folderId, can_view: 1, can_create: 0, can_edit: 0, can_delete: 0 };
+  }
+  return null;
 }
 
 export function getFolderPermission(userId: number, folderId: number, role: string): FolderPermission | null {
@@ -1060,18 +1479,14 @@ export function getFolderPermission(userId: number, folderId: number, role: stri
         can_delete: perm.can_delete
       };
     }
-    if (role === 'admin') return { folder_id: folderId, can_view: 1, can_create: 1, can_edit: 1, can_delete: 1 };
-    if (role === 'editor') return { folder_id: folderId, can_view: 1, can_create: 0, can_edit: 0, can_delete: 0 };
-    return null;
+    return defaultFolderPermissionForRole(folderId, role);
   }
 
   if (!db) throw new Error('Database not initialized');
   const perm = db.prepare('SELECT folder_id, can_view, can_create, can_edit, can_delete FROM user_folder_permissions WHERE user_id = ? AND folder_id = ?').get(userId, folderId) as FolderPermission | undefined;
   if (perm) return perm;
 
-  if (role === 'admin') return { folder_id: folderId, can_view: 1, can_create: 1, can_edit: 1, can_delete: 1 };
-  if (role === 'editor') return { folder_id: folderId, can_view: 1, can_create: 0, can_edit: 0, can_delete: 0 };
-  return null;
+  return defaultFolderPermissionForRole(folderId, role);
 }
 
 export function getUserFolderPermissions(userId: number): FolderPermission[] {
@@ -1472,48 +1887,55 @@ export function deleteFolder(id: number): { success: boolean; error?: string } {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Security / verification codes
+// Security / per-user single-use verification codes
 // ─────────────────────────────────────────────────────────────────────────────
+// Replaces the old global system_verification_codes flow (left in place as dead
+// data — see the CREATE TABLE above). Each code is minted for one target user,
+// stored only as a bcrypt hash, valid 24h, single-use, and at most one active
+// code per user (generating a new one revokes the prior active one).
 
-export interface VerificationCode {
-  id?: number;
-  code?: string;
-  code_hash?: string;
-  generated_at?: number;
-  expires_at?: number;
-  is_active?: number;
-  generated_by?: number;
+export interface UserCodeEntry {
+  id: number;
+  user_id: number;
+  username: string;
+  full_name: string | null;
+  status: 'active' | 'used' | 'revoked' | 'expired';
+  generated_by: number | null;
+  generated_by_name: string | null;
+  generated_at: number;
+  expires_at: number;
+  used_at: number | null;
+  used_document_id: number | null;
+  revoked_by: number | null;
+  revoked_at: number | null;
 }
 
-export function getCurrentVerificationCode(): VerificationCode | null {
+export function generateUserCode(targetUserId: number, issuedBy: number): { success: boolean; code?: string; expiresAt?: number; error?: string } {
+  const code = crypto.randomInt(0, 1_000_000).toString().padStart(6, '0');
+  const codeHash = bcrypt.hashSync(code, 10);
   const now = Math.floor(Date.now() / 1000);
-  if (useMemoryFallback) {
-    return memoryStore.system_verification_codes
-      .filter(c => c.is_active === 1 && c.expires_at > now)
-      .sort((a, b) => b.generated_at - a.generated_at)[0] ?? null;
-  }
-  if (!db) throw new Error('Database not initialized');
-  return db.prepare(
-    'SELECT * FROM system_verification_codes WHERE is_active = 1 AND expires_at > ? ORDER BY generated_at DESC LIMIT 1'
-  ).get(now) as VerificationCode | null;
-}
-
-export function generateVerificationCode(adminId: number): { success: boolean; code?: string; error?: string; expiresAt?: number } {
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
-  const codeHash = crypto.createHash('sha256').update(code).digest('hex');
-  const now = Math.floor(Date.now() / 1000);
-  const expiresAt = now + (24 * 60 * 60);
+  const expiresAt = now + 86400;
 
   if (useMemoryFallback) {
-    for (const c of memoryStore.system_verification_codes) c.is_active = 0;
-    memoryStore.system_verification_codes.push({
-      id: memoryStore.system_verification_codes.length + 1,
-      code,
+    for (const c of memoryStore.user_verification_codes) {
+      if (c.user_id === targetUserId && c.status === 'active') {
+        c.status = 'revoked';
+        c.revoked_by = issuedBy;
+        c.revoked_at = now;
+      }
+    }
+    memoryStore.user_verification_codes.push({
+      id: memoryStore.user_verification_codes.length + 1,
+      user_id: targetUserId,
       code_hash: codeHash,
+      status: 'active',
+      generated_by: issuedBy,
       generated_at: now,
       expires_at: expiresAt,
-      is_active: 1,
-      generated_by: adminId
+      used_at: null,
+      used_document_id: null,
+      revoked_by: null,
+      revoked_at: null
     });
     return { success: true, code, expiresAt };
   }
@@ -1521,11 +1943,12 @@ export function generateVerificationCode(adminId: number): { success: boolean; c
   if (!db) return { success: false, error: 'قاعدة البيانات غير موجودة' };
   try {
     const tx = db.transaction(() => {
-      db!.prepare('UPDATE system_verification_codes SET is_active = 0').run();
-      // Store plaintext code for admin display and hash for secure verification.
       db!.prepare(
-        'INSERT INTO system_verification_codes (code, code_hash, generated_at, expires_at, is_active, generated_by) VALUES (?, ?, ?, ?, ?, ?)'
-      ).run(code, codeHash, now, expiresAt, 1, adminId);
+        `UPDATE user_verification_codes SET status = 'revoked', revoked_by = ?, revoked_at = ? WHERE user_id = ? AND status = 'active'`
+      ).run(issuedBy, now, targetUserId);
+      db!.prepare(
+        `INSERT INTO user_verification_codes (user_id, code_hash, status, generated_by, generated_at, expires_at) VALUES (?, ?, 'active', ?, ?, ?)`
+      ).run(targetUserId, codeHash, issuedBy, now, expiresAt);
     });
     tx();
     return { success: true, code, expiresAt };
@@ -1534,23 +1957,117 @@ export function generateVerificationCode(adminId: number): { success: boolean; c
   }
 }
 
-export function verifySystemCode(code: string): { valid: boolean; error?: string } {
-  if (!code || code.length !== 6) return { valid: false, error: 'الرمز يجب أن يكون 6 أرقام' };
-  const codeHash = crypto.createHash('sha256').update(code).digest('hex');
+export function listUserCodes(): UserCodeEntry[] {
   const now = Math.floor(Date.now() / 1000);
 
   if (useMemoryFallback) {
-    const found = memoryStore.system_verification_codes.find(
-      c => c.is_active === 1 && c.expires_at > now && c.code_hash === codeHash
-    );
-    return { valid: !!found, error: found ? undefined : 'الرمز غير صحيح أو منتهي الصلاحية' };
+    return memoryStore.user_verification_codes
+      .slice()
+      .sort((a, b) => b.generated_at - a.generated_at)
+      .slice(0, 200)
+      .map(c => {
+        const targetUser = memoryStore.users.find(u => u.id === c.user_id);
+        const generator = c.generated_by != null ? memoryStore.users.find(u => u.id === c.generated_by) : undefined;
+        const status: UserCodeEntry['status'] = c.status === 'active' && c.expires_at <= now ? 'expired' : c.status;
+        return {
+          id: c.id,
+          user_id: c.user_id,
+          username: targetUser?.username ?? '',
+          full_name: targetUser?.full_name ?? null,
+          status,
+          generated_by: c.generated_by,
+          generated_by_name: generator?.full_name ?? generator?.username ?? null,
+          generated_at: c.generated_at,
+          expires_at: c.expires_at,
+          used_at: c.used_at,
+          used_document_id: c.used_document_id,
+          revoked_by: c.revoked_by,
+          revoked_at: c.revoked_at
+        };
+      });
   }
 
-  if (!db) return { valid: false, error: 'قاعدة البيانات غير موجودة' };
-  const found = db.prepare(
-    'SELECT id FROM system_verification_codes WHERE is_active = 1 AND expires_at > ? AND code_hash = ?'
-  ).get(now, codeHash);
-  return { valid: !!found, error: found ? undefined : 'الرمز غير صحيح أو منتهي الصلاحية' };
+  if (!db) throw new Error('Database not initialized');
+  const rows = db.prepare(`
+    SELECT
+      uvc.id, uvc.user_id, u.username, u.full_name,
+      CASE WHEN uvc.status = 'active' AND uvc.expires_at <= ? THEN 'expired' ELSE uvc.status END as status,
+      uvc.generated_by, gu.full_name as generated_by_full_name, gu.username as generated_by_username,
+      uvc.generated_at, uvc.expires_at, uvc.used_at, uvc.used_document_id, uvc.revoked_by, uvc.revoked_at
+    FROM user_verification_codes uvc
+    JOIN users u ON u.id = uvc.user_id
+    LEFT JOIN users gu ON gu.id = uvc.generated_by
+    ORDER BY uvc.generated_at DESC
+    LIMIT 200
+  `).all(now) as Array<Record<string, unknown>>;
+
+  return rows.map(r => ({
+    id: r.id as number,
+    user_id: r.user_id as number,
+    username: r.username as string,
+    full_name: (r.full_name as string | null) ?? null,
+    status: r.status as UserCodeEntry['status'],
+    generated_by: (r.generated_by as number | null) ?? null,
+    generated_by_name: (r.generated_by_full_name as string | null) ?? (r.generated_by_username as string | null) ?? null,
+    generated_at: r.generated_at as number,
+    expires_at: r.expires_at as number,
+    used_at: (r.used_at as number | null) ?? null,
+    used_document_id: (r.used_document_id as number | null) ?? null,
+    revoked_by: (r.revoked_by as number | null) ?? null,
+    revoked_at: (r.revoked_at as number | null) ?? null
+  }));
+}
+
+export function revokeUserCode(codeId: number, revokedBy: number): { success: boolean; error?: string } {
+  const now = Math.floor(Date.now() / 1000);
+
+  if (useMemoryFallback) {
+    const c = memoryStore.user_verification_codes.find(entry => entry.id === codeId);
+    if (!c) return { success: false, error: 'الرمز غير موجود' };
+    if (c.status !== 'active') return { success: false, error: 'الرمز غير نشط' };
+    c.status = 'revoked';
+    c.revoked_by = revokedBy;
+    c.revoked_at = now;
+    return { success: true };
+  }
+
+  if (!db) return { success: false, error: 'قاعدة البيانات غير موجودة' };
+  const result = db.prepare(
+    `UPDATE user_verification_codes SET status = 'revoked', revoked_by = ?, revoked_at = ? WHERE id = ? AND status = 'active'`
+  ).run(revokedBy, now, codeId);
+  if (result.changes === 0) return { success: false, error: 'الرمز غير موجود أو غير نشط' };
+  return { success: true };
+}
+
+export function verifyAndConsumeUserCode(userId: number, code: string, documentId?: number): { success: boolean; error?: string } {
+  const now = Math.floor(Date.now() / 1000);
+  const invalidError = 'الرمز غير صحيح أو منتهي الصلاحية';
+
+  if (useMemoryFallback) {
+    const c = memoryStore.user_verification_codes
+      .filter(entry => entry.user_id === userId && entry.status === 'active' && entry.expires_at > now)
+      .sort((a, b) => b.generated_at - a.generated_at)[0];
+    if (!c || !bcrypt.compareSync(code, c.code_hash)) return { success: false, error: invalidError };
+    c.status = 'used';
+    c.used_at = now;
+    c.used_document_id = documentId ?? null;
+    return { success: true };
+  }
+
+  if (!db) return { success: false, error: 'قاعدة البيانات غير موجودة' };
+  const row = db.prepare(
+    `SELECT id, code_hash FROM user_verification_codes WHERE user_id = ? AND status = 'active' AND expires_at > ? ORDER BY generated_at DESC LIMIT 1`
+  ).get(userId, now) as { id: number; code_hash: string } | undefined;
+  if (!row || !bcrypt.compareSync(code, row.code_hash)) return { success: false, error: invalidError };
+
+  const tx = db.transaction(() => {
+    return db!.prepare(
+      `UPDATE user_verification_codes SET status = 'used', used_at = ?, used_document_id = ? WHERE id = ? AND status = 'active'`
+    ).run(now, documentId ?? null, row.id);
+  });
+  const result = tx();
+  if (result.changes === 0) return { success: false, error: invalidError };
+  return { success: true };
 }
 
 export function logDocumentAccess(documentId: number, userId: number, username: string, accessType: 'view' | 'edit', confidentiality: string, method?: string): void {
@@ -1899,12 +2416,67 @@ export function closeYear(year: number, adminId: number): { success: boolean; me
   }
 }
 
+// Validates a year before it is ever interpolated into an `archived_documents_${year}`
+// table name: must be an integer, and must be a year actually registered in
+// archived_years (i.e. a table that closeYear() really created). This is the sole
+// gate that keeps the table-name interpolation below from being an injection hole.
+function assertArchivedYear(year: number): void {
+  if (!Number.isInteger(year)) {
+    throw new Error('سنة غير صالحة');
+  }
+  if (useMemoryFallback) {
+    const exists = memoryStore.archived_years.some(y => y.year === year);
+    if (!exists) throw new Error('لا يوجد أرشيف لهذه السنة');
+    return;
+  }
+  if (!db) throw new Error('Database not initialized');
+  const row = db.prepare('SELECT 1 FROM archived_years WHERE year = ?').get(year);
+  if (!row) throw new Error('لا يوجد أرشيف لهذه السنة');
+}
+
+// List view: explicit column list excludes body/attachments_json/signature_base64
+// (heavy + potentially sensitive fields). Pre-hierarchy year tables are frozen
+// column snapshots taken before org_unit_id existed on documents, so we probe
+// with PRAGMA table_info and substitute NULL when the column is absent.
 export function getArchivedDocuments(year: number): unknown[] {
+  assertArchivedYear(year);
   if (useMemoryFallback) {
     return [];
   }
   if (!db) throw new Error('Database not initialized');
-  return db.prepare(`SELECT * FROM archived_documents_${year} ORDER BY created_at DESC`).all();
+  const columns = db.prepare(`PRAGMA table_info(archived_documents_${year})`).all() as Array<{ name: string }>;
+  const orgUnitCol = columns.some(c => c.name === 'org_unit_id') ? 'd.org_unit_id' : 'NULL AS org_unit_id';
+  return db.prepare(`
+    SELECT
+      d.id, d.ref_number, d.type_id, d.folder_id, d.confidentiality, d.subject, d.sender, d.receiver,
+      d.author, d.address, d.target, d.content, d.input_method, d.date, d.notes, d.status,
+      d.created_at, d.updated_at, d.created_by, ${orgUnitCol},
+      dt.name as type, dt.label as type_label, dt.color as type_color, dt.icon as type_icon,
+      CASE WHEN json_valid(d.attachments_json) THEN json_array_length(d.attachments_json) ELSE 0 END as attachments_count
+    FROM archived_documents_${year} d
+    LEFT JOIN document_types dt ON d.type_id = dt.id
+    ORDER BY d.created_at DESC
+  `).all();
+}
+
+// Detail view: full row (incl. body/attachments_json/signature_base64) — caller
+// (main.ts handler) is responsible for applying the top-secret gate before this
+// reaches the renderer.
+export function getArchivedDocumentById(year: number, id: number): Record<string, unknown> | undefined {
+  assertArchivedYear(year);
+  if (useMemoryFallback) {
+    return undefined;
+  }
+  if (!db) throw new Error('Database not initialized');
+  const columns = db.prepare(`PRAGMA table_info(archived_documents_${year})`).all() as Array<{ name: string }>;
+  const orgUnitSelect = columns.some(c => c.name === 'org_unit_id') ? '' : ', NULL AS org_unit_id';
+  return db.prepare(`
+    SELECT d.*, dt.name as type, dt.label as type_label, dt.color as type_color, dt.icon as type_icon,
+      CASE WHEN json_valid(d.attachments_json) THEN json_array_length(d.attachments_json) ELSE 0 END as attachments_count${orgUnitSelect}
+    FROM archived_documents_${year} d
+    LEFT JOIN document_types dt ON d.type_id = dt.id
+    WHERE d.id = ?
+  `).get(id) as Record<string, unknown> | undefined;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1920,10 +2492,15 @@ export function exportData(): string {
       counters: memoryStore.counters,
       audit_log: memoryStore.audit_log,
       users: memoryStore.users,
-      system_verification_codes: memoryStore.system_verification_codes,
       document_access_log: memoryStore.document_access_log,
       password_reset_requests: memoryStore.password_reset_requests,
-      archived_years: memoryStore.archived_years
+      archived_years: memoryStore.archived_years,
+      // Org-unit scoping is the authoritative authorization model (hierarchy
+      // feature) — must round-trip through backup/restore or a replace-mode
+      // import collapses every user/document to NULL org_unit_id, losing all
+      // visibility scoping. memoryStore.users/documents already carry
+      // org_unit_id as a plain field, so they need no extra handling here.
+      org_units: memoryStore.org_units
     }, null, 2);
   }
   if (!db) throw new Error('Database not initialized');
@@ -1933,15 +2510,21 @@ export function exportData(): string {
   const counters = query('SELECT * FROM counters');
   const audit_log = query('SELECT * FROM audit_log');
   const users = query('SELECT * FROM users');
-  const system_verification_codes = query('SELECT * FROM system_verification_codes');
   const document_access_log = query('SELECT * FROM document_access_log');
   const password_reset_requests = query('SELECT * FROM password_reset_requests');
   const archived_years = query('SELECT * FROM archived_years');
   const master_lists = query('SELECT * FROM master_lists');
+  // Org-unit scoping is the authoritative authorization model (hierarchy
+  // feature) — org_units itself, plus users.org_unit_id and
+  // documents.org_unit_id (both already included via SELECT *), must all
+  // round-trip through backup/restore or a replace-mode import collapses
+  // every user/document to NULL org_unit_id, losing all visibility scoping.
+  const org_units = query('SELECT * FROM org_units');
 
   return JSON.stringify({
     folders, documents, document_types, counters, audit_log, users,
-    system_verification_codes, document_access_log, password_reset_requests, archived_years, master_lists
+    document_access_log, password_reset_requests, archived_years, master_lists,
+    org_units
   }, null, 2);
 }
 
@@ -1963,6 +2546,7 @@ export function importData(jsonData: string, mode: 'merge' | 'replace'): { succe
       password_reset_requests?: Array<Record<string, unknown>>;
       archived_years?: Array<Record<string, unknown>>;
       master_lists?: Array<Record<string, unknown>>;
+      org_units?: Array<Record<string, unknown>>;
     };
 
     if (mode === 'replace') {
@@ -1978,20 +2562,22 @@ export function importData(jsonData: string, mode: 'merge' | 'replace'): { succe
         DELETE FROM document_types;
         DELETE FROM folders;
         DELETE FROM users;
+        DELETE FROM org_units;
       `);
     }
 
     const insertFolder = db.prepare('INSERT OR REPLACE INTO folders (id, name, group_name, is_system, is_active, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
     const insertDocType = db.prepare('INSERT OR REPLACE INTO document_types (id, name, label, color, icon, prefix, is_active, is_system, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
+    const insertOrgUnit = db.prepare('INSERT OR REPLACE INTO org_units (id, name, unit_type, parent_id, is_active, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
     const insertDoc = db.prepare(`
       INSERT OR REPLACE INTO documents (
         id, ref_number, type_id, folder_id, confidentiality, subject, sender, receiver, author, address, target, content, input_method,
-        date, body, notes, status, signature_base64, attachments_json, created_at, updated_at, created_by
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        date, body, notes, status, signature_base64, attachments_json, created_at, updated_at, created_by, org_unit_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const insertCounter = db.prepare('INSERT OR REPLACE INTO counters (key, value) VALUES (?, ?)');
     const insertAudit = db.prepare('INSERT OR REPLACE INTO audit_log (id, action, doc_ref, details, username, timestamp) VALUES (?, ?, ?, ?, ?, ?)');
-    const insertUser = db.prepare('INSERT OR REPLACE INTO users (id, username, password_hash, full_name, role, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    const insertUser = db.prepare('INSERT OR REPLACE INTO users (id, username, password_hash, full_name, role, org_unit_id, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
     const insertMasterList = db.prepare('INSERT OR REPLACE INTO master_lists (id, list_type, name, name_en, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?)');
 
     const tx = db.transaction(() => {
@@ -2024,6 +2610,25 @@ export function importData(jsonData: string, mode: 'merge' | 'replace'): { succe
           );
         }
       }
+      // org_units must be inserted before documents/users so their
+      // org_unit_id FK references resolve (best-effort — foreign_keys
+      // enforcement is off, but this keeps insertion order sensible).
+      // Tolerant of old backups that predate the hierarchy feature: absent
+      // org_units array just means no rows to restore, not a throw.
+      if (data.org_units) {
+        for (const item of data.org_units) {
+          insertOrgUnit.run(
+            (item.id as number | undefined) ?? null,
+            item.name,
+            item.unit_type,
+            (item.parent_id as number | undefined) ?? null,
+            item.is_active ?? 1,
+            (item.created_by as number | undefined) ?? null,
+            item.created_at ?? new Date().toISOString(),
+            item.updated_at ?? new Date().toISOString()
+          );
+        }
+      }
       if (data.documents) {
         for (const item of data.documents) {
           insertDoc.run(
@@ -2048,7 +2653,8 @@ export function importData(jsonData: string, mode: 'merge' | 'replace'): { succe
             item.attachments_json ?? '[]',
             item.created_at ?? new Date().toISOString(),
             item.updated_at ?? new Date().toISOString(),
-            item.created_by ?? null
+            item.created_by ?? null,
+            (item.org_unit_id as number | undefined) ?? null
           );
         }
       }
@@ -2089,6 +2695,7 @@ export function importData(jsonData: string, mode: 'merge' | 'replace'): { succe
             item.password_hash,
             item.full_name ?? null,
             item.role,
+            (item.org_unit_id as number | undefined) ?? null,
             item.is_active ?? 1,
             item.created_at ?? new Date().toISOString(),
             item.updated_at ?? new Date().toISOString()

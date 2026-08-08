@@ -1,0 +1,49 @@
+<h2 mat-dialog-title class="text-right">
+  {{ isEdit ? '✏️ تعديل وحدة تنظيمية' : '➕ إضافة وحدة تنظيمية' }}
+</h2>
+
+<mat-dialog-content class="text-right">
+  <div class="space-y-4 min-w-[320px]">
+    <mat-form-field class="w-full" appearance="outline">
+      <mat-label>الاسم *</mat-label>
+      <input matInput [ngModel]="name()" (ngModelChange)="name.set($event)" autocomplete="off">
+      @if (errors()['name']) {
+        <mat-error>{{ errors()['name'] }}</mat-error>
+      }
+    </mat-form-field>
+
+    <mat-form-field class="w-full" appearance="outline">
+      <mat-label>النوع *</mat-label>
+      <mat-select [ngModel]="unitType()" (ngModelChange)="unitType.set($event)">
+        <mat-option value="administration">{{ unitTypeLabels.administration }}</mat-option>
+        <mat-option value="section">{{ unitTypeLabels.section }}</mat-option>
+      </mat-select>
+    </mat-form-field>
+
+    <mat-form-field class="w-full" appearance="outline">
+      <mat-label>الوحدة الأم</mat-label>
+      <mat-select [ngModel]="parentId()" (ngModelChange)="parentId.set($event)">
+        <mat-option [value]="NO_PARENT_VALUE">بدون وحدة أم (وحدة جذر)</mat-option>
+        @for (row of parentOptions(); track row.unit.id) {
+          <mat-option [value]="row.unit.id">
+            {{ '— '.repeat(row.depth) }}{{ row.unit.name }}
+          </mat-option>
+        }
+      </mat-select>
+    </mat-form-field>
+
+    <div class="flex items-center justify-between">
+      <span>الحالة</span>
+      <mat-slide-toggle [ngModel]="isActive()" (ngModelChange)="isActive.set($event)" color="primary">
+        {{ isActive() ? 'مفعّل' : 'معطّل' }}
+      </mat-slide-toggle>
+    </div>
+  </div>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button (click)="close()" [disabled]="loading()">إلغاء</button>
+  <button mat-raised-button color="primary" (click)="save()" [disabled]="loading()">
+    @if (loading()) { جاري الحفظ... } @else { 💾 حفظ }
+  </button>
+</mat-dialog-actions>

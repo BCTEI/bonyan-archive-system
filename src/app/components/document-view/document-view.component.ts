@@ -22,7 +22,7 @@ import { ToastService } from '../../services/toast.service';
 })
 export class DocumentViewComponent implements OnInit {
   dialogRef = inject(MatDialogRef<DocumentViewComponent>);
-  data = inject<{ doc: ArchiveDocument; folder?: Folder; print?: boolean }>(MAT_DIALOG_DATA);
+  data = inject<{ doc: ArchiveDocument; folder?: Folder; print?: boolean; scope?: string }>(MAT_DIALOG_DATA);
   documentService = inject(DocumentService);
   auditService = inject(AuditService);
   auth = inject(AuthService);
@@ -52,7 +52,7 @@ export class DocumentViewComponent implements OnInit {
   }
 
   async handlePrint(): Promise<void> {
-    const allowed = await this.documentAccess.verifyAccess(this.doc, 'print');
+    const allowed = await this.documentAccess.verifyAccess(this.doc, 'print', this.data.scope ?? 'live');
     if (!allowed) {
       this.toast.show('تم رفض الوصول: يتطلب التحقق من الهوية لهذه الوثيقة', 'error');
       return;
