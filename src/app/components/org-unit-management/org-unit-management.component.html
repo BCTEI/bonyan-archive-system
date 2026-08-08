@@ -1,0 +1,72 @@
+<div class="p-4 max-w-5xl mx-auto" dir="rtl">
+  <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+    <div>
+      <h1 class="text-2xl font-bold text-primary">🏛️ الهيكل التنظيمي</h1>
+      <p class="text-text-light text-sm">إدارة الإدارات والأقسام والعلاقات الهرمية بينها</p>
+    </div>
+    <button mat-raised-button color="primary" (click)="openForm()">
+      <mat-icon>add_business</mat-icon>
+      <span>إضافة إدارة</span>
+    </button>
+  </div>
+
+  @if (loading()) {
+    <div class="bg-card rounded-xl shadow-sm border border-border p-8 text-center text-text-light">
+      جاري تحميل الهيكل التنظيمي...
+    </div>
+  } @else if (flatUnits().length === 0) {
+    <div class="bg-card rounded-xl shadow-sm border border-border p-8 text-center">
+      <div class="text-4xl mb-3">🏛️</div>
+      <h3 class="text-lg font-semibold mb-1">لا توجد وحدات تنظيمية</h3>
+      <p class="text-text-light text-sm mb-4">ابدأ بإضافة إدارة جديدة</p>
+      <button mat-raised-button color="primary" (click)="openForm()">
+        <mat-icon>add_business</mat-icon>
+        <span>إضافة إدارة</span>
+      </button>
+    </div>
+  } @else {
+    <div class="bg-card rounded-xl shadow-sm border border-border overflow-hidden">
+      <ul class="org-unit-list">
+        @for (row of flatUnits(); track row.unit.id) {
+          <li class="org-unit-row" [style.padding-inline-start.px]="16 + row.depth * 28">
+            <mat-icon class="unit-icon">{{ row.unit.unit_type === 'administration' ? 'account_balance' : 'folder_shared' }}</mat-icon>
+            <span class="unit-name" [class.inactive]="!row.unit.is_active">{{ row.unit.name }}</span>
+            <span class="unit-type-badge">{{ typeLabel(row.unit) }}</span>
+            @if (!row.unit.is_active) {
+              <span class="unit-status-badge inactive">معطّل</span>
+            }
+
+            <span class="spacer"></span>
+
+            <button mat-icon-button [matMenuTriggerFor]="menu" aria-label="إجراءات">
+              <mat-icon>more_vert</mat-icon>
+            </button>
+            <mat-menu #menu="matMenu">
+              <button mat-menu-item (click)="openForm(undefined, row.unit)">
+                <mat-icon>add</mat-icon>
+                <span>إضافة قسم فرعي</span>
+              </button>
+              <button mat-menu-item (click)="openForm(row.unit)">
+                <mat-icon>edit</mat-icon>
+                <span>تعديل</span>
+              </button>
+              <button mat-menu-item (click)="toggleStatus(row.unit)">
+                <mat-icon>{{ row.unit.is_active ? 'block' : 'check_circle' }}</mat-icon>
+                <span>{{ row.unit.is_active ? 'تعطيل' : 'تفعيل' }}</span>
+              </button>
+              <button mat-menu-item
+                      (click)="deleteUnit(row.unit)"
+                      [disabled]="hasChildren(row.unit)"
+                      [matTooltip]="hasChildren(row.unit) ? 'لا يمكن حذف وحدة لديها وحدات فرعية' : 'حذف'"
+                      matTooltipPosition="left"
+                      class="text-danger">
+                <mat-icon>delete</mat-icon>
+                <span>حذف</span>
+              </button>
+            </mat-menu>
+          </li>
+        }
+      </ul>
+    </div>
+  }
+</div>

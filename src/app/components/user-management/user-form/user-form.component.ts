@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -9,8 +9,12 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { User, UserRole, ROLE_LABELS } from '../../../models/user.model';
+import { FlatOrgUnit } from '../../../models/org-unit.model';
 import { UserService } from '../../../services/user.service';
+import { OrgUnitService } from '../../../services/org-unit.service';
 import { ToastService } from '../../../services/toast.service';
+
+const NO_ORG_UNIT_VALUE = '__NONE__';
 
 @Component({
   selector: 'app-user-form',
@@ -29,11 +33,14 @@ import { ToastService } from '../../../services/toast.service';
   templateUrl: './user-form.component.html',
   styleUrl: './user-form.component.scss'
 })
-export class UserFormComponent {
+export class UserFormComponent implements OnInit {
   private dialogRef = inject(MatDialogRef<UserFormComponent>);
   private data = inject<{ user?: User }>(MAT_DIALOG_DATA);
   private userService = inject(UserService);
+  private orgUnitService = inject(OrgUnitService);
   private toast = inject(ToastService);
+
+  readonly NO_ORG_UNIT_VALUE = NO_ORG_UNIT_VALUE;
 
   isEdit = !!this.data.user;
   user = this.data.user;
@@ -42,24 +49,36 @@ export class UserFormComponent {
   fullName = signal(this.user?.full_name ?? '');
   password = signal('');
   confirmPassword = signal('');
-  role = signal<UserRole>(this.user?.role ?? 'viewer');
+  role = signal<UserRole>(this.user?.role ?? 'employee');
+  orgUnitId = signal<number | typeof NO_ORG_UNIT_VALUE>(this.user?.org_unit_id ?? NO_ORG_UNIT_VALUE);
   isActive = signal(this.user?.is_active ?? true);
 
-  roles: { value: UserRole; label: string }[] = [
-    { value: 'admin', label: ROLE_LABELS.admin },
-    { value: 'editor', label: ROLE_LABELS.editor },
-    { value: 'viewer', label: ROLE_LABELS.viewer }
-  ];
+  roles: { value: UserRole; label: string }[] = Object.entries(ROLE_LABELS).map(([value, label]) => ({
+    value: value as UserRole,
+    label
+  }));
+
+  orgUnitOptions = signal<FlatOrgUnit[]>([]);
 
   loading = signal(false);
   errors = signal<Record<string, string>>({});
 
+  async ngOnInit(): Promise<void> {
+    try {
+      this.orgUnitOptions.set(await this.orgUnitService.getFlatTree());
+    } catch {
+      // Non-fatal: form still works, just without unit assignment.
+    }
+  }
+
   async save(): Promise<void> {
     this.errors.set({});
+    const unit = this.orgUnitId();
     const payload: any = {
       username: this.username().trim(),
       full_name: this.fullName().trim() || null,
       role: this.role(),
+      org_unit_id: unit === NO_ORG_UNIT_VALUE ? null : unit,
       is_active: this.isActive()
     };
 

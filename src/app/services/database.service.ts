@@ -51,10 +51,15 @@ export class DatabaseService {
   }
 
   async getAuditEntries(limit?: number): Promise<AuditEntry[]> {
-    const sql = limit
-      ? 'SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT ?'
-      : 'SELECT * FROM audit_log ORDER BY timestamp DESC';
-    return this.query<AuditEntry>(sql, limit ? [limit] : undefined);
+    try {
+      const result = await this.api.auditAPI.list(limit);
+      if (!result.success) return [];
+      return result.entries ?? [];
+    } catch {
+      // Below section_head, audit:list is gated off — fail soft to an empty list
+      // rather than breaking the dashboard's "recent audit" widget for lower roles.
+      return [];
+    }
   }
 
   async addAudit(action: string, docRef?: string, details?: string): Promise<boolean> {
@@ -62,17 +67,9 @@ export class DatabaseService {
   }
 
   async getStats(): Promise<{ total: number; [key: string]: number }> {
-    const result = await this.api.dbQuery('SELECT type_id, COUNT(*) as c FROM documents GROUP BY type_id');
-    const stats: { total: number; [key: string]: number } = { total: 0 };
-    for (const row of result as Array<{ type_id: number; c: number }>) {
-      stats[`type_${row.type_id}`] = row.c;
-      stats.total += row.c;
-    }
-    const confRows = await this.api.dbQuery("SELECT confidentiality, COUNT(*) as c FROM documents GROUP BY confidentiality");
-    for (const row of confRows as Array<{ confidentiality: string; c: number }>) {
-      stats[row.confidentiality] = row.c;
-    }
-    return stats;
+    const result = await this.api.getStats();
+    if (!result.success) throw new Error(result.error ?? 'فشل تحميل الإحصائيات');
+    return result.stats ?? { total: 0 };
   }
 
   async exportData(): Promise<string> {
