@@ -47,7 +47,6 @@ export class DocumentFormComponent implements OnInit {
   attachments = signal<Attachment[]>([]);
   drawing = signal(false);
   dragOver = signal(false);
-  generatingRef = signal(false);
   isSaving = signal(false);
   today = new Date().toISOString().split('T')[0];
 
@@ -95,9 +94,9 @@ export class DocumentFormComponent implements OnInit {
       const defaultType = types[0];
       this.selectedType.set(defaultType);
       this.doc.set(this.emptyDoc(defaultType?.id ?? 1));
-      if (defaultType) {
-        await this.generateRef();
-      }
+      // ref_number stays empty for a new document — the main process allocates
+      // it from the yearly archive sequence at the moment document:create runs,
+      // so it is never pre-fetched (and never wasted on an abandoned form).
     }
   }
 
@@ -141,28 +140,14 @@ export class DocumentFormComponent implements OnInit {
     this.doc.update(d => ({ ...d, [key]: value }));
   }
 
-  async generateRef(): Promise<void> {
-    const d = this.doc();
-    this.generatingRef.set(true);
-    const ref = await this.documentService.getNextRef(d.type_id, d.folder_id);
-    this.doc.update(doc => ({ ...doc, ref_number: ref }));
-    this.generatingRef.set(false);
-  }
-
   onTypeChange(typeId: number): void {
     const type = this.documentTypes().find(t => t.id === typeId);
     this.selectedType.set(type);
     this.doc.update(doc => ({ ...doc, type_id: typeId }));
-    if (!this.doc().ref_number) {
-      this.generateRef();
-    }
   }
 
   onFolderChange(folderId: number): void {
     this.doc.update(doc => ({ ...doc, folder_id: folderId }));
-    if (!this.doc().ref_number) {
-      this.generateRef();
-    }
   }
 
   onConfidentialityChange(level: ConfidentialityLevel): void {
@@ -361,10 +346,6 @@ export class DocumentFormComponent implements OnInit {
       this.toast.show('الموضوع مطلوب', 'warning');
       return;
     }
-    if (!d.ref_number) {
-      this.toast.show('يرجى توليد الرقم المرجعي', 'warning');
-      return;
-    }
     if (type.name === 'صادر' && (!d.receiver || !d.author)) {
       this.toast.show('يرجى ملء الجهة المستقبلة واسم المؤلف', 'warning');
       return;
@@ -394,9 +375,10 @@ export class DocumentFormComponent implements OnInit {
         await this.documentService.update(payload);
         await this.auditService.log('تعديل', d.ref_number, d.subject);
       } else {
-        const id = await this.documentService.create(payload);
+        const { id, ref_number } = await this.documentService.create(payload);
         payload.id = id;
-        await this.auditService.log('إنشاء', d.ref_number, d.subject);
+        payload.ref_number = ref_number;
+        await this.auditService.log('إنشاء', ref_number, d.subject);
       }
       this.dialogRef.close(true);
     } catch (err: unknown) {

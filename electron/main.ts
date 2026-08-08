@@ -80,7 +80,8 @@ import {
   initDb,
   query,
   run,
-  getNextRef,
+  generateArchiveRefNumber,
+  generateDocumentBarcode,
   addAudit,
   clearAudit,
   exportData,
@@ -245,14 +246,6 @@ ipcMain.handle('db:run', (_event: IpcMainInvokeEvent, sql: string, params?: unkn
   if (!user) return { success: false, error: 'يجب تسجيل الدخول' };
   if (!hasPermission(user, ['editor'])) return { success: false, error: 'ليس لديك صلاحية التعديل' };
   return run(sql, params);
-});
-
-ipcMain.handle('db:getNextRef', (_event: IpcMainInvokeEvent, typeId: number, folderId: number) => {
-  console.log('[Main] Handling db:getNextRef');
-  const user = activeUser();
-  if (!user) throw new Error('يجب تسجيل الدخول');
-  if (!hasPermission(user, ['editor'])) throw new Error('ليس لديك صلاحية التعديل');
-  return getNextRef(typeId, folderId);
 });
 
 ipcMain.handle('db:export', () => {
@@ -807,8 +800,61 @@ ipcMain.handle('document:getById', (_event: IpcMainInvokeEvent, id: number) => {
   }
 });
 
+// Resolves a scanned/typed barcode to its document. The barcode never carries
+// document data itself, so this still enforces the same login + confidentiality
+// checks as document:getById — a manipulated or guessed value can only ever
+// resolve to a real row, never bypass access control.
+ipcMain.handle('document:getByBarcode', (_event: IpcMainInvokeEvent, barcode: unknown) => {
+  try {
+    const user = activeUser();
+    if (!user) return { success: false, error: 'يجب تسجيل الدخول' };
+    if (typeof barcode !== 'string') {
+      return { success: false, error: 'رمز الباركود غير صالح' };
+    }
+    const trimmed = barcode.trim();
+    // Current format: the barcode column holds only the variable part of the
+    // ref_number, with the fixed "م.ب/" prefix stripped (e.g. "58/1" for
+    // "م.ب/58/1") — see generateDocumentBarcode in electron/database.ts.
+    // Labels printed before that change may still encode the full reference,
+    // either with the Arabic prefix or the older ASCII transliteration
+    // "MB/58/1", so both are also accepted and resolved back to the same
+    // document by trying both the barcode column and the ref_number column.
+    const asciiFormat = /^\d+\/\d+$/.test(trimmed);
+    const arabicPrefixFormat = /^م\.ب\/\d+\/\d+$/.test(trimmed);
+    const legacyFormat = /^MB\/\d+\/\d+$/.test(trimmed);
+    if (!asciiFormat && !arabicPrefixFormat && !legacyFormat) {
+      return { success: false, error: 'رمز الباركود غير صالح' };
+    }
+    let barcodeValue: string;
+    let refNumberValue: string;
+    if (asciiFormat) {
+      barcodeValue = trimmed;
+      refNumberValue = `م.ب/${trimmed}`;
+    } else if (arabicPrefixFormat) {
+      barcodeValue = trimmed.replace(/^م\.ب\//, '');
+      refNumberValue = trimmed;
+    } else {
+      barcodeValue = trimmed.replace(/^MB\//, '');
+      refNumberValue = trimmed.replace('MB', 'م.ب');
+    }
+    const sql = 'SELECT d.*, dt.name as type, dt.label as type_label, dt.color as type_color, dt.icon as type_icon FROM documents d JOIN document_types dt ON d.type_id = dt.id WHERE d.barcode = ? OR d.ref_number = ?';
+    const rows = query(sql, [barcodeValue, refNumberValue]) as Array<Record<string, unknown>>;
+    if (rows.length === 0) return { success: false, error: 'لم يتم العثور على وثيقة بهذا الباركود' };
+    const doc = rows[0];
+    const conf = doc.confidentiality as string;
+    if (!canAccessConfidentiality(user.role, conf)) {
+      return { success: false, error: 'ليس لديك صلاحية الوصول لهذه الوثيقة' };
+    }
+    return { success: true, document: doc };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
 function validateDocumentInput(doc: Record<string, unknown>, isCreate: boolean): string | null {
-  if (isCreate && !doc.ref_number) return 'الرقم المرجعي مطلوب';
+  // ref_number is server-generated on create (see generateArchiveRefNumber) and
+  // therefore never required from the client here; on update the existing
+  // ref_number simply passes through unchanged.
   if (!doc.type_id) return 'نوع الملف مطلوب';
   if (!doc.folder_id) return 'المجلد مطلوب';
   if (!doc.date) return 'التاريخ مطلوب';
@@ -827,7 +873,15 @@ ipcMain.handle('document:create', (_event: IpcMainInvokeEvent, doc: Record<strin
     const validationError = validateDocumentInput(doc, true);
     if (validationError) return { success: false, error: validationError };
 
-    console.log('[Main] Creating document:', doc.ref_number, 'type_id:', doc.type_id, 'confidentiality:', doc.confidentiality);
+    const folderId = Number(doc.folder_id);
+    if (!Number.isInteger(folderId)) return { success: false, error: 'المجلد غير صالح' };
+
+    // Reference number is always generated here, server-side, from the yearly
+    // archive sequence — never trusted from the client — so it can't collide,
+    // be spoofed, or drift out of sequence.
+    const { ref_number } = generateArchiveRefNumber(folderId);
+
+    console.log('[Main] Creating document:', ref_number, 'type_id:', doc.type_id, 'confidentiality:', doc.confidentiality);
 
     const result = run(`
       INSERT INTO documents (
@@ -835,9 +889,9 @@ ipcMain.handle('document:create', (_event: IpcMainInvokeEvent, doc: Record<strin
         date, body, notes, status, signature_base64, attachments_json, created_by
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
-      doc.ref_number,
+      ref_number,
       doc.type_id,
-      doc.folder_id,
+      folderId,
       doc.confidentiality ?? 'عادي',
       doc.subject,
       doc.sender ?? null,
@@ -855,8 +909,15 @@ ipcMain.handle('document:create', (_event: IpcMainInvokeEvent, doc: Record<strin
       doc.attachments_json ?? '[]',
       user?.username
     ]);
-    addAudit('إنشاء وثيقة', doc.ref_number as string, doc.subject as string, user?.username);
-    return { success: true, id: Number(result.lastInsertRowid) };
+    const id = Number(result.lastInsertRowid);
+
+    // Barcode encodes this document's own ref_number verbatim — see
+    // generateDocumentBarcode.
+    const barcode = generateDocumentBarcode(ref_number);
+    run('UPDATE documents SET barcode = ? WHERE id = ?', [barcode, id]);
+
+    addAudit('إنشاء وثيقة', ref_number, doc.subject as string, user?.username);
+    return { success: true, id, ref_number, barcode };
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
   }

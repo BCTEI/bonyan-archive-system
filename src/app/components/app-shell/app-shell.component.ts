@@ -1,4 +1,4 @@
-import { Component, HostListener, OnInit, inject, signal } from '@angular/core';
+import { Component, HostListener, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
@@ -8,6 +8,8 @@ import { HeaderComponent } from '../header/header.component';
 import { FooterBarComponent } from '../footer-bar/footer-bar.component';
 import { AuthService } from '../../services/auth.service';
 import { HasPermissionDirective } from '../../directives/has-permission.directive';
+import { BarcodeScanService } from '../../services/barcode-scan.service';
+import { BarcodeLookupService } from '../../services/barcode-lookup.service';
 
 const MOBILE_BREAKPOINT = 768;
 const SIDEBAR_STATE_KEY = 'bonyan_sidebar_open';
@@ -30,15 +32,29 @@ const SIDEBAR_STATE_KEY = 'bonyan_sidebar_open';
   templateUrl: './app-shell.component.html',
   styleUrl: './app-shell.component.scss'
 })
-export class AppShellComponent implements OnInit {
+export class AppShellComponent implements OnInit, OnDestroy {
   auth = inject(AuthService);
   router = inject(Router);
+  private barcodeScan = inject(BarcodeScanService);
+  private barcodeLookup = inject(BarcodeLookupService);
   sidebarOpen = signal(true);
   isMobile = signal(false);
   currentYear = signal(new Date().getFullYear());
 
+  private stopBarcodeScan?: () => void;
+
   ngOnInit(): void {
     this.updateViewport();
+    // Lets a physical barcode scanner open a document's details from anywhere
+    // in the app (dashboard, grid, etc.) without the user having to click into
+    // a specific field first — see BarcodeScanService for the detection logic.
+    this.stopBarcodeScan = this.barcodeScan.start(barcode => {
+      void this.barcodeLookup.openByBarcode(barcode);
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.stopBarcodeScan?.();
   }
 
   @HostListener('window:resize')

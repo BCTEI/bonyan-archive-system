@@ -28,10 +28,6 @@ export class DatabaseService {
     return result;
   }
 
-  async getNextRef(typeId: number, folderId: number): Promise<string> {
-    return this.api.getNextRef(typeId, folderId);
-  }
-
   async getFolders(): Promise<Folder[]> {
     const result = await this.api.folderCategoryAPI.getAll();
     if (!result.success) throw new Error(result.error ?? 'فشل تحميل المجلدات');

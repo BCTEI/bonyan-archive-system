@@ -43,6 +43,7 @@ export interface ArchiveDocument {
   body?: string;
   notes?: string;
   status: DocumentStatus;
+  barcode?: string;
   signature_base64?: string;
   attachments_json: string;
   created_at?: string;

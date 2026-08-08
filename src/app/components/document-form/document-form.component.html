@@ -22,12 +22,11 @@
     @if (doc().ref_number) {
       <span class="px-3 py-1 rounded-lg bg-primary text-white font-bold">{{ doc().ref_number }}</span>
     } @else {
-      <span class="text-text-light text-sm">لم يتم التوليد</span>
+      <span class="px-3 py-1 rounded-lg border border-dashed border-border text-text-light text-sm" style="font-family:monospace">
+        م.ب/؟/{{ doc().folder_id }}
+      </span>
+      <span class="text-xs text-text-light">يُولَّد الرقم تلقائياً عند الحفظ</span>
     }
-    <button mat-stroked-button color="primary" (click)="generateRef()" [disabled]="generatingRef() || !doc().type_id">
-      <mat-icon>refresh</mat-icon>
-      توليد
-    </button>
   </div>
 
   <div class="mb-4">

@@ -1,0 +1,148 @@
+:host {
+  --canvas-bg: #f5f3ee;
+  --card-bg: #ffffff;
+  --card-border: #e4e1d9;
+  --frame-border: #2b2b2b;
+  --text-primary: #1a1a1a;
+  --text-body: #333333;
+  --accent-red: #c0392b;
+
+  display: block;
+  height: 100%;
+}
+
+.doc-canvas {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  height: 100%;
+  min-height: 100vh;
+  padding: 32px 24px;
+  background: var(--canvas-bg);
+  box-sizing: border-box;
+}
+
+.doc-card {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 820px;
+  height: 90vh;
+  background: var(--card-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 20px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.06);
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.doc-frame {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border: 3px solid var(--frame-border);
+  border-radius: 8px;
+  padding: 40px 48px;
+  box-sizing: border-box;
+  scrollbar-gutter: stable;
+}
+
+.doc-header {
+  margin-bottom: 28px;
+}
+
+.doc-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 10px;
+  margin: 0;
+  text-align: right;
+}
+
+.wordmark {
+  font-family: 'Segoe UI', Arial, Helvetica, sans-serif;
+  font-weight: 800;
+  letter-spacing: 0.4px;
+  font-size: 22px;
+  color: var(--text-primary);
+}
+
+.subtitle {
+  font-family: 'Tajawal', sans-serif;
+  font-weight: 400;
+  font-size: 18px;
+  color: var(--text-body);
+}
+
+.accent-rule {
+  margin-top: 14px;
+  height: 2px;
+  width: 100%;
+  background: var(--accent-red);
+}
+
+.doc-section {
+  margin-bottom: 36px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.section-heading {
+  margin: 0 0 14px;
+  font-family: 'Tajawal', sans-serif;
+  font-weight: 700;
+  font-size: 17px;
+  color: var(--text-primary);
+  text-align: right;
+}
+
+.sub-block {
+  margin-bottom: 20px;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+}
+
+.sub-heading {
+  margin: 0 0 6px;
+  font-family: 'Tajawal', sans-serif;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--text-primary);
+  text-align: right;
+}
+
+.body-text {
+  margin: 0;
+  font-family: 'Tajawal', sans-serif;
+  font-weight: 400;
+  font-size: 15px;
+  line-height: 1.9;
+  color: var(--text-body);
+  text-align: right;
+}
+
+.body-list {
+  margin: 0;
+  padding-inline-end: 22px;
+  padding-inline-start: 0;
+  list-style-position: outside;
+
+  li {
+    font-family: 'Tajawal', sans-serif;
+    font-weight: 400;
+    font-size: 15px;
+    line-height: 1.9;
+    color: var(--text-body);
+    text-align: right;
+    margin-bottom: 6px;
+
+    &:last-child {
+      margin-bottom: 0;
+    }
+  }
+}

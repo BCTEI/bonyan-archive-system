@@ -25,6 +25,7 @@ export class DocumentCardComponent {
   edit = output<ArchiveDocument>();
   delete = output<ArchiveDocument>();
   print = output<ArchiveDocument>();
+  printLabel = output<ArchiveDocument>();
 
   auth = inject(AuthService);
   documentService = inject(DocumentService);

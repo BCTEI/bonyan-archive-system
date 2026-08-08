@@ -45,13 +45,4 @@ export class HeaderComponent {
   async logout(): Promise<void> {
     await this.auth.logout();
   }
-
-  onSearch(query: string): void {
-    const trimmed = query.trim();
-    if (trimmed) {
-      this.router.navigate(['/main/documents'], { queryParams: { q: trimmed } });
-    } else {
-      this.router.navigate(['/main/documents'], { queryParams: {} });
-    }
-  }
 }

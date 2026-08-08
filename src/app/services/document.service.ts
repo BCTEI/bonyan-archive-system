@@ -21,10 +21,16 @@ export class DocumentService {
     return result.document;
   }
 
-  async create(doc: ArchiveDocument): Promise<number> {
+  async getByBarcode(barcode: string): Promise<ArchiveDocument | undefined> {
+    const result = await this.api.documentAPI.getByBarcode(barcode);
+    if (!result.success) throw new Error(result.error ?? 'لم يتم العثور على وثيقة بهذا الباركود');
+    return result.document;
+  }
+
+  async create(doc: ArchiveDocument): Promise<{ id: number; ref_number: string }> {
     const result = await this.api.documentAPI.create(doc);
     if (!result.success) throw new Error(result.error ?? 'فشل إنشاء الوثيقة');
-    return result.id!;
+    return { id: result.id!, ref_number: result.ref_number! };
   }
 
   async update(doc: ArchiveDocument): Promise<void> {
@@ -35,10 +41,6 @@ export class DocumentService {
   async delete(id: number): Promise<void> {
     const result = await this.api.documentAPI.delete(id);
     if (!result.success) throw new Error(result.error ?? 'فشل حذف الوثيقة');
-  }
-
-  async getNextRef(typeId: number, folderId: number): Promise<string> {
-    return this.api.getNextRef(typeId, folderId);
   }
 
   parseAttachments(doc: ArchiveDocument): Attachment[] {

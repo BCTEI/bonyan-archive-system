@@ -6,7 +6,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   dbInit: () => ipcRenderer.invoke('db:init'),
   dbQuery: (sql: string, params?: unknown[]) => ipcRenderer.invoke('db:query', sql, params),
   dbRun: (sql: string, params?: unknown[]) => ipcRenderer.invoke('db:run', sql, params),
-  getNextRef: (typeId: number, folderId: number) => ipcRenderer.invoke('db:getNextRef', typeId, folderId),
   exportData: () => ipcRenderer.invoke('db:export'),
   importData: (jsonData: string, mode: 'merge' | 'replace') => ipcRenderer.invoke('db:import', jsonData, mode),
   addAudit: (action: string, docRef?: string, details?: string) => ipcRenderer.invoke('db:audit', action, docRef, details),
@@ -44,6 +43,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   documentAPI: {
     getAll: () => ipcRenderer.invoke('document:getAll'),
     getById: (id: number) => ipcRenderer.invoke('document:getById', id),
+    getByBarcode: (barcode: string) => ipcRenderer.invoke('document:getByBarcode', barcode),
     create: (doc: unknown) => ipcRenderer.invoke('document:create', doc),
     update: (doc: unknown) => ipcRenderer.invoke('document:update', doc),
     delete: (id: number) => ipcRenderer.invoke('document:delete', id),

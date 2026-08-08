@@ -18,8 +18,14 @@ import { AuditService } from '../../services/audit.service';
 import { AuthService } from '../../services/auth.service';
 import { ExportImportService } from '../../services/export-import.service';
 import { ToastService } from '../../services/toast.service';
+import { PrintService } from '../../services/print.service';
 import { ArchiveDocument, DocumentTypeEntry, ConfidentialityLevel } from '../../models/document.model';
 import { Folder } from '../../models/folder.model';
+
+// Fixed prefix of every reference number (see generateArchiveRefNumber in
+// electron/database.ts) — the ref-number search field shows this as a
+// permanent chip so the user only ever types the variable part.
+export const REF_NUMBER_PREFIX = 'م.ب/';
 
 @Component({
   selector: 'app-document-grid',
@@ -43,6 +49,7 @@ export class DocumentGridComponent implements OnInit {
   private documentAccess = inject(DocumentAccessService);
   private masterListService = inject(MasterListService);
   private route = inject(ActivatedRoute);
+  private printService = inject(PrintService);
 
   documents = signal<ArchiveDocument[]>([]);
   folders = signal<Folder[]>([]);
@@ -60,7 +67,11 @@ export class DocumentGridComponent implements OnInit {
   selectedReceiver = signal<string>('الكل');
   selectedDepartment = signal<string>('الكل');
   search = signal('');
+  subjectSearch = signal('');
+  refNumberSearch = signal('');
   loading = signal(false);
+
+  readonly refNumberPrefix = REF_NUMBER_PREFIX;
 
   confidentialityLevels: { value: ConfidentialityLevel | 'الكل'; label: string }[] = [
     { value: 'الكل', label: 'الكل' },
@@ -123,7 +134,10 @@ export class DocumentGridComponent implements OnInit {
     const sender = this.selectedSender();
     const receiver = this.selectedReceiver();
     const department = this.selectedDepartment();
-    const term = this.search().trim();
+    const term = this.search().trim().toLowerCase();
+    const subjectTerm = this.subjectSearch().trim().toLowerCase();
+    const refSuffix = this.refNumberSearch().trim();
+    const refTerm = refSuffix ? (REF_NUMBER_PREFIX + refSuffix).toLowerCase() : '';
 
     if (typeId !== 'الكل') {
       list = list.filter(d => d.type_id === typeId);
@@ -148,11 +162,17 @@ export class DocumentGridComponent implements OnInit {
     }
     if (term) {
       list = list.filter(d =>
-        d.subject.includes(term) ||
-        d.ref_number.includes(term) ||
-        (d.sender?.includes(term) ?? false) ||
-        (d.receiver?.includes(term) ?? false)
+        d.subject.toLowerCase().includes(term) ||
+        d.ref_number.toLowerCase().includes(term) ||
+        (d.sender?.toLowerCase().includes(term) ?? false) ||
+        (d.receiver?.toLowerCase().includes(term) ?? false)
       );
+    }
+    if (subjectTerm) {
+      list = list.filter(d => d.subject.toLowerCase().includes(subjectTerm));
+    }
+    if (refTerm) {
+      list = list.filter(d => d.ref_number.toLowerCase().includes(refTerm));
     }
     this.filtered.set(list);
   }
@@ -197,6 +217,19 @@ export class DocumentGridComponent implements OnInit {
     this.applyFilters();
   }
 
+  setSubjectSearch(value: string): void {
+    this.subjectSearch.set(value);
+    this.applyFilters();
+  }
+
+  setRefNumberSearch(value: string): void {
+    // Defensive: if the user pastes a full reference number (prefix included),
+    // strip the prefix so it isn't duplicated against the fixed chip.
+    const stripped = value.startsWith(REF_NUMBER_PREFIX) ? value.slice(REF_NUMBER_PREFIX.length) : value;
+    this.refNumberSearch.set(stripped);
+    this.applyFilters();
+  }
+
   clearFilters(): void {
     this.selectedTypeId.set('الكل');
     this.selectedConfidentiality.set('الكل');
@@ -206,6 +239,8 @@ export class DocumentGridComponent implements OnInit {
     this.selectedReceiver.set('الكل');
     this.selectedDepartment.set('الكل');
     this.search.set('');
+    this.subjectSearch.set('');
+    this.refNumberSearch.set('');
     this.applyFilters();
   }
 
@@ -264,6 +299,13 @@ export class DocumentGridComponent implements OnInit {
       maxWidth: '95vw',
       data: { doc, folder: this.folders().find(f => f.id === doc.folder_id), print: true }
     });
+  }
+
+  async onPrintLabel(doc: ArchiveDocument): Promise<void> {
+    const allowed = await this.documentAccess.verifyAccess(doc, 'print');
+    if (!allowed) return;
+    if (!doc.barcode) return;
+    this.printService.printBarcodeLabel(doc);
   }
 
   async exportData(): Promise<void> {

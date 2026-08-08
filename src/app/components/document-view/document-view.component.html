@@ -1,68 +1,180 @@
-<div class="p-6" dir="rtl">
-  <div class="flex items-center justify-between mb-6">
-    <div class="flex items-center gap-3 flex-wrap">
-      <span class="px-3 py-1 rounded-lg bg-primary text-white font-bold">{{ doc.ref_number }}</span>
-      <span class="px-3 py-1 rounded-lg text-sm font-bold"
-            [style.background-color]="(doc.type_color ?? '#2563eb') + '20'"
-            [style.color]="doc.type_color ?? '#2563eb'">
-        {{ doc.type_icon }} {{ doc.type_label ?? doc.type }}
-      </span>
-      <span class="px-3 py-1 rounded-lg text-sm font-bold flex items-center gap-1"
-            [class]="confClass(doc.confidentiality)">
-        {{ doc.confidentiality === 'عادي' ? '🟢' : doc.confidentiality === 'سري' ? '🟡' : '🔴' }}
-        {{ doc.confidentiality }}
-      </span>
-      <span class="px-3 py-1 rounded-lg text-sm text-white" [class.bg-success]="doc.status === 'معتمد'" [class.bg-warning]="doc.status !== 'معتمد'">{{ doc.status }}</span>
+<div class="doc-view" dir="rtl">
+  <div class="doc-view-header">
+    <div class="min-w-0 flex-1">
+      <div class="flex items-center gap-2 flex-wrap mb-2">
+        <span class="ref-badge">{{ doc.ref_number }}</span>
+        <span class="px-2.5 py-1 rounded-lg text-xs font-bold"
+              [style.background-color]="(doc.type_color ?? '#2563eb') + '20'"
+              [style.color]="doc.type_color ?? '#2563eb'">
+          {{ doc.type_icon }} {{ doc.type_label ?? doc.type }}
+        </span>
+        <span class="px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1"
+              [class]="confClass(doc.confidentiality)">
+          {{ doc.confidentiality === 'عادي' ? '🟢' : doc.confidentiality === 'سري' ? '🟡' : '🔴' }}
+          {{ doc.confidentiality }}
+        </span>
+        <span class="px-2.5 py-1 rounded-lg text-xs font-bold text-white"
+              [class.bg-success]="doc.status === 'معتمد'" [class.bg-warning]="doc.status !== 'معتمد'">{{ doc.status }}</span>
+      </div>
+      <h2 class="text-lg font-bold text-text leading-snug break-words">{{ doc.subject }}</h2>
     </div>
-    <div class="flex items-center gap-2">
-      <button mat-icon-button (click)="print()" title="طباعة">
+
+    <div class="flex items-center gap-1 shrink-0">
+      <button *appHasPermission="'canEditDocument'" mat-icon-button (click)="edit()" title="تعديل الوثيقة">
+        <mat-icon>edit</mat-icon>
+      </button>
+      <button mat-icon-button (click)="print()" title="طباعة الوثيقة">
         <mat-icon>print</mat-icon>
       </button>
+      @if (doc.barcode) {
+        <button mat-icon-button (click)="printLabel()" title="طباعة ملصق الباركود">
+          <mat-icon>qr_code_2</mat-icon>
+        </button>
+      }
       <button mat-icon-button (click)="close()" title="إغلاق">
         <mat-icon>close</mat-icon>
       </button>
     </div>
   </div>
 
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 text-sm">
-    <div><span class="font-bold text-primary">الموضوع:</span> {{ doc.subject }}</div>
-    <div><span class="font-bold text-primary">التاريخ:</span> {{ doc.date }}</div>
-    @if (doc.sender) { <div><span class="font-bold text-primary">المرسل:</span> {{ doc.sender }}</div> }
-    @if (doc.receiver) { <div><span class="font-bold text-primary">المستلم:</span> {{ doc.receiver }}</div> }
-    @if (doc.author) { <div><span class="font-bold text-primary">المؤلف / معد الملف:</span> {{ doc.author }}</div> }
-    @if (doc.input_method) { <div><span class="font-bold text-primary">طريقة الاستلام:</span> {{ inputMethodLabel(doc.input_method) }}</div> }
-    @if (doc.address) { <div><span class="font-bold text-primary">العنوان / الوصف:</span> {{ doc.address }}</div> }
-    @if (doc.content) { <div><span class="font-bold text-primary">المحتوى / الملخص:</span> {{ doc.content }}</div> }
-    @if (doc.body) { <div><span class="font-bold text-primary">المضمون:</span> {{ doc.body }}</div> }
-    <div><span class="font-bold text-primary">المجلد:</span> {{ folder?.name ?? '' }}</div>
-    <div><span class="font-bold text-primary">أنشئ بواسطة:</span> {{ doc.created_by ?? '-' }}</div>
-  </div>
+  <div class="doc-view-body">
+    <div class="doc-view-main">
+      <section class="doc-section">
+        <h3 class="doc-section-title">بيانات الوثيقة</h3>
+        <div class="doc-field-grid">
+          <div class="doc-field">
+            <span class="doc-field-label">الرقم الإشاري</span>
+            <span class="doc-field-value font-mono">{{ doc.ref_number }}</span>
+          </div>
+          <div class="doc-field">
+            <span class="doc-field-label">نوع الوثيقة</span>
+            <span class="doc-field-value">{{ doc.type_icon }} {{ doc.type_label ?? doc.type }}</span>
+          </div>
+          <div class="doc-field">
+            <span class="doc-field-label">التصنيف</span>
+            <span class="doc-field-value">{{ folder ? ('#' + folder.id + ' — ' + folder.name) : '—' }}</span>
+          </div>
+          <div class="doc-field">
+            <span class="doc-field-label">التاريخ</span>
+            <span class="doc-field-value">{{ doc.date }}</span>
+          </div>
+          <div class="doc-field sm:col-span-2">
+            <span class="doc-field-label">الموضوع</span>
+            <span class="doc-field-value">{{ doc.subject }}</span>
+          </div>
+        </div>
+      </section>
 
-  @if (doc.notes) {
-    <div class="mb-6">
-      <h3 class="font-bold text-primary mb-2">ملاحظات</h3>
-      <div class="bg-bg p-4 rounded-lg whitespace-pre-wrap">{{ doc.notes }}</div>
+      @if (doc.sender || doc.receiver || doc.author || doc.input_method) {
+        <section class="doc-section">
+          <h3 class="doc-section-title">بيانات الأطراف</h3>
+          <div class="doc-field-grid">
+            @if (doc.sender) {
+              <div class="doc-field">
+                <span class="doc-field-label">المرسل</span>
+                <span class="doc-field-value">{{ doc.sender }}</span>
+              </div>
+            }
+            @if (doc.author) {
+              <div class="doc-field">
+                <span class="doc-field-label">المؤلف / معد الملف</span>
+                <span class="doc-field-value">{{ doc.author }}</span>
+              </div>
+            }
+            @if (doc.receiver) {
+              <div class="doc-field">
+                <span class="doc-field-label">المستلم</span>
+                <span class="doc-field-value">{{ doc.receiver }}</span>
+              </div>
+            }
+            @if (doc.input_method) {
+              <div class="doc-field">
+                <span class="doc-field-label">طريقة الاستلام</span>
+                <span class="doc-field-value">{{ inputMethodLabel(doc.input_method) }}</span>
+              </div>
+            }
+          </div>
+        </section>
+      }
+
+      @if (doc.address || doc.content || doc.body) {
+        <section class="doc-section">
+          <h3 class="doc-section-title">محتوى الوثيقة</h3>
+          <div class="space-y-3">
+            @if (doc.address) {
+              <div>
+                <span class="doc-field-label block mb-1">العنوان / الوصف</span>
+                <p class="doc-text-block">{{ doc.address }}</p>
+              </div>
+            }
+            @if (doc.content) {
+              <div>
+                <span class="doc-field-label block mb-1">المحتوى / الملخص</span>
+                <p class="doc-text-block">{{ doc.content }}</p>
+              </div>
+            }
+            @if (doc.body) {
+              <div>
+                <span class="doc-field-label block mb-1">المضمون</span>
+                <p class="doc-text-block">{{ doc.body }}</p>
+              </div>
+            }
+          </div>
+        </section>
+      }
+
+      @if (doc.notes) {
+        <section class="doc-section">
+          <h3 class="doc-section-title">الملاحظات</h3>
+          <p class="doc-text-block whitespace-pre-wrap">{{ doc.notes }}</p>
+        </section>
+      }
+
+      @if (attachments.length > 0) {
+        <section class="doc-section">
+          <h3 class="doc-section-title">المرفقات <span class="text-text-light font-normal">({{ attachments.length }})</span></h3>
+          <div class="flex flex-wrap gap-2">
+            @for (att of attachments; track att.name + att.ext) {
+              <button (click)="openAttachment(att)" class="attachment-chip">
+                <mat-icon>attachment</mat-icon>
+                <span>{{ att.name }}.{{ att.ext }}</span>
+              </button>
+            }
+          </div>
+        </section>
+      }
+
+      @if (doc.signature_base64) {
+        <section class="doc-section">
+          <h3 class="doc-section-title">التوقيع</h3>
+          <img [src]="doc.signature_base64" alt="التوقيع" class="max-h-28 border border-border rounded-lg p-2 bg-white">
+        </section>
+      }
     </div>
-  }
 
-  @if (attachments.length > 0) {
-    <div class="mb-6">
-      <h3 class="font-bold text-primary mb-2">المرفقات</h3>
-      <div class="flex flex-wrap gap-2">
-        @for (att of attachments; track att.name + att.ext) {
-          <button (click)="openAttachment(att)" class="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary hover:bg-border transition text-sm">
-            <mat-icon>attachment</mat-icon>
-            <span>{{ att.name }}.{{ att.ext }}</span>
-          </button>
-        }
+    <aside class="doc-view-side">
+      @if (doc.barcode) {
+        <div class="doc-section text-center">
+          <h3 class="doc-section-title">الباركود</h3>
+          <div class="flex flex-col items-center gap-2 py-2">
+            <svg #barcodeSvg class="max-w-full"></svg>
+            <span class="font-mono font-bold text-xs text-text-light">{{ doc.ref_number }}</span>
+          </div>
+        </div>
+      }
+      <div class="doc-section">
+        <h3 class="doc-section-title">بيانات إضافية</h3>
+        <div class="space-y-3">
+          <div class="doc-field">
+            <span class="doc-field-label">المجلد</span>
+            <span class="doc-field-value">{{ folder?.name || '—' }}</span>
+          </div>
+          <div class="doc-field">
+            <span class="doc-field-label">أنشئ بواسطة</span>
+            <span class="doc-field-value">{{ doc.created_by || '—' }}</span>
+          </div>
+        </div>
       </div>
-    </div>
-  }
-
-  @if (doc.signature_base64) {
-    <div class="mb-4">
-      <h3 class="font-bold text-primary mb-2">التوقيع</h3>
-      <img [src]="doc.signature_base64" alt="التوقيع" class="max-h-32 border border-border rounded-lg p-2 bg-white">
-    </div>
-  }
+    </aside>
+  </div>
 </div>

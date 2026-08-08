@@ -12,12 +12,14 @@ import { AnnualClosingComponent } from './components/annual-closing/annual-closi
 import { ChangePasswordComponent } from './components/change-password/change-password.component';
 import { UserProfileComponent } from './components/user-profile/user-profile.component';
 import { MasterListManagementComponent } from './components/master-list-management/master-list-management.component';
+import { DocumentBriefViewerComponent } from './components/document-brief-viewer/document-brief-viewer.component';
 import { authGuard } from './guards/auth.guard';
 import { adminGuard } from './guards/admin.guard';
 import { permissionGuard } from './guards/permission.guard';
 
 export const routes: Routes = [
   { path: 'login', component: LoginComponent },
+  { path: 'brief-preview', component: DocumentBriefViewerComponent },
   {
     path: 'main',
     component: AppShellComponent,

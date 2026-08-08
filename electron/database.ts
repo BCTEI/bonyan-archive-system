@@ -138,6 +138,14 @@ interface InMemoryMasterList {
   created_at: number;
 }
 
+interface InMemoryArchiveSequence {
+  id: number;
+  year: number;
+  last_number: number;
+  created_at: number;
+  updated_at: number;
+}
+
 interface InMemoryStore {
   users: InMemoryUser[];
   folders: InMemoryFolder[];
@@ -152,6 +160,7 @@ interface InMemoryStore {
   password_reset_requests: InMemoryResetRequest[];
   archived_years: InMemoryArchivedYear[];
   master_lists: InMemoryMasterList[];
+  archive_sequences: InMemoryArchiveSequence[];
 }
 
 const memoryStore: InMemoryStore = {
@@ -189,7 +198,8 @@ const memoryStore: InMemoryStore = {
     { id: 6, list_type: 'receiver', name: 'الإدارة العامة', name_en: null, is_active: 1, created_at: Date.now() },
     { id: 7, list_type: 'department', name: 'قسم التدريب', name_en: null, is_active: 1, created_at: Date.now() },
     { id: 8, list_type: 'department', name: 'قسم الصيانة', name_en: null, is_active: 1, created_at: Date.now() }
-  ]
+  ],
+  archive_sequences: []
 };
 
 let useMemoryFallback = false;
@@ -216,6 +226,9 @@ export function initDb(): { success: boolean; error?: string } {
 
     db = new Database(dbPath);
     console.log('[Database] SQLite connection established');
+    // Wait for the write lock instead of failing immediately with SQLITE_BUSY
+    // if this file is ever touched concurrently (extra window, external tool).
+    db.pragma('busy_timeout = 5000');
 
     db.exec(`
       CREATE TABLE IF NOT EXISTS users (
@@ -314,6 +327,18 @@ export function initDb(): { success: boolean; error?: string } {
         value INTEGER NOT NULL DEFAULT 0
       );
 
+      -- One row per calendar year. last_number only ever increments (via
+      -- getNextArchiveSequenceNumber's transaction below); it is never derived
+      -- from COUNT(*) on documents, so deleting a document never frees its
+      -- number back up for reuse.
+      CREATE TABLE IF NOT EXISTS archive_sequences (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        year INTEGER NOT NULL UNIQUE,
+        last_number INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER DEFAULT (strftime('%s','now')),
+        updated_at INTEGER DEFAULT (strftime('%s','now'))
+      );
+
       CREATE TABLE IF NOT EXISTS audit_log (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         action TEXT NOT NULL,
@@ -397,6 +422,7 @@ export function initDb(): { success: boolean; error?: string } {
     migrateDocumentTypeId();
     migrateFolderSystemFlags();
     migrateDocumentConfidentiality();
+    migrateDocumentBarcode();
     seedMasterLists();
     createPostMigrationIndexes();
 
@@ -594,8 +620,47 @@ function createPostMigrationIndexes(): void {
     if (names.has('confidentiality')) {
       db.exec('CREATE INDEX IF NOT EXISTS idx_documents_confidentiality ON documents(confidentiality)');
     }
+    if (names.has('subject')) {
+      db.exec('CREATE INDEX IF NOT EXISTS idx_documents_subject ON documents(subject)');
+    }
   } catch (err) {
     console.warn('[Database] Failed to create post-migration indexes:', err instanceof Error ? err.message : err);
+  }
+}
+
+// Adds documents.barcode (idempotent) and (re)syncs it from each row's own
+// ref_number so every document's barcode always matches its reference number
+// — this also repairs rows whose barcode was stamped by an older scheme.
+function migrateDocumentBarcode(): void {
+  if (!db || useMemoryFallback) return;
+  const columns = db.prepare("PRAGMA table_info(documents)").all() as Array<{ name: string }>;
+  if (!columns.some(c => c.name === 'barcode')) {
+    try {
+      db.exec('ALTER TABLE documents ADD COLUMN barcode TEXT');
+      console.log('[Database] Added documents.barcode column');
+    } catch (err) {
+      console.warn('[Database] Failed to add barcode column:', err instanceof Error ? err.message : err);
+      return;
+    }
+  }
+
+  const rows = db.prepare('SELECT id, ref_number, barcode FROM documents').all() as Array<{ id: number; ref_number: string; barcode: string | null }>;
+  const stale = rows.filter(row => row.ref_number && generateDocumentBarcode(row.ref_number) !== row.barcode);
+  if (stale.length > 0) {
+    const update = db.prepare('UPDATE documents SET barcode = ? WHERE id = ?');
+    const tx = db.transaction((items: typeof stale) => {
+      for (const row of items) {
+        update.run(generateDocumentBarcode(row.ref_number), row.id);
+      }
+    });
+    tx(stale);
+    console.log('[Database] Synced barcode for', stale.length, 'document(s)');
+  }
+
+  try {
+    db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_barcode ON documents(barcode)');
+  } catch (err) {
+    console.warn('[Database] Failed to create barcode index:', err instanceof Error ? err.message : err);
   }
 }
 
@@ -1169,29 +1234,93 @@ export function getStats(): Record<string, number> {
   return stats;
 }
 
-export function getNextRef(typeId: number, folderId: number): string {
-  const year = new Date().getFullYear();
-  let prefix = 'X';
+// ─────────────────────────────────────────────────────────────────────────────
+// Yearly archive reference sequence
+//
+// Reference format: م.ب/{sequenceNumber}/{classificationNumber}
+//   e.g. م.ب/1/105, م.ب/2/105, م.ب/3/150
+//
+// - sequenceNumber is read from the dedicated archive_sequences table (one row
+//   per year) and incremented by 1 — never derived from COUNT(*) on documents,
+//   so deleting a document can never free its number back up for reuse.
+// - classificationNumber is the folder/classification id the document was
+//   filed under.
+// - Allocation runs inside a better-sqlite3 transaction. better-sqlite3 calls
+//   are synchronous, so no other IPC handler can interleave mid-transaction;
+//   combined with the UNIQUE(year) constraint and an upsert, two document:create
+//   calls arriving back-to-back can never be handed the same sequence number.
+// ─────────────────────────────────────────────────────────────────────────────
 
+export interface ArchiveSequenceEntry {
+  id: number;
+  year: number;
+  last_number: number;
+  created_at: number;
+  updated_at: number;
+}
+
+export function getArchiveSequence(year: number): ArchiveSequenceEntry | undefined {
   if (useMemoryFallback) {
-    const type = memoryStore.document_types.find(t => t.id === typeId);
-    prefix = type?.prefix ?? 'X';
-    const key = `${prefix}_${folderId}_${year}`;
-    const current = memoryStore.counters[key] ?? 0;
-    memoryStore.counters[key] = current + 1;
-    return `${prefix}-${String(folderId).padStart(3, '0')}-${year}-${String(current + 1).padStart(4, '0')}`;
+    const entry = memoryStore.archive_sequences.find(s => s.year === year);
+    return entry ? { ...entry } : undefined;
+  }
+  if (!db) throw new Error('Database not initialized');
+  return db.prepare('SELECT * FROM archive_sequences WHERE year = ?').get(year) as ArchiveSequenceEntry | undefined;
+}
+
+export function getNextArchiveSequenceNumber(year: number): number {
+  if (useMemoryFallback) {
+    let entry = memoryStore.archive_sequences.find(s => s.year === year);
+    if (!entry) {
+      entry = { id: memoryStore.archive_sequences.length + 1, year, last_number: 0, created_at: Date.now(), updated_at: Date.now() };
+      memoryStore.archive_sequences.push(entry);
+    }
+    entry.last_number += 1;
+    entry.updated_at = Date.now();
+    return entry.last_number;
   }
 
   if (!db) throw new Error('Database not initialized');
-  const type = db.prepare('SELECT prefix FROM document_types WHERE id = ?').get(typeId) as { prefix: string } | undefined;
-  prefix = type?.prefix ?? 'X';
-  const key = `${prefix}_${folderId}_${year}`;
+  const allocate = db.transaction((y: number): number => {
+    db!.prepare(`
+      INSERT INTO archive_sequences (year, last_number, created_at, updated_at)
+      VALUES (?, 1, strftime('%s','now'), strftime('%s','now'))
+      ON CONFLICT(year) DO UPDATE SET
+        last_number = last_number + 1,
+        updated_at = strftime('%s','now')
+    `).run(y);
+    const row = db!.prepare('SELECT last_number FROM archive_sequences WHERE year = ?').get(y) as { last_number: number };
+    return row.last_number;
+  });
+  return allocate(year);
+}
 
-  db.prepare('INSERT OR IGNORE INTO counters (key, value) VALUES (?, 0)').run(key);
-  db.prepare('UPDATE counters SET value = value + 1 WHERE key = ?').run(key);
+export function generateArchiveRefNumber(classificationNumber: number): { ref_number: string; sequence_number: number; year: number } {
+  const year = new Date().getFullYear();
+  const sequenceNumber = getNextArchiveSequenceNumber(year);
+  return {
+    ref_number: `م.ب/${sequenceNumber}/${classificationNumber}`,
+    sequence_number: sequenceNumber,
+    year
+  };
+}
 
-  const row = db.prepare('SELECT value FROM counters WHERE key = ?').get(key) as { value: number };
-  return `${prefix}-${String(folderId).padStart(3, '0')}-${year}-${String(row.value).padStart(4, '0')}`;
+// ─────────────────────────────────────────────────────────────────────────────
+// Document barcode identifier
+//
+// The "م.ب/" prefix is a fixed, known part of every reference number, so it
+// carries no information a scan needs — only the variable part after it
+// (e.g. "58/1" out of "م.ب/58/1") is encoded into the barcode. This keeps
+// the barcode payload plain ASCII, sidestepping Arabic/RTL/Unicode issues on
+// scanners entirely (no FNC4 "Full ASCII" byte mode required, though the
+// renderer in barcode.service.ts + code128-fnc4.ts still supports it for any
+// legacy full-reference barcodes already printed). A scan resolves back to
+// the complete reference number by re-adding the prefix — see
+// document:getByBarcode in main.ts.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function generateDocumentBarcode(refNumber: string): string {
+  return refNumber.replace(/^م\.ب\//, '');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -10,7 +10,6 @@ export interface ElectronAPI {
   dbInit: () => Promise<boolean>;
   dbQuery: (sql: string, params?: unknown[]) => Promise<unknown[]>;
   dbRun: (sql: string, params?: unknown[]) => Promise<{ lastInsertRowid: number | bigint; changes: number }>;
-  getNextRef: (typeId: number, folderId: number) => Promise<string>;
   exportData: () => Promise<string>;
   importData: (jsonData: string, mode: 'merge' | 'replace') => Promise<{ success: boolean; message: string }>;
   addAudit: (action: string, docRef?: string, details?: string) => Promise<boolean>;
@@ -45,7 +44,8 @@ export interface ElectronAPI {
   documentAPI: {
     getAll: () => Promise<{ success: boolean; documents?: ArchiveDocument[]; error?: string }>;
     getById: (id: number) => Promise<{ success: boolean; document?: ArchiveDocument; error?: string }>;
-    create: (doc: unknown) => Promise<{ success: boolean; id?: number; error?: string }>;
+    getByBarcode: (barcode: string) => Promise<{ success: boolean; document?: ArchiveDocument; error?: string }>;
+    create: (doc: unknown) => Promise<{ success: boolean; id?: number; ref_number?: string; barcode?: string; error?: string }>;
     update: (doc: unknown) => Promise<{ success: boolean; error?: string }>;
     delete: (id: number) => Promise<{ success: boolean; error?: string }>;
   };
