@@ -6,7 +6,7 @@
   <div class="space-y-4 min-w-[320px]">
     <mat-form-field class="w-full" appearance="outline">
       <mat-label>اسم المستخدم *</mat-label>
-      <input matInput [(ngModel)]="username" [disabled]="isEdit" autocomplete="off">
+      <input matInput [(ngModel)]="username" [disabled]="isEdit" autocomplete="off" placeholder="اسم المستخدم">
       <mat-hint>3-20 حرف، أحرف إنجليزية وأرقام وشرطة سفلية</mat-hint>
       @if (errors()['username']) {
         <mat-error>{{ errors()['username'] }}</mat-error>
@@ -15,13 +15,13 @@
 
     <mat-form-field class="w-full" appearance="outline">
       <mat-label>الاسم الكامل</mat-label>
-      <input matInput [(ngModel)]="fullName" autocomplete="off">
+      <input matInput [(ngModel)]="fullName" autocomplete="off" placeholder="الاسم الكامل">
     </mat-form-field>
 
     <mat-form-field class="w-full" appearance="outline">
       <mat-label>كلمة المرور {{ isEdit ? '' : '*' }}</mat-label>
       <input matInput [type]="showPassword() ? 'text' : 'password'"
-             [(ngModel)]="password" autocomplete="new-password">
+             [(ngModel)]="password" autocomplete="new-password" placeholder="كلمة المرور">
       <button matSuffix mat-icon-button type="button"
               (click)="toggleShowPassword()"
               [attr.aria-label]="showPassword() ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'">
@@ -40,7 +40,7 @@
     <mat-form-field class="w-full" appearance="outline">
       <mat-label>تأكيد كلمة المرور</mat-label>
       <input matInput [type]="showPassword() ? 'text' : 'password'"
-             [(ngModel)]="confirmPassword" autocomplete="new-password">
+             [(ngModel)]="confirmPassword" autocomplete="new-password" placeholder="تأكيد كلمة المرور">
     </mat-form-field>
 
     <mat-form-field class="w-full" appearance="outline">
