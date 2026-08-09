@@ -9,7 +9,7 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { User, UserRole, ROLE_LABELS } from '../../../models/user.model';
-import { FlatOrgUnit } from '../../../models/org-unit.model';
+import { FlatOrgUnit, UNIT_TYPE_LABELS } from '../../../models/org-unit.model';
 import { UserService } from '../../../services/user.service';
 import { OrgUnitService } from '../../../services/org-unit.service';
 import { ToastService } from '../../../services/toast.service';
@@ -49,6 +49,7 @@ export class UserFormComponent implements OnInit {
   fullName = signal(this.user?.full_name ?? '');
   password = signal('');
   confirmPassword = signal('');
+  showPassword = signal(false);
   role = signal<UserRole>(this.user?.role ?? 'employee');
   orgUnitId = signal<number | typeof NO_ORG_UNIT_VALUE>(this.user?.org_unit_id ?? NO_ORG_UNIT_VALUE);
   isActive = signal(this.user?.is_active ?? true);
@@ -62,6 +63,59 @@ export class UserFormComponent implements OnInit {
 
   loading = signal(false);
   errors = signal<Record<string, string>>({});
+
+  toggleShowPassword(): void {
+    this.showPassword.update(v => !v);
+  }
+
+  /** Depth-indented, type-tagged label for an org-unit <mat-option>. */
+  unitOptionLabel(row: FlatOrgUnit): string {
+    // Non-breaking spaces: mat-option collapses ordinary consecutive spaces.
+    const indent = '   '.repeat(Math.max(0, row.depth - 1));
+    const connector = row.depth > 0 ? '• ' : '';
+    const type = UNIT_TYPE_LABELS[row.unit.unit_type];
+    return `${indent}${connector}${row.unit.name} (${type})`;
+  }
+
+  /** Generate a strong password, reveal it, fill both fields, and copy it. */
+  async generatePassword(): Promise<void> {
+    const lower = 'abcdefghijkmnpqrstuvwxyz';
+    const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const digits = '23456789';
+    const symbols = '@#$%&*?!';
+    const all = lower + upper + digits + symbols;
+    const length = 14;
+
+    const pick = (set: string): string => {
+      const buf = new Uint32Array(1);
+      crypto.getRandomValues(buf);
+      return set[buf[0] % set.length];
+    };
+
+    // Guarantee one of each class, then fill the remainder from the full set.
+    const chars = [pick(lower), pick(upper), pick(digits), pick(symbols)];
+    while (chars.length < length) chars.push(pick(all));
+
+    // Fisher–Yates shuffle so the guaranteed chars aren't always in front.
+    for (let i = chars.length - 1; i > 0; i--) {
+      const buf = new Uint32Array(1);
+      crypto.getRandomValues(buf);
+      const j = buf[0] % (i + 1);
+      [chars[i], chars[j]] = [chars[j], chars[i]];
+    }
+    const pwd = chars.join('');
+
+    this.password.set(pwd);
+    this.confirmPassword.set(pwd);
+    this.showPassword.set(true);
+
+    try {
+      await navigator.clipboard.writeText(pwd);
+      this.toast.show('تم توليد كلمة المرور ونسخها — احفظها الآن', 'success');
+    } catch {
+      this.toast.show('تم توليد كلمة المرور (تعذّر النسخ التلقائي، انسخها يدوياً)', 'warning');
+    }
+  }
 
   async ngOnInit(): Promise<void> {
     try {
