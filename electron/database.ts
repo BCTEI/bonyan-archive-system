@@ -155,12 +155,14 @@ interface InMemoryMasterList {
   created_at: number;
 }
 
-<<<<<<< HEAD
 interface InMemoryArchiveSequence {
   id: number;
   year: number;
   last_number: number;
-=======
+  created_at: number;
+  updated_at: number;
+}
+
 interface InMemoryOrgUnit {
   id: number;
   name: string;
@@ -168,7 +170,6 @@ interface InMemoryOrgUnit {
   parent_id: number | null;
   is_active: number;
   created_by: number | null;
->>>>>>> 3b3136ae18bc5ea33852723c975be1b023f7b2f0
   created_at: number;
   updated_at: number;
 }
@@ -188,11 +189,8 @@ interface InMemoryStore {
   password_reset_requests: InMemoryResetRequest[];
   archived_years: InMemoryArchivedYear[];
   master_lists: InMemoryMasterList[];
-<<<<<<< HEAD
   archive_sequences: InMemoryArchiveSequence[];
-=======
   org_units: InMemoryOrgUnit[];
->>>>>>> 3b3136ae18bc5ea33852723c975be1b023f7b2f0
 }
 
 const memoryStore: InMemoryStore = {
@@ -233,11 +231,8 @@ const memoryStore: InMemoryStore = {
     { id: 7, list_type: 'department', name: 'قسم التدريب', name_en: null, is_active: 1, created_at: Date.now() },
     { id: 8, list_type: 'department', name: 'قسم الصيانة', name_en: null, is_active: 1, created_at: Date.now() }
   ],
-<<<<<<< HEAD
-  archive_sequences: []
-=======
+  archive_sequences: [],
   org_units: []
->>>>>>> 3b3136ae18bc5ea33852723c975be1b023f7b2f0
 };
 
 let useMemoryFallback = false;

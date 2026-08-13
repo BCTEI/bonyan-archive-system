@@ -373,16 +373,7 @@ ipcMain.handle('db:run', (_event: IpcMainInvokeEvent, sql: string, params?: unkn
   return run(sql, params);
 });
 
-<<<<<<< HEAD
-=======
-ipcMain.handle('db:getNextRef', (_event: IpcMainInvokeEvent, typeId: number, folderId: number) => {
-  console.log('[Main] Handling db:getNextRef');
-  const user = activeUser();
-  if (!user) throw new Error('يجب تسجيل الدخول');
-  return getNextRef(typeId, folderId);
-});
 
->>>>>>> 3b3136ae18bc5ea33852723c975be1b023f7b2f0
 ipcMain.handle('db:export', () => {
   console.log('[Main] Handling db:export');
   const user = activeUser();
@@ -1088,7 +1079,7 @@ ipcMain.handle('document:getByBarcode', (_event: IpcMainInvokeEvent, barcode: un
     if (rows.length === 0) return { success: false, error: 'لم يتم العثور على وثيقة بهذا الباركود' };
     const doc = rows[0];
     const conf = doc.confidentiality as string;
-    if (!canAccessConfidentiality(user.role, conf)) {
+    if (!canAccessConfidentiality(user, conf, doc.created_by as string | undefined)) {
       return { success: false, error: 'ليس لديك صلاحية الوصول لهذه الوثيقة' };
     }
     return { success: true, document: doc };
@@ -1119,7 +1110,6 @@ ipcMain.handle('document:create', (_event: IpcMainInvokeEvent, doc: Record<strin
     const validationError = validateDocumentInput(doc, true);
     if (validationError) return { success: false, error: validationError };
 
-<<<<<<< HEAD
     const folderId = Number(doc.folder_id);
     if (!Number.isInteger(folderId)) return { success: false, error: 'المجلد غير صالح' };
 
@@ -1128,8 +1118,6 @@ ipcMain.handle('document:create', (_event: IpcMainInvokeEvent, doc: Record<strin
     // be spoofed, or drift out of sequence.
     const { ref_number } = generateArchiveRefNumber(folderId);
 
-    console.log('[Main] Creating document:', ref_number, 'type_id:', doc.type_id, 'confidentiality:', doc.confidentiality);
-=======
     const requestedOrgUnitId = (doc.org_unit_id as number | null | undefined) ?? user.org_unit_id ?? null;
     if (!hasMinRole(user, 'deputy_manager')) {
       const isHead = user.role === 'dept_head' || user.role === 'section_head';
@@ -1145,8 +1133,7 @@ ipcMain.handle('document:create', (_event: IpcMainInvokeEvent, doc: Record<strin
       }
     }
 
-    console.log('[Main] Creating document:', doc.ref_number, 'type_id:', doc.type_id, 'confidentiality:', doc.confidentiality);
->>>>>>> 3b3136ae18bc5ea33852723c975be1b023f7b2f0
+    console.log('[Main] Creating document:', ref_number, 'type_id:', doc.type_id, 'confidentiality:', doc.confidentiality);
 
     const result = run(`
       INSERT INTO documents (
@@ -1176,7 +1163,6 @@ ipcMain.handle('document:create', (_event: IpcMainInvokeEvent, doc: Record<strin
       user.username,
       requestedOrgUnitId
     ]);
-<<<<<<< HEAD
     const id = Number(result.lastInsertRowid);
 
     // Barcode encodes this document's own ref_number verbatim — see
@@ -1184,12 +1170,8 @@ ipcMain.handle('document:create', (_event: IpcMainInvokeEvent, doc: Record<strin
     const barcode = generateDocumentBarcode(ref_number);
     run('UPDATE documents SET barcode = ? WHERE id = ?', [barcode, id]);
 
-    addAudit('إنشاء وثيقة', ref_number, doc.subject as string, user?.username);
+    addAudit('إنشاء وثيقة', ref_number, doc.subject as string, user.username);
     return { success: true, id, ref_number, barcode };
-=======
-    addAudit('إنشاء وثيقة', doc.ref_number as string, doc.subject as string, user.username);
-    return { success: true, id: Number(result.lastInsertRowid) };
->>>>>>> 3b3136ae18bc5ea33852723c975be1b023f7b2f0
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
   }

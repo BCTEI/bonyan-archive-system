@@ -248,7 +248,6 @@ export class PrintService {
       // ignore
     }
 
-<<<<<<< HEAD
     const typeLabel = `${doc.type_icon ?? ''} ${doc.type_label ?? doc.type ?? '—'}`.trim();
     const logoBlock = logoDataUri
       ? `<img src="${logoDataUri}" alt="شعار مركز البنيان">`
@@ -273,26 +272,13 @@ export class PrintService {
     const attachmentSheets = attachments
       .map((att, i) => this.buildAttachmentSheet(att, i, attachments.length, doc, printedAt, printedBy))
       .join('');
-=======
-    const typeLabel = doc.type_label ?? doc.type ?? '—';
-    const typeIcon = doc.type_icon ?? '';
-    const confidentialityEmoji = doc.confidentiality === 'عادي' ? '🟢' : doc.confidentiality === 'سري' ? '🟡' : '🔴';
-    const statusEmoji = doc.status === 'معتمد' ? '✅' : '⏳';
-    const printedAt = new Date().toLocaleString('ar-LY');
-    const baseHref = window.location.origin;
->>>>>>> 3b3136ae18bc5ea33852723c975be1b023f7b2f0
 
     return `
       <!DOCTYPE html>
       <html dir="rtl" lang="ar">
       <head>
         <meta charset="UTF-8">
-<<<<<<< HEAD
         <title>${doc.ref_number} — ${this.escapeHtml(doc.subject)}</title>
-=======
-        <base href="${baseHref}/">
-        <title>تقرير وثيقة - ${doc.ref_number}</title>
->>>>>>> 3b3136ae18bc5ea33852723c975be1b023f7b2f0
         <style>
           :root {
             --navy-deep: #0f2140;
@@ -308,7 +294,6 @@ export class PrintService {
             --stripe: #f4f5f8;
           }
           * { margin: 0; padding: 0; box-sizing: border-box; }
-<<<<<<< HEAD
           html, body { background: #e7e9ee; }
           body {
             direction: rtl;
@@ -521,58 +506,8 @@ export class PrintService {
               <div class="org-name">مركز البنيان لتقنية والصناعات الهندسية</div>
               <div class="system-name">نظام الأرشيف الإلكتروني</div>
               <div class="org-place">مصراتة — ليبيا</div>
-=======
-          body { font-family: 'Tajawal', Arial, sans-serif; font-size: 12pt; line-height: 1.6; color: #1e293b; background: #f1f5f9; }
-          .page { width: 210mm; min-height: 297mm; padding: 20mm; margin: 0 auto; background: white; }
-          .header { text-align: center; border-bottom: 3px solid #1e3a5f; padding-bottom: 15px; margin-bottom: 20px; }
-          .print-logo { width: 120px; max-width: 28%; height: auto; margin-bottom: 12px; }
-          .header h1 { font-size: 18pt; color: #1e3a5f; margin-bottom: 5px; }
-          .header h2 { font-size: 14pt; color: #64748b; font-weight: 400; }
-          .section { border: 1px solid #cbd5e1; border-radius: 8px; padding: 15px; margin-bottom: 15px; }
-          .section-title { font-size: 13pt; font-weight: 700; color: #1e3a5f; margin-bottom: 10px; border-bottom: 2px solid #e2e8f0; padding-bottom: 5px; }
-          .field-row { display: flex; margin-bottom: 8px; }
-          .field-label { font-weight: 700; color: #64748b; width: 140px; }
-          .field-value { flex: 1; font-weight: 600; }
-          .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 10pt; font-weight: 700; }
-          .badge-approved { background: #d1fae5; color: #059669; }
-          .badge-pending { background: #fef3c7; color: #d97706; }
-          .badge-secret { background: #fee2e2; color: #dc2626; }
-          .badge-top-secret { background: #7f1d1d; color: #ffffff; }
-          .badge-normal { background: #d1fae5; color: #059669; }
-          .signature-box { border: 2px dashed #cbd5e1; border-radius: 8px; padding: 15px; text-align: center; min-height: 100px; }
-          .signature-img { max-width: 300px; max-height: 100px; }
-          .attachments-list { list-style: none; padding: 0; }
-          .attachments-list li { padding: 4px 0; border-bottom: 1px solid #e2e8f0; }
-          .attachments-list li:last-child { border-bottom: none; }
-          .qr-code { text-align: center; margin-top: 20px; padding-top: 15px; border-top: 1px dashed #cbd5e1; }
-          .qr-placeholder { width: 120px; height: 120px; border: 1px solid #cbd5e1; border-radius: 8px; display: inline-flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 9pt; }
-          .footer { margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 10px; font-size: 9pt; color: #64748b; text-align: center; }
-          .cut-line { border-top: 1px dashed #cbd5e1; margin: 20px 0; text-align: center; color: #94a3b8; font-size: 9pt; }
-          @media print { body { background: white; } .page { margin: 0; box-shadow: none; width: 100%; } }
-        </style>
-      </head>
-      <body>
-        <div class="page">
-          <div class="header">
-            <img src="assets/images/bonyan-logo.png" alt="شعار مركز البنيان" class="print-logo">
-            <h1>🏛️ مركز البنيان لتقنية والصناعيات الهندسية</h1>
-            <h2>📋 نظام الأرشيف الإلكتروني — مصراتة</h2>
-          </div>
-
-          <div class="section">
-            <div class="section-title">📄 معلومات الوثيقة</div>
-            <div class="field-row">
-              <span class="field-label">الرقم الإشاري:</span>
-              <span class="field-value" style="font-family:monospace;font-size:14pt">${doc.ref_number}</span>
->>>>>>> 3b3136ae18bc5ea33852723c975be1b023f7b2f0
-            </div>
-            <div class="ref-wrap">
-              <div class="ref-label">الرقم الإشاري</div>
-              <div class="ref-badge">${doc.ref_number}</div>
             </div>
           </div>
-
-<<<<<<< HEAD
           <div class="subject-strip">
             <span class="subject-eyebrow">الموضوع</span>
             <span class="subject-value">${this.escapeHtml(doc.subject)}</span>
@@ -596,17 +531,6 @@ export class PrintService {
           <div class="card">
             <div class="card-header"><span>محتوى الوثيقة</span></div>
             <div class="card-body">${contentBody}</div>
-=======
-          <div class="section">
-            <div class="section-title">📋 التفاصيل</div>
-            <div class="field-row"><span class="field-label">📅 التاريخ:</span><span class="field-value">${doc.date}</span></div>
-            <div class="field-row"><span class="field-label">📤 المرسل:</span><span class="field-value">${doc.sender || '—'}</span></div>
-            <div class="field-row"><span class="field-label">📥 المستلم:</span><span class="field-value">${doc.receiver || '—'}</span></div>
-            <div class="field-row"><span class="field-label">📝 الموضوع:</span><span class="field-value">${doc.subject}</span></div>
-            <div class="field-row"><span class="field-label">✍️ المنشئ:</span><span class="field-value">${doc.author || '—'}</span></div>
-            <div class="field-row"><span class="field-label">�️ كاتب الوثيقة:</span><span class="field-value">${doc.writer_name || '—'}</span></div>
-            <div class="field-row"><span class="field-label">�📁 المجلد:</span><span class="field-value">${folderName}</span></div>
->>>>>>> 3b3136ae18bc5ea33852723c975be1b023f7b2f0
           </div>
 
           ${doc.notes ? `

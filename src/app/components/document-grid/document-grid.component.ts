@@ -135,12 +135,9 @@ export class DocumentGridComponent implements OnInit {
     const receiver = this.selectedReceiver();
     const department = this.selectedDepartment();
     const term = this.search().trim().toLowerCase();
-<<<<<<< HEAD
     const subjectTerm = this.subjectSearch().trim().toLowerCase();
     const refSuffix = this.refNumberSearch().trim();
     const refTerm = refSuffix ? (REF_NUMBER_PREFIX + refSuffix).toLowerCase() : '';
-=======
->>>>>>> 3b3136ae18bc5ea33852723c975be1b023f7b2f0
 
     if (typeId !== 'الكل') {
       list = list.filter(d => d.type_id === typeId);
@@ -164,14 +161,6 @@ export class DocumentGridComponent implements OnInit {
       list = list.filter(d => d.sender === department || d.receiver === department);
     }
     if (term) {
-<<<<<<< HEAD
-      list = list.filter(d =>
-        d.subject.toLowerCase().includes(term) ||
-        d.ref_number.toLowerCase().includes(term) ||
-        (d.sender?.toLowerCase().includes(term) ?? false) ||
-        (d.receiver?.toLowerCase().includes(term) ?? false)
-      );
-=======
       list = list.filter(d => {
         const searchable = [
           d.subject,
@@ -187,7 +176,6 @@ export class DocumentGridComponent implements OnInit {
 
         return searchable.some(value => value.toLowerCase().includes(term));
       });
->>>>>>> 3b3136ae18bc5ea33852723c975be1b023f7b2f0
     }
     if (subjectTerm) {
       list = list.filter(d => d.subject.toLowerCase().includes(subjectTerm));
