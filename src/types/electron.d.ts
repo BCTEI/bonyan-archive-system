@@ -130,6 +130,7 @@ export interface ElectronAPI {
 
   annualClosingAPI: {
     getArchivedYears: () => Promise<{ success: boolean; years?: ArchivedYear[]; error?: string }>;
+    getCurrentArchiveYear: () => Promise<{ success: boolean; year?: number; sequence?: number; error?: string }>;
     closeYear: (year: number) => Promise<{ success: boolean; message?: string; error?: string; backupPath?: string }>;
     getArchivedDocuments: (year: number) => Promise<{ success: boolean; documents?: unknown[]; error?: string }>;
     getArchivedDocumentById: (year: number, id: number) => Promise<{ success: boolean; document?: unknown; error?: string }>;

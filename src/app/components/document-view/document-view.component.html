@@ -14,7 +14,9 @@
           {{ doc.confidentiality }}
         </span>
         <span class="px-2.5 py-1 rounded-lg text-xs font-bold text-white"
-              [class.bg-success]="doc.status === 'معتمد'" [class.bg-warning]="doc.status !== 'معتمد'">{{ doc.status }}</span>
+              [class.bg-success]="doc.status === 'معتمد'"
+              [class.bg-warning]="doc.status === 'قيد الاعتماد'"
+              [class.bg-danger]="doc.status === 'موقوف'">{{ doc.status }}</span>
       </div>
       <h2 class="text-lg font-bold text-text leading-snug break-words">{{ doc.subject }}</h2>
     </div>
@@ -37,7 +39,6 @@
     </div>
   </div>
 
-<<<<<<< HEAD
   <div class="doc-view-body">
     <div class="doc-view-main">
       <section class="doc-section">
@@ -65,24 +66,8 @@
           </div>
         </div>
       </section>
-=======
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6 text-sm">
-    <div><span class="font-bold text-primary">الموضوع:</span> {{ doc.subject }}</div>
-    <div><span class="font-bold text-primary">التاريخ:</span> {{ doc.date }}</div>
-    @if (doc.sender) { <div><span class="font-bold text-primary">المرسل:</span> {{ doc.sender }}</div> }
-    @if (doc.receiver) { <div><span class="font-bold text-primary">المستلم:</span> {{ doc.receiver }}</div> }
-    @if (doc.author || doc.writer_name) { <div><span class="font-bold text-primary">المنشئ:</span> {{ doc.author || doc.writer_name }}</div> }
-    @if (doc.writer_name) { <div><span class="font-bold text-primary">اسم كاتب الوثيقة:</span> {{ doc.writer_name }}</div> }
-    @if (doc.input_method) { <div><span class="font-bold text-primary">طريقة الاستلام:</span> {{ inputMethodLabel(doc.input_method) }}</div> }
-    @if (doc.address) { <div><span class="font-bold text-primary">العنوان / الوصف:</span> {{ doc.address }}</div> }
-    @if (doc.content) { <div><span class="font-bold text-primary">المحتوى / الملخص:</span> {{ doc.content }}</div> }
-    @if (doc.body) { <div><span class="font-bold text-primary">المضمون:</span> {{ doc.body }}</div> }
-    <div><span class="font-bold text-primary">المجلد:</span> {{ folder?.name ?? '' }}</div>
-    <div><span class="font-bold text-primary">أنشئ بواسطة:</span> {{ doc.created_by ?? '-' }}</div>
-  </div>
->>>>>>> 3b3136ae18bc5ea33852723c975be1b023f7b2f0
 
-      @if (doc.sender || doc.receiver || doc.author || doc.input_method) {
+      @if (doc.sender || doc.receiver || doc.author || doc.writer_name || doc.input_method) {
         <section class="doc-section">
           <h3 class="doc-section-title">بيانات الأطراف</h3>
           <div class="doc-field-grid">
@@ -92,10 +77,14 @@
                 <span class="doc-field-value">{{ doc.sender }}</span>
               </div>
             }
-            @if (doc.author) {
+            @if (doc.type === 'صادر') {
               <div class="doc-field">
-                <span class="doc-field-label">المؤلف / معد الملف</span>
-                <span class="doc-field-value">{{ doc.author }}</span>
+                <span class="doc-field-label">منشئ الرسالة</span>
+                <span class="doc-field-value">{{ doc.author || 'غير محدد' }}</span>
+              </div>
+              <div class="doc-field">
+                <span class="doc-field-label">معد الرسالة</span>
+                <span class="doc-field-value">{{ doc.writer_name || 'غير محدد' }}</span>
               </div>
             }
             @if (doc.receiver) {

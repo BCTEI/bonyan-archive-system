@@ -38,9 +38,14 @@ export class DocumentService {
     if (!result.success) throw new Error(result.error ?? 'فشل تحديث الوثيقة');
   }
 
-  async delete(id: number): Promise<void> {
+  /**
+   * Non-destructive "delete": the main process marks the document as
+   * suspended (موقوف) instead of removing the row. Archive history,
+   * reference number and attachments are always preserved.
+   */
+  async suspend(id: number): Promise<void> {
     const result = await this.api.documentAPI.delete(id);
-    if (!result.success) throw new Error(result.error ?? 'فشل حذف الوثيقة');
+    if (!result.success) throw new Error(result.error ?? 'فشل إيقاف الوثيقة');
   }
 
   parseAttachments(doc: ArchiveDocument): Attachment[] {

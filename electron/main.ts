@@ -125,6 +125,8 @@ import {
   changeOwnPassword,
   getArchivedYears,
   closeYear,
+  getCurrentArchiveYear,
+  getArchiveSequence,
   getArchivedDocuments,
   getArchivedDocumentById,
   getMasterLists,
@@ -373,16 +375,6 @@ ipcMain.handle('db:run', (_event: IpcMainInvokeEvent, sql: string, params?: unkn
   return run(sql, params);
 });
 
-<<<<<<< HEAD
-=======
-ipcMain.handle('db:getNextRef', (_event: IpcMainInvokeEvent, typeId: number, folderId: number) => {
-  console.log('[Main] Handling db:getNextRef');
-  const user = activeUser();
-  if (!user) throw new Error('يجب تسجيل الدخول');
-  return getNextRef(typeId, folderId);
-});
-
->>>>>>> 3b3136ae18bc5ea33852723c975be1b023f7b2f0
 ipcMain.handle('db:export', () => {
   console.log('[Main] Handling db:export');
   const user = activeUser();
@@ -836,7 +828,7 @@ ipcMain.handle('documentType:delete', (_event: IpcMainInvokeEvent, id: number) =
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Master list handlers (authors, senders, receivers, departments)
+// Master list handlers (message creators, preparers, senders, receivers, departments)
 // ─────────────────────────────────────────────────────────────────────────────
 
 ipcMain.handle('masterList:getAll', (_event: IpcMainInvokeEvent, listType?: string, activeOnly = false) => {
@@ -1088,7 +1080,7 @@ ipcMain.handle('document:getByBarcode', (_event: IpcMainInvokeEvent, barcode: un
     if (rows.length === 0) return { success: false, error: 'لم يتم العثور على وثيقة بهذا الباركود' };
     const doc = rows[0];
     const conf = doc.confidentiality as string;
-    if (!canAccessConfidentiality(user.role, conf)) {
+    if (!canAccessConfidentiality(user, conf, (doc.created_by as string) ?? undefined)) {
       return { success: false, error: 'ليس لديك صلاحية الوصول لهذه الوثيقة' };
     }
     return { success: true, document: doc };
@@ -1101,12 +1093,14 @@ function validateDocumentInput(doc: Record<string, unknown>, isCreate: boolean):
   // ref_number is server-generated on create (see generateArchiveRefNumber) and
   // therefore never required from the client here; on update the existing
   // ref_number simply passes through unchanged.
+  const nonEmpty = (v: unknown): boolean =>
+    typeof v === 'string' ? v.trim().length > 0 : !!v;
   if (!doc.type_id) return 'نوع الملف مطلوب';
   if (!doc.folder_id) return 'المجلد مطلوب';
   if (!doc.date) return 'التاريخ مطلوب';
-  if (!doc.sender) return 'المرسل مطلوب';
-  if (!doc.receiver) return 'المستلم مطلوب';
-  if (!doc.subject) return 'الموضوع مطلوب';
+  if (!nonEmpty(doc.sender)) return 'المرسل مطلوب';
+  if (!nonEmpty(doc.receiver)) return 'المستلم مطلوب';
+  if (!nonEmpty(doc.subject)) return 'الموضوع مطلوب';
   if (!doc.confidentiality) return 'مستوى السرية مطلوب';
   return null;
 }
@@ -1119,17 +1113,9 @@ ipcMain.handle('document:create', (_event: IpcMainInvokeEvent, doc: Record<strin
     const validationError = validateDocumentInput(doc, true);
     if (validationError) return { success: false, error: validationError };
 
-<<<<<<< HEAD
     const folderId = Number(doc.folder_id);
     if (!Number.isInteger(folderId)) return { success: false, error: 'المجلد غير صالح' };
 
-    // Reference number is always generated here, server-side, from the yearly
-    // archive sequence — never trusted from the client — so it can't collide,
-    // be spoofed, or drift out of sequence.
-    const { ref_number } = generateArchiveRefNumber(folderId);
-
-    console.log('[Main] Creating document:', ref_number, 'type_id:', doc.type_id, 'confidentiality:', doc.confidentiality);
-=======
     const requestedOrgUnitId = (doc.org_unit_id as number | null | undefined) ?? user.org_unit_id ?? null;
     if (!hasMinRole(user, 'deputy_manager')) {
       const isHead = user.role === 'dept_head' || user.role === 'section_head';
@@ -1145,14 +1131,18 @@ ipcMain.handle('document:create', (_event: IpcMainInvokeEvent, doc: Record<strin
       }
     }
 
-    console.log('[Main] Creating document:', doc.ref_number, 'type_id:', doc.type_id, 'confidentiality:', doc.confidentiality);
->>>>>>> 3b3136ae18bc5ea33852723c975be1b023f7b2f0
+    // Reference number is always generated here, server-side, from the yearly
+    // archive sequence — never trusted from the client — so it can't collide,
+    // be spoofed, or drift out of sequence.
+    const { ref_number, year: archiveYear } = generateArchiveRefNumber(folderId);
+
+    console.log('[Main] Creating document:', ref_number, 'type_id:', doc.type_id, 'confidentiality:', doc.confidentiality);
 
     const result = run(`
       INSERT INTO documents (
-        ref_number, type_id, folder_id, confidentiality, subject, sender, receiver, author, address, target, content, input_method,
-        date, body, notes, status, signature_base64, attachments_json, created_by, org_unit_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ref_number, type_id, folder_id, confidentiality, subject, sender, receiver, author, writer_name, address, target, content, input_method,
+        date, body, notes, status, signature_base64, attachments_json, created_by, org_unit_id, archive_year
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
       ref_number,
       doc.type_id,
@@ -1174,9 +1164,9 @@ ipcMain.handle('document:create', (_event: IpcMainInvokeEvent, doc: Record<strin
       doc.signature_base64 ?? null,
       doc.attachments_json ?? '[]',
       user.username,
-      requestedOrgUnitId
+      requestedOrgUnitId,
+      archiveYear
     ]);
-<<<<<<< HEAD
     const id = Number(result.lastInsertRowid);
 
     // Barcode encodes this document's own ref_number verbatim — see
@@ -1186,10 +1176,6 @@ ipcMain.handle('document:create', (_event: IpcMainInvokeEvent, doc: Record<strin
 
     addAudit('إنشاء وثيقة', ref_number, doc.subject as string, user?.username);
     return { success: true, id, ref_number, barcode };
-=======
-    addAudit('إنشاء وثيقة', doc.ref_number as string, doc.subject as string, user.username);
-    return { success: true, id: Number(result.lastInsertRowid) };
->>>>>>> 3b3136ae18bc5ea33852723c975be1b023f7b2f0
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
   }
@@ -1204,8 +1190,8 @@ ipcMain.handle('document:update', (_event: IpcMainInvokeEvent, doc: Record<strin
     const validationError = validateDocumentInput(doc, false);
     if (validationError) return { success: false, error: validationError };
 
-    const existingRows = query('SELECT confidentiality, created_by, org_unit_id FROM documents WHERE id = ?', [doc.id]) as
-      Array<{ confidentiality: string; created_by: string | null; org_unit_id: number | null }>;
+    const existingRows = query('SELECT ref_number, confidentiality, created_by, org_unit_id FROM documents WHERE id = ?', [doc.id]) as
+      Array<{ ref_number: string; confidentiality: string; created_by: string | null; org_unit_id: number | null }>;
     if (existingRows.length === 0) return { success: false, error: 'الوثيقة غير موجودة' };
     const existing = existingRows[0];
 
@@ -1231,15 +1217,17 @@ ipcMain.handle('document:update', (_event: IpcMainInvokeEvent, doc: Record<strin
       // employees cannot move a document's org unit; the requested change is ignored.
     }
 
+    // ref_number is immutable once allocated from the yearly archive sequence:
+    // the client-sent value is ignored and the stored one always wins, so an
+    // edit can never rewrite (or collide) a reference number.
     run(`
       UPDATE documents SET
-        ref_number = ?, type_id = ?, folder_id = ?, confidentiality = ?, subject = ?, sender = ?, receiver = ?,
-        author = ?, address = ?, target = ?, content = ?, input_method = ?,
+        type_id = ?, folder_id = ?, confidentiality = ?, subject = ?, sender = ?, receiver = ?,
+        author = ?, writer_name = ?, address = ?, target = ?, content = ?, input_method = ?,
         date = ?, body = ?, notes = ?, status = ?, signature_base64 = ?, attachments_json = ?, org_unit_id = ?,
         updated_at = strftime('%s','now')
       WHERE id = ?
     `, [
-      doc.ref_number,
       doc.type_id,
       doc.folder_id,
       doc.confidentiality ?? 'عادي',
@@ -1261,30 +1249,42 @@ ipcMain.handle('document:update', (_event: IpcMainInvokeEvent, doc: Record<strin
       orgUnitId,
       doc.id
     ]);
-    addAudit('تعديل وثيقة', doc.ref_number as string, doc.subject as string, user.username);
+    addAudit('تعديل وثيقة', existing.ref_number, doc.subject as string, user.username);
     return { success: true };
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
   }
 });
 
+// Archive rule: a registered document is NEVER physically deleted. The old
+// "delete" action is now a non-destructive suspension — the row, its
+// reference number, attachments and metadata all stay in the archive; only
+// the status changes to 'موقوف' so it leaves the active list.
 ipcMain.handle('document:delete', (_event: IpcMainInvokeEvent, id: number) => {
   try {
     const user = activeUser();
-    if (!user) return { success: false, error: 'ليس لديك صلاحية حذف وثيقة' };
+    if (!user) return { success: false, error: 'ليس لديك صلاحية إيقاف وثيقة' };
 
-    const existing = query('SELECT ref_number, subject, confidentiality, created_by, org_unit_id FROM documents WHERE id = ?', [id]) as
-      Array<{ ref_number: string; subject: string; confidentiality: string; created_by: string | null; org_unit_id: number | null }>;
+    const existing = query('SELECT ref_number, subject, status, confidentiality, created_by, org_unit_id FROM documents WHERE id = ?', [id]) as
+      Array<{ ref_number: string; subject: string; status: string; confidentiality: string; created_by: string | null; org_unit_id: number | null }>;
     if (existing.length === 0) return { success: false, error: 'الوثيقة غير موجودة' };
     if (!canTouchDocument(user, existing[0])) {
       return { success: false, error: 'ليس لديك صلاحية الوصول لهذه الوثيقة' };
     }
     if (!canAccessConfidentiality(user, existing[0].confidentiality, existing[0].created_by ?? undefined)) {
-      return { success: false, error: 'ليس لديك صلاحية حذف هذه الوثيقة' };
+      return { success: false, error: 'ليس لديك صلاحية إيقاف هذه الوثيقة' };
     }
 
-    run('DELETE FROM documents WHERE id = ?', [id]);
-    addAudit('حذف وثيقة', existing[0].ref_number, existing[0].subject, user.username);
+    if (existing[0].status === 'موقوف') {
+      return { success: true }; // already suspended — nothing to do
+    }
+    run("UPDATE documents SET status = 'موقوف', updated_at = strftime('%s','now') WHERE id = ?", [id]);
+    addAudit(
+      'إيقاف وثيقة',
+      existing[0].ref_number,
+      `${existing[0].subject} — الحالة السابقة: ${existing[0].status}، الحالة الجديدة: موقوف`,
+      user.username
+    );
     return { success: true };
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
@@ -1496,6 +1496,18 @@ ipcMain.handle('annualClosing:getArchivedYears', () => {
     const user = activeUser();
     if (!hasMinRole(user, 'deputy_manager')) return { success: false, error: 'ليس لديك صلاحية' };
     return { success: true, years: getArchivedYears() };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('annualClosing:getCurrentArchiveYear', () => {
+  try {
+    const user = activeUser();
+    if (!hasMinRole(user, 'deputy_manager')) return { success: false, error: 'ليس لديك صلاحية' };
+    const year = getCurrentArchiveYear();
+    const sequence = getArchiveSequence(year)?.last_number ?? 0;
+    return { success: true, year, sequence };
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
   }

@@ -1,5 +1,10 @@
 export type DocumentTypeName = 'صادر' | 'وارد' | 'مراسلات';
-export type DocumentStatus = 'معتمد' | 'قيد الاعتماد';
+// 'موقوف' (suspended) is the non-destructive end state set by the suspend
+// action (formerly "delete"): the row, its ref number, attachments and
+// metadata all stay in the archive — it is only hidden from the active list.
+export type DocumentStatus = 'معتمد' | 'قيد الاعتماد' | 'موقوف';
+
+export const SUSPENDED_STATUS: DocumentStatus = 'موقوف';
 export type ConfidentialityLevel = 'عادي' | 'سري' | 'سري للغاية';
 
 export interface Attachment {
@@ -57,4 +62,8 @@ export interface ArchiveDocument {
   created_by?: string;
   org_unit_id?: number | null;
   locked?: boolean;
+  // Archive year this document was actually registered under (set server-side
+  // at creation from the active archive year) — the basis annual closing uses
+  // to decide what belongs to a year, independent of the editable `date` field.
+  archive_year?: number;
 }

@@ -13,11 +13,8 @@ import { ArchiveBrowserComponent } from './components/archive-browser/archive-br
 import { ChangePasswordComponent } from './components/change-password/change-password.component';
 import { UserProfileComponent } from './components/user-profile/user-profile.component';
 import { MasterListManagementComponent } from './components/master-list-management/master-list-management.component';
-<<<<<<< HEAD
 import { DocumentBriefViewerComponent } from './components/document-brief-viewer/document-brief-viewer.component';
-=======
 import { OrgUnitManagementComponent } from './components/org-unit-management/org-unit-management.component';
->>>>>>> 3b3136ae18bc5ea33852723c975be1b023f7b2f0
 import { authGuard } from './guards/auth.guard';
 import { adminGuard } from './guards/admin.guard';
 import { permissionGuard } from './guards/permission.guard';

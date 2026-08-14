@@ -28,7 +28,9 @@ export class DocumentCardComponent {
 
   view = output<ArchiveDocument>();
   edit = output<ArchiveDocument>();
-  delete = output<ArchiveDocument>();
+  // Non-destructive: emits the suspend request (status → 'موقوف'); registered
+  // documents are never physically deleted from the archive.
+  suspend = output<ArchiveDocument>();
   print = output<ArchiveDocument>();
   printLabel = output<ArchiveDocument>();
 

@@ -33,7 +33,8 @@ export class MasterListFormComponent {
 
   typeLabel(): string {
     switch (this.listType) {
-      case 'author': return 'مؤلف';
+      case 'author': return 'منشئ الرسالة';
+      case 'preparer': return 'معد الرسالة';
       case 'sender': return 'جهة مرسلة';
       case 'receiver': return 'جهة مستقبلة';
       case 'department': return 'قسم';

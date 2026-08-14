@@ -34,6 +34,7 @@ export class AnnualClosingComponent implements OnInit {
   private router = inject(Router);
 
   currentYear = new Date().getFullYear();
+  currentSequence = signal(0);
   documentCount = signal(0);
   archivedYears = signal<ArchivedYear[]>([]);
   loading = signal(false);
@@ -48,12 +49,14 @@ export class AnnualClosingComponent implements OnInit {
   async loadData(): Promise<void> {
     this.loading.set(true);
     try {
-      const [docs, years] = await Promise.all([
+      const [docs, years, archiveState] = await Promise.all([
         this.documentService.getAll(),
-        this.annualClosingService.getArchivedYears()
+        this.annualClosingService.getArchivedYears(),
+        this.annualClosingService.getCurrentArchiveYear()
       ]);
-      const yearPrefix = String(this.currentYear);
-      const count = docs.filter(d => d.date && d.date.startsWith(yearPrefix)).length;
+      this.currentYear = archiveState.year;
+      this.currentSequence.set(archiveState.sequence);
+      const count = docs.filter(d => d.archive_year === this.currentYear).length;
       this.documentCount.set(count);
       this.archivedYears.set(years);
     } catch (err: unknown) {

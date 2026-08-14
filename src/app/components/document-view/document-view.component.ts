@@ -15,6 +15,7 @@ import { ToastService } from '../../services/toast.service';
 import { BarcodeService } from '../../services/barcode.service';
 import { HasPermissionDirective } from '../../directives/has-permission.directive';
 import { DocumentFormComponent } from '../document-form/document-form.component';
+import { AttachmentPreviewComponent } from '../attachment-preview/attachment-preview.component';
 
 @Component({
   selector: 'app-document-view',
@@ -83,11 +84,12 @@ export class DocumentViewComponent implements OnInit, AfterViewInit {
     });
   }
 
-  async openAttachment(att: Attachment): Promise<void> {
-    const result = await window.electronAPI.openAttachment(att.base64, att.name, att.ext);
-    if (!result.success) {
-      console.error(result.message);
-    }
+  openAttachment(att: Attachment): void {
+    this.dialog.open(AttachmentPreviewComponent, {
+      width: '960px',
+      maxWidth: '95vw',
+      data: { attachment: att, refNumber: this.doc.ref_number }
+    });
   }
 
   async handlePrint(): Promise<void> {

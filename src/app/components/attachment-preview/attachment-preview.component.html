@@ -1,0 +1,64 @@
+<div class="preview-dialog" dir="rtl">
+  <div class="preview-header">
+    <div class="preview-title">
+      <mat-icon>description</mat-icon>
+      <div class="preview-title-text">
+        <span class="preview-name">{{ attachment.name }}.{{ attachment.ext }}</span>
+        @if (data.refNumber) {
+          <span class="preview-sub">تابع للرقم الإشاري: {{ data.refNumber }}</span>
+        }
+      </div>
+    </div>
+    <div class="preview-actions">
+      <button mat-icon-button (click)="openExternally()" title="فتح الملف خارجيًا">
+        <mat-icon>open_in_new</mat-icon>
+      </button>
+      <button mat-icon-button (click)="close()" title="إغلاق">
+        <mat-icon>close</mat-icon>
+      </button>
+    </div>
+  </div>
+
+  <div class="preview-body">
+    @switch (kind) {
+      @case ('pdf') {
+        <iframe class="pdf-frame" [src]="pdfUrl" title="معاينة PDF"></iframe>
+      }
+      @case ('image') {
+        <div class="image-frame">
+          <img [src]="imageUrl" [alt]="attachment.name">
+        </div>
+      }
+      @case ('docx') {
+        @if (loading()) {
+          <div class="preview-loading">
+            <mat-spinner diameter="36"></mat-spinner>
+            <p>جارٍ تحويل المستند للمعاينة...</p>
+          </div>
+        } @else if (docxHtml) {
+          <div class="docx-frame">
+            <div class="docx-content" [innerHTML]="docxHtml"></div>
+          </div>
+        }
+      }
+      @default {
+        <div class="preview-fallback">
+          <mat-icon class="fallback-icon">insert_drive_file</mat-icon>
+          <p class="fallback-name">{{ attachment.name }}.{{ attachment.ext }}</p>
+          <p class="fallback-meta">{{ attachment.ext.toUpperCase() }} — {{ formatSize(attachment.size) }}</p>
+          <p class="fallback-note">
+            @if (conversionFailed()) {
+              تعذر تحويل هذا الملف لمعاينته داخل النظام. يمكنك فتحه بالبرنامج المناسب على جهازك.
+            } @else {
+              هذا النوع من الملفات لا يمكن معاينته مباشرة داخل النظام. يمكنك فتحه بالبرنامج المناسب على جهازك.
+            }
+          </p>
+          <button mat-flat-button color="primary" (click)="openExternally()">
+            <mat-icon>open_in_new</mat-icon>
+            فتح الملف
+          </button>
+        </div>
+      }
+    }
+  </div>
+</div>

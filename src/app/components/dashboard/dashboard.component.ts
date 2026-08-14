@@ -41,7 +41,7 @@ export class DashboardComponent implements AfterViewInit {
 
   stats = signal<{ total: number; [key: string]: number }>({ total: 0 });
   documentTypes = signal<DocumentTypeEntry[]>([]);
-  masterLists = signal<Record<MasterListType, MasterListEntry[]>>({ author: [], sender: [], receiver: [], department: [] });
+  masterLists = signal<Record<MasterListType, MasterListEntry[]>>({ author: [], preparer: [], sender: [], receiver: [], department: [] });
   recentAudit = signal<AuditEntry[]>([]);
   todaySessions = signal<UserSession[]>([]);
   recentDocuments = signal<ArchiveDocument[]>([]);
@@ -50,7 +50,8 @@ export class DashboardComponent implements AfterViewInit {
   chartDimension = signal<'type' | MasterListType>('type');
   chartDimensions: { value: 'type' | MasterListType; label: string }[] = [
     { value: 'type', label: 'حسب نوع الوثيقة' },
-    { value: 'author', label: 'حسب المؤلف' },
+    { value: 'author', label: 'حسب منشئ الرسالة' },
+    { value: 'preparer', label: 'حسب معد الرسالة' },
     { value: 'sender', label: 'حسب المرسل' },
     { value: 'receiver', label: 'حسب المستلم' },
     { value: 'department', label: 'حسب القسم / الجهة' }
@@ -83,15 +84,16 @@ export class DashboardComponent implements AfterViewInit {
 
   async loadMasterLists(): Promise<void> {
     try {
-      const [author, sender, receiver, department] = await Promise.all([
+      const [author, preparer, sender, receiver, department] = await Promise.all([
         this.masterListService.getAll('author', true),
+        this.masterListService.getAll('preparer', true),
         this.masterListService.getAll('sender', true),
         this.masterListService.getAll('receiver', true),
         this.masterListService.getAll('department', true)
       ]);
-      this.masterLists.set({ author, sender, receiver, department });
+      this.masterLists.set({ author, preparer, sender, receiver, department });
     } catch {
-      this.masterLists.set({ author: [], sender: [], receiver: [], department: [] });
+      this.masterLists.set({ author: [], preparer: [], sender: [], receiver: [], department: [] });
     }
   }
 
@@ -156,7 +158,9 @@ export class DashboardComponent implements AfterViewInit {
     for (const doc of docs) {
       const raw = dimension === 'department'
         ? (doc.sender || doc.receiver || 'غير محدد')
-        : (doc[dimension] || 'غير محدد');
+        : dimension === 'preparer'
+          ? (doc.writer_name || 'غير محدد')
+          : (doc[dimension] || 'غير محدد');
       const key = raw.trim() || 'غير محدد';
       counts.set(key, (counts.get(key) ?? 0) + 1);
     }

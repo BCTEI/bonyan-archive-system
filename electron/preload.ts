@@ -91,6 +91,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   annualClosingAPI: {
     getArchivedYears: () => ipcRenderer.invoke('annualClosing:getArchivedYears'),
+    getCurrentArchiveYear: () => ipcRenderer.invoke('annualClosing:getCurrentArchiveYear'),
     closeYear: (year: number) => ipcRenderer.invoke('annualClosing:closeYear', year),
     getArchivedDocuments: (year: number) => ipcRenderer.invoke('annualClosing:getArchivedDocuments', year),
     getArchivedDocumentById: (year: number, id: number) => ipcRenderer.invoke('annualClosing:getArchivedDocumentById', year, id),
