@@ -559,6 +559,7 @@ export class PrintService {
               <div class="org-name">مركز البنيان لتقنية والصناعات الهندسية</div>
               <div class="system-name">نظام الأرشيف الإلكتروني</div>
               <div class="org-place">مصراتة — ليبيا</div>
+<<<<<<< HEAD
             </div>
             <div class="ref-wrap">
               <div class="ref-label">الرقم الإشاري</div>
@@ -566,6 +567,10 @@ export class PrintService {
             </div>
           </div>
 
+=======
+            </div>
+          </div>
+>>>>>>> 34f7b21f5b35a8c45089ea5b89eb73571562b5a5
           <div class="subject-strip">
             <span class="subject-eyebrow">الموضوع</span>
             <span class="subject-value">${this.escapeHtml(doc.subject)}</span>

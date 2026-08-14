@@ -6,7 +6,7 @@
   <div class="space-y-4 min-w-[320px]">
     <mat-form-field class="w-full" appearance="outline">
       <mat-label>اسم المستخدم *</mat-label>
-      <input matInput [(ngModel)]="username" [disabled]="isEdit" autocomplete="off">
+      <input matInput [(ngModel)]="username" [disabled]="isEdit" autocomplete="off" placeholder="اسم المستخدم">
       <mat-hint>3-20 حرف، أحرف إنجليزية وأرقام وشرطة سفلية</mat-hint>
       @if (errors()['username']) {
         <mat-error>{{ errors()['username'] }}</mat-error>
@@ -15,13 +15,23 @@
 
     <mat-form-field class="w-full" appearance="outline">
       <mat-label>الاسم الكامل</mat-label>
-      <input matInput [(ngModel)]="fullName" autocomplete="off">
+      <input matInput [(ngModel)]="fullName" autocomplete="off" placeholder="الاسم الكامل">
     </mat-form-field>
 
     <mat-form-field class="w-full" appearance="outline">
       <mat-label>كلمة المرور {{ isEdit ? '' : '*' }}</mat-label>
-      <input matInput type="password" [(ngModel)]="password" autocomplete="new-password">
-      <mat-hint>{{ isEdit ? 'اتركها فارغة إذا لا تريد التغيير' : '6 أحرف على الأقل' }}</mat-hint>
+      <input matInput [type]="showPassword() ? 'text' : 'password'"
+             [(ngModel)]="password" autocomplete="new-password" placeholder="كلمة المرور">
+      <button matSuffix mat-icon-button type="button"
+              (click)="toggleShowPassword()"
+              [attr.aria-label]="showPassword() ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'">
+        <mat-icon>{{ showPassword() ? 'visibility_off' : 'visibility' }}</mat-icon>
+      </button>
+      <button matSuffix mat-icon-button type="button"
+              (click)="generatePassword()" aria-label="توليد كلمة مرور قوية">
+        <mat-icon>casino</mat-icon>
+      </button>
+      <mat-hint>{{ isEdit ? 'اتركها فارغة إذا لا تريد التغيير' : '6 أحرف على الأقل — أو استخدم زر التوليد' }}</mat-hint>
       @if (errors()['password']) {
         <mat-error>{{ errors()['password'] }}</mat-error>
       }
@@ -29,7 +39,8 @@
 
     <mat-form-field class="w-full" appearance="outline">
       <mat-label>تأكيد كلمة المرور</mat-label>
-      <input matInput type="password" [(ngModel)]="confirmPassword" autocomplete="new-password">
+      <input matInput [type]="showPassword() ? 'text' : 'password'"
+             [(ngModel)]="confirmPassword" autocomplete="new-password" placeholder="تأكيد كلمة المرور">
     </mat-form-field>
 
     <mat-form-field class="w-full" appearance="outline">
@@ -45,15 +56,14 @@
     </mat-form-field>
 
     <mat-form-field class="w-full" appearance="outline">
-      <mat-label>الوحدة التنظيمية</mat-label>
+      <mat-label>الإدارة / القسم</mat-label>
       <mat-select [(ngModel)]="orgUnitId">
         <mat-option [value]="NO_ORG_UNIT_VALUE">بدون وحدة</mat-option>
         @for (row of orgUnitOptions(); track row.unit.id) {
-          <mat-option [value]="row.unit.id">
-            {{ '— '.repeat(row.depth) }}{{ row.unit.name }}
-          </mat-option>
+          <mat-option [value]="row.unit.id">{{ unitOptionLabel(row) }}</mat-option>
         }
       </mat-select>
+      <mat-hint>المسافة البادئة تدل على تبعية القسم للإدارة</mat-hint>
     </mat-form-field>
 
     <div class="flex items-center justify-between">

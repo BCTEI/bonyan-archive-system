@@ -375,6 +375,10 @@ ipcMain.handle('db:run', (_event: IpcMainInvokeEvent, sql: string, params?: unkn
   return run(sql, params);
 });
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 34f7b21f5b35a8c45089ea5b89eb73571562b5a5
 ipcMain.handle('db:export', () => {
   console.log('[Main] Handling db:export');
   const user = activeUser();
@@ -1080,7 +1084,11 @@ ipcMain.handle('document:getByBarcode', (_event: IpcMainInvokeEvent, barcode: un
     if (rows.length === 0) return { success: false, error: 'لم يتم العثور على وثيقة بهذا الباركود' };
     const doc = rows[0];
     const conf = doc.confidentiality as string;
+<<<<<<< HEAD
     if (!canAccessConfidentiality(user, conf, (doc.created_by as string) ?? undefined)) {
+=======
+    if (!canAccessConfidentiality(user, conf, doc.created_by as string | undefined)) {
+>>>>>>> 34f7b21f5b35a8c45089ea5b89eb73571562b5a5
       return { success: false, error: 'ليس لديك صلاحية الوصول لهذه الوثيقة' };
     }
     return { success: true, document: doc };
@@ -1116,6 +1124,14 @@ ipcMain.handle('document:create', (_event: IpcMainInvokeEvent, doc: Record<strin
     const folderId = Number(doc.folder_id);
     if (!Number.isInteger(folderId)) return { success: false, error: 'المجلد غير صالح' };
 
+<<<<<<< HEAD
+=======
+    // Reference number is always generated here, server-side, from the yearly
+    // archive sequence — never trusted from the client — so it can't collide,
+    // be spoofed, or drift out of sequence.
+    const { ref_number } = generateArchiveRefNumber(folderId);
+
+>>>>>>> 34f7b21f5b35a8c45089ea5b89eb73571562b5a5
     const requestedOrgUnitId = (doc.org_unit_id as number | null | undefined) ?? user.org_unit_id ?? null;
     if (!hasMinRole(user, 'deputy_manager')) {
       const isHead = user.role === 'dept_head' || user.role === 'section_head';
@@ -1131,11 +1147,14 @@ ipcMain.handle('document:create', (_event: IpcMainInvokeEvent, doc: Record<strin
       }
     }
 
+<<<<<<< HEAD
     // Reference number is always generated here, server-side, from the yearly
     // archive sequence — never trusted from the client — so it can't collide,
     // be spoofed, or drift out of sequence.
     const { ref_number, year: archiveYear } = generateArchiveRefNumber(folderId);
 
+=======
+>>>>>>> 34f7b21f5b35a8c45089ea5b89eb73571562b5a5
     console.log('[Main] Creating document:', ref_number, 'type_id:', doc.type_id, 'confidentiality:', doc.confidentiality);
 
     const result = run(`
@@ -1174,7 +1193,7 @@ ipcMain.handle('document:create', (_event: IpcMainInvokeEvent, doc: Record<strin
     const barcode = generateDocumentBarcode(ref_number);
     run('UPDATE documents SET barcode = ? WHERE id = ?', [barcode, id]);
 
-    addAudit('إنشاء وثيقة', ref_number, doc.subject as string, user?.username);
+    addAudit('إنشاء وثيقة', ref_number, doc.subject as string, user.username);
     return { success: true, id, ref_number, barcode };
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
