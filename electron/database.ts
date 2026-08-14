@@ -191,10 +191,7 @@ interface InMemoryStore {
   master_lists: InMemoryMasterList[];
   archive_sequences: InMemoryArchiveSequence[];
   org_units: InMemoryOrgUnit[];
-<<<<<<< HEAD
   current_archive_year: number | null;
-=======
->>>>>>> 34f7b21f5b35a8c45089ea5b89eb73571562b5a5
 }
 
 const memoryStore: InMemoryStore = {
@@ -236,12 +233,8 @@ const memoryStore: InMemoryStore = {
     { id: 8, list_type: 'department', name: 'قسم الصيانة', name_en: null, is_active: 1, created_at: Date.now() }
   ],
   archive_sequences: [],
-<<<<<<< HEAD
   org_units: [],
   current_archive_year: null
-=======
-  org_units: []
->>>>>>> 34f7b21f5b35a8c45089ea5b89eb73571562b5a5
 };
 
 let useMemoryFallback = false;
