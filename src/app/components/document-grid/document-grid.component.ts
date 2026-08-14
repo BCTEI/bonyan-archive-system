@@ -260,6 +260,10 @@ export class DocumentGridComponent implements OnInit {
   }
 
   async onDelete(doc: ArchiveDocument): Promise<void> {
+    // Verify access first for "سري للغاية" (and "سري") documents.
+    const verified = await this.documentAccess.verifyAccess(doc, 'delete');
+    if (!verified) return;
+
     if (!confirm('هل أنت متأكد من حذف الوثيقة؟')) return;
     await this.documentService.delete(doc.id!);
     await this.auditService.log('حذف', doc.ref_number, doc.subject);
@@ -267,11 +271,14 @@ export class DocumentGridComponent implements OnInit {
     this.toast.show('تم حذف الوثيقة', 'success');
   }
 
-  onPrint(doc: ArchiveDocument): void {
+  async onPrint(doc: ArchiveDocument): Promise<void> {
+    // Verify access first for "سري للغاية" (and "سري") documents.
+    const verified = await this.documentAccess.verifyAccess(doc, 'print');
+    if (!verified) return;
     this.dialog.open(DocumentViewComponent, {
       width: '850px',
       maxWidth: '95vw',
-      data: { doc, folder: this.folders().find(f => f.id === doc.folder_id), print: true }
+      data: { doc, folder: this.folders().find(f => f.id === doc.folder_id), print: true, verified: true }
     });
   }
 

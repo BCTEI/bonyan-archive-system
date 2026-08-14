@@ -9,10 +9,11 @@ import { MatInputModule } from '@angular/material/input';
 import { ArchiveDocument } from '../../models/document.model';
 import { SecurityService } from '../../services/security.service';
 import { AuthService } from '../../services/auth.service';
+import { DocumentAction } from '../../services/document-access.service';
 
 interface SecurityModalData {
   doc: ArchiveDocument;
-  accessType: 'view' | 'edit';
+  action: DocumentAction;
 }
 
 const LOCKOUT_DURATION_MS = 5 * 60 * 1000;
@@ -40,7 +41,7 @@ export class SecurityModalComponent implements OnInit {
   private authService = inject(AuthService);
 
   doc = this.data.doc;
-  accessType = this.data.accessType;
+  action = this.data.action;
 
   step = signal<'password' | 'code'>('password');
   password = signal('');
@@ -52,6 +53,26 @@ export class SecurityModalComponent implements OnInit {
 
   private failedAttempts = 0;
   private firstFailureTime: number | null = null;
+
+  get actionTitle(): string {
+    switch (this.action) {
+      case 'edit': return 'تعديل الوثيقة';
+      case 'print': return 'طباعة الوثيقة';
+      case 'delete': return 'حذف الوثيقة';
+      case 'view': return 'عرض الوثيقة';
+      default: return 'الوصول إلى الوثيقة';
+    }
+  }
+
+  get actionIcon(): string {
+    switch (this.action) {
+      case 'edit': return '✏️';
+      case 'print': return '🖨️';
+      case 'delete': return '🗑️';
+      case 'view': return '👁️';
+      default: return '🔐';
+    }
+  }
 
   async ngOnInit(): Promise<void> {
     if (this.doc.confidentiality === 'عادي') {
@@ -93,7 +114,7 @@ export class SecurityModalComponent implements OnInit {
           this.step.set('code');
           this.password.set('');
         } else {
-          await this.securityService.logAccess(this.doc.id!, this.accessType, 'سري', 'password');
+          await this.logAccess('password');
           this.dialogRef.close({ verified: true, method: 'password' });
         }
       } else {
@@ -120,7 +141,7 @@ export class SecurityModalComponent implements OnInit {
     try {
       const valid = await this.securityService.verifyCode(codeValue);
       if (valid) {
-        await this.securityService.logAccess(this.doc.id!, this.accessType, 'سري للغاية', 'password+code');
+        await this.logAccess('password+code');
         this.dialogRef.close({ verified: true, method: 'password+code' });
       } else {
         this.errorMessage.set('رمز التحقق غير صحيح');
@@ -131,6 +152,17 @@ export class SecurityModalComponent implements OnInit {
     } finally {
       this.loading.set(false);
     }
+  }
+
+  private async logAccess(method: string): Promise<void> {
+    const accessType = this.normalizeAccessType(this.action);
+    await this.securityService.logAccess(this.doc.id!, accessType, this.doc.confidentiality, method);
+  }
+
+  private normalizeAccessType(action: DocumentAction): 'view' | 'edit' {
+    // The database access log only supports 'view' and 'edit'.
+    // Map print/delete to 'edit' since they are modification-type actions.
+    return action === 'view' ? 'view' : 'edit';
   }
 
   private handleFailedAttempt(message: string): void {

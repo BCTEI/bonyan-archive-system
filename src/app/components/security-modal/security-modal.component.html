@@ -3,11 +3,10 @@
     <h2 class="text-xl font-bold flex items-center gap-2"
         [class.text-warning]="doc.confidentiality === 'سري'"
         [class.text-danger]="doc.confidentiality === 'سري للغاية'">
-      @if (doc.confidentiality === 'سري للغاية') { 🔴 } @else { 🔒 }
       @if (doc.confidentiality === 'سري للغاية') {
-        وثيقة سرية للغاية
+        🔴 {{ actionIcon }} {{ actionTitle }} — وثيقة سرية للغاية
       } @else {
-        وثيقة سرية
+        🔒 {{ actionIcon }} {{ actionTitle }} — وثيقة سرية
       }
     </h2>
     <button mat-icon-button (click)="close()" aria-label="إغلاق">
@@ -25,7 +24,7 @@
         @if (doc.confidentiality === 'سري للغاية') {
           <strong>الخطوة 1:</strong> أدخل <strong>كلمة مرور حسابك</strong> للمتابعة.
         } @else {
-          أدخل <strong>كلمة مرور حسابك</strong> لفتح الوثيقة.
+          أدخل <strong>كلمة مرور حسابك</strong>.
         }
       </p>
     } @else {
@@ -62,7 +61,7 @@
           @if (doc.confidentiality === 'سري للغاية') {
             التالي
           } @else {
-            🔓 فتح الوثيقة
+            ✔ تأكيد
           }
         }
       </button>
@@ -79,7 +78,7 @@
         @if (loading()) {
           جاري التحقق...
         } @else {
-          🔓 فتح الوثيقة
+          ✔ تأكيد
         }
       </button>
     </div>
