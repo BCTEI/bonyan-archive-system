@@ -155,6 +155,14 @@ interface InMemoryMasterList {
   created_at: number;
 }
 
+interface InMemoryArchiveSequence {
+  id: number;
+  year: number;
+  last_number: number;
+  created_at: number;
+  updated_at: number;
+}
+
 interface InMemoryOrgUnit {
   id: number;
   name: string;
@@ -181,7 +189,9 @@ interface InMemoryStore {
   password_reset_requests: InMemoryResetRequest[];
   archived_years: InMemoryArchivedYear[];
   master_lists: InMemoryMasterList[];
+  archive_sequences: InMemoryArchiveSequence[];
   org_units: InMemoryOrgUnit[];
+  current_archive_year: number | null;
 }
 
 const memoryStore: InMemoryStore = {
@@ -222,7 +232,9 @@ const memoryStore: InMemoryStore = {
     { id: 7, list_type: 'department', name: 'قسم التدريب', name_en: null, is_active: 1, created_at: Date.now() },
     { id: 8, list_type: 'department', name: 'قسم الصيانة', name_en: null, is_active: 1, created_at: Date.now() }
   ],
-  org_units: []
+  archive_sequences: [],
+  org_units: [],
+  current_archive_year: null
 };
 
 let useMemoryFallback = false;
@@ -250,6 +262,9 @@ export function initDb(): { success: boolean; error?: string } {
 
     db = new Database(dbPath);
     console.log('[Database] SQLite connection established');
+    // Wait for the write lock instead of failing immediately with SQLITE_BUSY
+    // if this file is ever touched concurrently (extra window, external tool).
+    db.pragma('busy_timeout = 5000');
 
     db.exec(`
       CREATE TABLE IF NOT EXISTS users (
@@ -346,6 +361,29 @@ export function initDb(): { success: boolean; error?: string } {
       CREATE TABLE IF NOT EXISTS counters (
         key TEXT PRIMARY KEY,
         value INTEGER NOT NULL DEFAULT 0
+      );
+
+      -- One row per calendar year. last_number only ever increments (via
+      -- getNextArchiveSequenceNumber's transaction below); it is never derived
+      -- from COUNT(*) on documents, so deleting a document never frees its
+      -- number back up for reuse.
+      CREATE TABLE IF NOT EXISTS archive_sequences (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        year INTEGER NOT NULL UNIQUE,
+        last_number INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER DEFAULT (strftime('%s','now')),
+        updated_at INTEGER DEFAULT (strftime('%s','now'))
+      );
+
+      -- Single row (id=1) holding the archive year currently open for new
+      -- documents. Decouples ref-number generation from the OS clock, so
+      -- closeYear() can advance it immediately instead of waiting for the
+      -- real calendar to roll over. NULL (or missing row) means "not set
+      -- yet" — callers fall back to the OS calendar year, so pre-existing
+      -- databases behave exactly as before until a year is first closed.
+      CREATE TABLE IF NOT EXISTS app_state (
+        id INTEGER PRIMARY KEY CHECK (id = 1),
+        current_archive_year INTEGER
       );
 
       CREATE TABLE IF NOT EXISTS audit_log (
@@ -460,9 +498,12 @@ export function initDb(): { success: boolean; error?: string } {
     migrateDocumentTypeId();
     migrateFolderSystemFlags();
     migrateDocumentConfidentiality();
+    migrateDocumentBarcode();
     seedMasterLists();
+    migrateMasterListsPreparerType();
     createPostMigrationIndexes();
     migrateDocumentsOrgUnit();
+    migrateDocumentsArchiveYear();
 
     return { success: true };
   } catch (err: unknown) {
@@ -527,6 +568,38 @@ function seedMasterLists(): void {
   });
   tx();
   console.log('[Database] Seeded master lists');
+}
+
+// Widens master_lists.list_type's CHECK constraint to allow 'preparer' (معد الرسالة)
+// alongside the original author/sender/receiver/department values. SQLite can't
+// ALTER a CHECK constraint in place, so this rebuilds the table under a transaction:
+// rename → recreate with the wider CHECK → copy all rows → drop the renamed copy.
+// Guarded by inspecting sqlite_master so it only runs once, and is a no-op (including
+// on the in-memory fallback, which never enforces this constraint) once already applied.
+function migrateMasterListsPreparerType(): void {
+  if (!db || useMemoryFallback) return;
+  const tableSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'master_lists'").get() as { sql: string } | undefined;
+  if (!tableSql || tableSql.sql.includes('preparer')) return;
+
+  const tx = db.transaction(() => {
+    db!.exec('ALTER TABLE master_lists RENAME TO master_lists_old');
+    db!.exec(`
+      CREATE TABLE master_lists (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        list_type TEXT NOT NULL CHECK(list_type IN ('author', 'sender', 'receiver', 'department', 'preparer')),
+        name TEXT NOT NULL,
+        name_en TEXT,
+        is_active INTEGER DEFAULT 1,
+        created_at INTEGER DEFAULT (strftime('%s','now'))
+      )
+    `);
+    db!.exec('INSERT INTO master_lists (id, list_type, name, name_en, is_active, created_at) SELECT id, list_type, name, name_en, is_active, created_at FROM master_lists_old');
+    db!.exec('DROP TABLE master_lists_old');
+    db!.exec('CREATE INDEX IF NOT EXISTS idx_master_lists_type ON master_lists(list_type)');
+    db!.exec('CREATE INDEX IF NOT EXISTS idx_master_lists_name ON master_lists(name)');
+  });
+  tx();
+  console.log('[Database] Widened master_lists.list_type to allow preparer');
 }
 
 function migrateDocumentTypeId(): void {
@@ -658,8 +731,47 @@ function createPostMigrationIndexes(): void {
     if (names.has('confidentiality')) {
       db.exec('CREATE INDEX IF NOT EXISTS idx_documents_confidentiality ON documents(confidentiality)');
     }
+    if (names.has('subject')) {
+      db.exec('CREATE INDEX IF NOT EXISTS idx_documents_subject ON documents(subject)');
+    }
   } catch (err) {
     console.warn('[Database] Failed to create post-migration indexes:', err instanceof Error ? err.message : err);
+  }
+}
+
+// Adds documents.barcode (idempotent) and (re)syncs it from each row's own
+// ref_number so every document's barcode always matches its reference number
+// — this also repairs rows whose barcode was stamped by an older scheme.
+function migrateDocumentBarcode(): void {
+  if (!db || useMemoryFallback) return;
+  const columns = db.prepare("PRAGMA table_info(documents)").all() as Array<{ name: string }>;
+  if (!columns.some(c => c.name === 'barcode')) {
+    try {
+      db.exec('ALTER TABLE documents ADD COLUMN barcode TEXT');
+      console.log('[Database] Added documents.barcode column');
+    } catch (err) {
+      console.warn('[Database] Failed to add barcode column:', err instanceof Error ? err.message : err);
+      return;
+    }
+  }
+
+  const rows = db.prepare('SELECT id, ref_number, barcode FROM documents').all() as Array<{ id: number; ref_number: string; barcode: string | null }>;
+  const stale = rows.filter(row => row.ref_number && generateDocumentBarcode(row.ref_number) !== row.barcode);
+  if (stale.length > 0) {
+    const update = db.prepare('UPDATE documents SET barcode = ? WHERE id = ?');
+    const tx = db.transaction((items: typeof stale) => {
+      for (const row of items) {
+        update.run(generateDocumentBarcode(row.ref_number), row.id);
+      }
+    });
+    tx(stale);
+    console.log('[Database] Synced barcode for', stale.length, 'document(s)');
+  }
+
+  try {
+    db.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_barcode ON documents(barcode)');
+  } catch (err) {
+    console.warn('[Database] Failed to create barcode index:', err instanceof Error ? err.message : err);
   }
 }
 
@@ -751,6 +863,15 @@ function migrateRolesV2(): void {
     console.error('[Database] Failed to back up database before roles-v2 migration:', err instanceof Error ? err.message : err);
   }
 
+  // Disable foreign keys for the duration of the table rebuild. This
+  // better-sqlite3 build enables foreign_keys by default, so `DROP TABLE users`
+  // performs an implicit DELETE of every row, which violates child tables that
+  // reference users(id) without ON DELETE CASCADE (user_folder_permissions,
+  // password_reset_requests, ...) and raises "FOREIGN KEY constraint failed".
+  // PRAGMA foreign_keys is a silent no-op inside a transaction, so it must be
+  // toggled outside — this is SQLite's official table-rebuild recipe.
+  const fkWasOn = db.pragma('foreign_keys', { simple: true }) === 1;
+  if (fkWasOn) db.pragma('foreign_keys = OFF');
   try {
     const tx = db.transaction(() => {
       db!.exec(`
@@ -767,10 +888,14 @@ function migrateRolesV2(): void {
           updated_at INTEGER DEFAULT (strftime('%s','now'))
         );
       `);
+      // Preserve already-valid 5-role values (idempotent re-runs, and recovery
+      // from a half-applied migration where seedAdmin already stamped a new
+      // role); map the legacy admin/editor/viewer model otherwise.
       db!.exec(`
         INSERT INTO users_v2 (id, username, password_hash, full_name, role, org_unit_id, is_active, created_at, updated_at)
         SELECT id, username, password_hash, full_name,
           CASE
+            WHEN role IN ('general_manager','deputy_manager','dept_head','section_head','employee') THEN role
             WHEN role = 'admin' AND id = (SELECT MIN(id) FROM users WHERE role = 'admin') THEN 'general_manager'
             WHEN role = 'admin' THEN 'deputy_manager'
             ELSE 'employee'
@@ -785,6 +910,8 @@ function migrateRolesV2(): void {
     console.log('[Database] Migrated users table to 5-role hierarchy schema (roles v2)');
   } catch (err) {
     console.error('[Database] Failed to migrate users table to roles v2:', err instanceof Error ? err.message : err);
+  } finally {
+    if (fkWasOn) db.pragma('foreign_keys = ON');
   }
 }
 
@@ -803,6 +930,42 @@ function migrateDocumentsOrgUnit(): void {
     db.exec('CREATE INDEX IF NOT EXISTS idx_documents_org_unit ON documents(org_unit_id)');
   } catch (err) {
     console.warn('[Database] Failed to create idx_documents_org_unit index:', err instanceof Error ? err.message : err);
+  }
+}
+
+// Ties each document to the archive year it was actually registered under
+// (i.e. whatever generateArchiveRefNumber resolved current_archive_year to at
+// create time), independent of the free-text `date` field the user enters
+// (a letter's own date, which can be arbitrary/past). closeYear() uses this
+// column — not `date` — to decide what belongs to a given archive year, so
+// closing is deterministic and can't be fooled by an unrelated date value.
+// Pre-existing rows never had this written at creation time, so they're
+// backfilled from `date` (the same signal closeYear() used before this
+// migration), preserving prior behavior for historical documents.
+function migrateDocumentsArchiveYear(): void {
+  if (!db || useMemoryFallback) return;
+  const columns = db.prepare("PRAGMA table_info(documents)").all() as Array<{ name: string }>;
+  if (!columns.some(c => c.name === 'archive_year')) {
+    try {
+      db.exec('ALTER TABLE documents ADD COLUMN archive_year INTEGER');
+      console.log('[Database] Added documents.archive_year column');
+    } catch (err) {
+      console.warn('[Database] Failed to add documents.archive_year column:', err instanceof Error ? err.message : err);
+    }
+  }
+  try {
+    db.exec(`
+      UPDATE documents
+      SET archive_year = CAST(strftime('%Y', date) AS INTEGER)
+      WHERE archive_year IS NULL AND date IS NOT NULL
+    `);
+  } catch (err) {
+    console.warn('[Database] Failed to backfill documents.archive_year:', err instanceof Error ? err.message : err);
+  }
+  try {
+    db.exec('CREATE INDEX IF NOT EXISTS idx_documents_archive_year ON documents(archive_year)');
+  } catch (err) {
+    console.warn('[Database] Failed to create idx_documents_archive_year index:', err instanceof Error ? err.message : err);
   }
 }
 
@@ -1585,29 +1748,135 @@ export function getStats(): Record<string, number> {
   return stats;
 }
 
-export function getNextRef(typeId: number, folderId: number): string {
-  const year = new Date().getFullYear();
-  let prefix = 'X';
+// ─────────────────────────────────────────────────────────────────────────────
+// Yearly archive reference sequence
+//
+// Reference format: م.ب/{sequenceNumber}/{classificationNumber}
+//   e.g. م.ب/1/105, م.ب/2/105, م.ب/3/150
+//
+// - sequenceNumber is read from the dedicated archive_sequences table (one row
+//   per year) and incremented by 1 — never derived from COUNT(*) on documents,
+//   so deleting a document can never free its number back up for reuse.
+// - classificationNumber is the folder/classification id the document was
+//   filed under.
+// - Allocation runs inside a better-sqlite3 transaction. better-sqlite3 calls
+//   are synchronous, so no other IPC handler can interleave mid-transaction;
+//   combined with the UNIQUE(year) constraint and an upsert, two document:create
+//   calls arriving back-to-back can never be handed the same sequence number.
+// ─────────────────────────────────────────────────────────────────────────────
 
+export interface ArchiveSequenceEntry {
+  id: number;
+  year: number;
+  last_number: number;
+  created_at: number;
+  updated_at: number;
+}
+
+export function getArchiveSequence(year: number): ArchiveSequenceEntry | undefined {
   if (useMemoryFallback) {
-    const type = memoryStore.document_types.find(t => t.id === typeId);
-    prefix = type?.prefix ?? 'X';
-    const key = `${prefix}_${folderId}_${year}`;
-    const current = memoryStore.counters[key] ?? 0;
-    memoryStore.counters[key] = current + 1;
-    return `${prefix}-${String(folderId).padStart(3, '0')}-${year}-${String(current + 1).padStart(4, '0')}`;
+    const entry = memoryStore.archive_sequences.find(s => s.year === year);
+    return entry ? { ...entry } : undefined;
+  }
+  if (!db) throw new Error('Database not initialized');
+  return db.prepare('SELECT * FROM archive_sequences WHERE year = ?').get(year) as ArchiveSequenceEntry | undefined;
+}
+
+export function getNextArchiveSequenceNumber(year: number): number {
+  if (useMemoryFallback) {
+    let entry = memoryStore.archive_sequences.find(s => s.year === year);
+    if (!entry) {
+      entry = { id: memoryStore.archive_sequences.length + 1, year, last_number: 0, created_at: Date.now(), updated_at: Date.now() };
+      memoryStore.archive_sequences.push(entry);
+    }
+    entry.last_number += 1;
+    entry.updated_at = Date.now();
+    return entry.last_number;
   }
 
   if (!db) throw new Error('Database not initialized');
-  const type = db.prepare('SELECT prefix FROM document_types WHERE id = ?').get(typeId) as { prefix: string } | undefined;
-  prefix = type?.prefix ?? 'X';
-  const key = `${prefix}_${folderId}_${year}`;
+  const allocate = db.transaction((y: number): number => {
+    db!.prepare(`
+      INSERT INTO archive_sequences (year, last_number, created_at, updated_at)
+      VALUES (?, 1, strftime('%s','now'), strftime('%s','now'))
+      ON CONFLICT(year) DO UPDATE SET
+        last_number = last_number + 1,
+        updated_at = strftime('%s','now')
+    `).run(y);
+    const row = db!.prepare('SELECT last_number FROM archive_sequences WHERE year = ?').get(y) as { last_number: number };
+    return row.last_number;
+  });
+  return allocate(year);
+}
 
-  db.prepare('INSERT OR IGNORE INTO counters (key, value) VALUES (?, 0)').run(key);
-  db.prepare('UPDATE counters SET value = value + 1 WHERE key = ?').run(key);
+// Archive year currently open for new documents. Independent of the OS clock
+// so closeYear() can advance it the moment a year is closed, instead of new
+// document numbering only resetting once the real calendar rolls over. Falls
+// back to the OS calendar year when never explicitly set, so existing
+// databases (no app_state row yet) keep behaving exactly as before.
+export function getCurrentArchiveYear(): number {
+  if (useMemoryFallback) {
+    return memoryStore.current_archive_year ?? new Date().getFullYear();
+  }
+  if (!db) throw new Error('Database not initialized');
+  const row = db.prepare('SELECT current_archive_year FROM app_state WHERE id = 1').get() as { current_archive_year: number | null } | undefined;
+  return row?.current_archive_year ?? new Date().getFullYear();
+}
 
-  const row = db.prepare('SELECT value FROM counters WHERE key = ?').get(key) as { value: number };
-  return `${prefix}-${String(folderId).padStart(3, '0')}-${year}-${String(row.value).padStart(4, '0')}`;
+function setCurrentArchiveYear(year: number): void {
+  if (useMemoryFallback) {
+    memoryStore.current_archive_year = year;
+    return;
+  }
+  if (!db) throw new Error('Database not initialized');
+  db.prepare(`
+    INSERT INTO app_state (id, current_archive_year) VALUES (1, ?)
+    ON CONFLICT(id) DO UPDATE SET current_archive_year = excluded.current_archive_year
+  `).run(year);
+}
+
+// Backend-side gate: whether `year` has already gone through closeYear().
+// Consulted before every ref-number allocation so document creation can
+// never depend solely on a frontend-held "current year" value going stale —
+// the archived_years table is the single source of truth.
+export function isArchiveYearClosed(year: number): boolean {
+  if (useMemoryFallback) {
+    return memoryStore.archived_years.some(y => y.year === year);
+  }
+  if (!db) throw new Error('Database not initialized');
+  const row = db.prepare('SELECT 1 FROM archived_years WHERE year = ?').get(year);
+  return !!row;
+}
+
+export function generateArchiveRefNumber(classificationNumber: number): { ref_number: string; sequence_number: number; year: number } {
+  const year = getCurrentArchiveYear();
+  if (isArchiveYearClosed(year)) {
+    throw new Error(`السنة الأرشيفية ${year} مغلقة ولا يمكن تسجيل وثائق جديدة تحتها`);
+  }
+  const sequenceNumber = getNextArchiveSequenceNumber(year);
+  return {
+    ref_number: `م.ب/${sequenceNumber}/${classificationNumber}`,
+    sequence_number: sequenceNumber,
+    year
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Document barcode identifier
+//
+// The "م.ب/" prefix is a fixed, known part of every reference number, so it
+// carries no information a scan needs — only the variable part after it
+// (e.g. "58/1" out of "م.ب/58/1") is encoded into the barcode. This keeps
+// the barcode payload plain ASCII, sidestepping Arabic/RTL/Unicode issues on
+// scanners entirely (no FNC4 "Full ASCII" byte mode required, though the
+// renderer in barcode.service.ts + code128-fnc4.ts still supports it for any
+// legacy full-reference barcodes already printed). A scan resolves back to
+// the complete reference number by re-adding the prefix — see
+// document:getByBarcode in main.ts.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function generateDocumentBarcode(refNumber: string): string {
+  return refNumber.replace(/^م\.ب\//, '');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1829,7 +2098,7 @@ export function createFolder(input: FolderInput, createdBy?: number): { success:
   if (!db) return { success: false, error: 'قاعدة البيانات غير موجودة' };
   try {
     const result = db.prepare(
-      'INSERT INTO folders (name, group_name, is_active, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, strftime("%s","now"), strftime("%s","now"))'
+      "INSERT INTO folders (name, group_name, is_active, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, strftime('%s','now'), strftime('%s','now'))"
     ).run(input.name, input.group_name, input.is_active ?? 1, createdBy ?? null);
     return { success: true, id: Number(result.lastInsertRowid) };
   } catch (err: unknown) {
@@ -2286,9 +2555,9 @@ export function approvePasswordReset(requestId: number, newPassword: string, app
   const req = db.prepare('SELECT user_id FROM password_reset_requests WHERE id = ?').get(requestId) as { user_id: number } | undefined;
   if (!req) return { success: false, error: 'الطلب غير موجود' };
   const tx = db.transaction(() => {
-    db!.prepare('UPDATE users SET password_hash = ?, updated_at = strftime("%s","now") WHERE id = ?').run(hash, req.user_id);
+    db!.prepare("UPDATE users SET password_hash = ?, updated_at = strftime('%s','now') WHERE id = ?").run(hash, req.user_id);
     db!.prepare(
-      'UPDATE password_reset_requests SET status = ?, approved_by = ?, approved_at = strftime("%s","now"), new_password_hash = ? WHERE id = ?'
+      "UPDATE password_reset_requests SET status = ?, approved_by = ?, approved_at = strftime('%s','now'), new_password_hash = ? WHERE id = ?"
     ).run('approved', approvedBy, hash, requestId);
   });
   tx();
@@ -2322,7 +2591,7 @@ export function adminResetPassword(userId: number, newPassword: string): { succe
   }
 
   if (!db) return { success: false, error: 'قاعدة البيانات غير موجودة' };
-  db.prepare('UPDATE users SET password_hash = ?, updated_at = strftime("%s","now") WHERE id = ?').run(hash, userId);
+  db.prepare("UPDATE users SET password_hash = ?, updated_at = strftime('%s','now') WHERE id = ?").run(hash, userId);
   return { success: true };
 }
 
@@ -2348,7 +2617,7 @@ export function changeOwnPassword(userId: number, currentPassword: string, newPa
     return { success: false, error: 'كلمة المرور الحالية غير صحيحة' };
   }
   const hash = bcrypt.hashSync(newPassword, 10);
-  db.prepare('UPDATE users SET password_hash = ?, updated_at = strftime("%s","now") WHERE id = ?').run(hash, userId);
+  db.prepare("UPDATE users SET password_hash = ?, updated_at = strftime('%s','now') WHERE id = ?").run(hash, userId);
   return { success: true };
 }
 
@@ -2386,12 +2655,24 @@ export function closeYear(year: number, adminId: number): { success: boolean; me
   if (!db) return { success: false, error: 'قاعدة البيانات غير موجودة' };
 
   try {
+    // A year can only ever be closed once — archived_years is the permanent
+    // historical record, and re-running the close below would DELETE and
+    // repopulate archived_documents_<year> from whatever is currently in
+    // `documents`, destroying the batch archived the first time.
+    const alreadyClosed = db.prepare('SELECT 1 FROM archived_years WHERE year = ?').get(year);
+    if (alreadyClosed) {
+      return { success: false, error: `سنة ${year} مغلقة بالفعل ولا يمكن إغلاقها مرة أخرى` };
+    }
+
     const userData = app.getPath('userData');
     const backupDir = path.join(userData, 'backups');
     if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
 
     const dbPath = path.join(userData, 'archive.db');
-    const docCount = db.prepare('SELECT COUNT(*) as c FROM documents WHERE strftime("%Y", date) = ?').get(year.toString()) as { c: number };
+    // archive_year (set at document:create time from the actual registration
+    // year) — not the free-text `date` field — is what defines membership in
+    // an archive year, so closing can't be thrown off by an unrelated date.
+    const docCount = db.prepare('SELECT COUNT(*) as c FROM documents WHERE archive_year = ?').get(year) as { c: number };
     if (docCount.c === 0) {
       return { success: false, error: 'لا توجد وثائق لإغلاقها في هذه السنة' };
     }
@@ -2402,12 +2683,23 @@ export function closeYear(year: number, adminId: number): { success: boolean; me
     const tx = db.transaction(() => {
       db!.exec(`CREATE TABLE IF NOT EXISTS archived_documents_${year} AS SELECT * FROM documents WHERE 1=0`);
       db!.prepare(`DELETE FROM archived_documents_${year}`).run();
-      db!.prepare(`INSERT INTO archived_documents_${year} SELECT * FROM documents WHERE strftime("%Y", date) = ?`).run(year.toString());
-      db!.prepare('DELETE FROM documents WHERE strftime("%Y", date) = ?').run(year.toString());
-      db!.prepare('DELETE FROM audit_log WHERE strftime("%Y", datetime(timestamp, "unixepoch")) = ?').run(year.toString());
+      db!.prepare(`INSERT INTO archived_documents_${year} SELECT * FROM documents WHERE archive_year = ?`).run(year);
+      db!.prepare('DELETE FROM documents WHERE archive_year = ?').run(year);
+      db!.prepare("DELETE FROM audit_log WHERE strftime('%Y', datetime(timestamp, 'unixepoch')) = ?").run(year.toString());
       db!.prepare('DELETE FROM counters').run();
-      db!.prepare('INSERT OR REPLACE INTO archived_years (year, archived_by, document_count, backup_path) VALUES (?, ?, ?, ?)')
+      // Plain INSERT, not INSERT OR REPLACE: archived_years' PK is `year`, and
+      // the already-closed check above should make a collision impossible —
+      // if one still happens (e.g. a race), fail loudly instead of silently
+      // overwriting a prior year's archived_at/document_count/backup_path.
+      db!.prepare('INSERT INTO archived_years (year, archived_by, document_count, backup_path) VALUES (?, ?, ?, ?)')
         .run(year, adminId, docCount.c, backupPath);
+      // Open the next archive year for new documents immediately — never
+      // moves the current year backward, in case an older, previously
+      // un-closed year is being closed retroactively.
+      db!.prepare(`
+        INSERT INTO app_state (id, current_archive_year) VALUES (1, ?)
+        ON CONFLICT(id) DO UPDATE SET current_archive_year = MAX(current_archive_year, excluded.current_archive_year)
+      `).run(year + 1);
     });
     tx();
 
@@ -2706,6 +2998,11 @@ export function importData(jsonData: string, mode: 'merge' | 'replace'): { succe
     });
 
     tx();
+    // Imported documents never carry archive_year (it isn't part of the
+    // backup format) — backfill it the same way pre-migration rows are, so
+    // restored documents can still be picked up by closeYear() later instead
+    // of being silently stuck with archive_year = NULL forever.
+    migrateDocumentsArchiveYear();
     return { success: true, message: 'تم استيراد البيانات بنجاح' };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';

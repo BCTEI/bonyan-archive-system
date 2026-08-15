@@ -21,10 +21,16 @@ export class DocumentService {
     return result.document;
   }
 
-  async create(doc: ArchiveDocument): Promise<number> {
+  async getByBarcode(barcode: string): Promise<ArchiveDocument | undefined> {
+    const result = await this.api.documentAPI.getByBarcode(barcode);
+    if (!result.success) throw new Error(result.error ?? 'لم يتم العثور على وثيقة بهذا الباركود');
+    return result.document;
+  }
+
+  async create(doc: ArchiveDocument): Promise<{ id: number; ref_number: string }> {
     const result = await this.api.documentAPI.create(doc);
     if (!result.success) throw new Error(result.error ?? 'فشل إنشاء الوثيقة');
-    return result.id!;
+    return { id: result.id!, ref_number: result.ref_number! };
   }
 
   async update(doc: ArchiveDocument): Promise<void> {
@@ -32,13 +38,14 @@ export class DocumentService {
     if (!result.success) throw new Error(result.error ?? 'فشل تحديث الوثيقة');
   }
 
-  async delete(id: number): Promise<void> {
+  /**
+   * Non-destructive "delete": the main process marks the document as
+   * suspended (موقوف) instead of removing the row. Archive history,
+   * reference number and attachments are always preserved.
+   */
+  async suspend(id: number): Promise<void> {
     const result = await this.api.documentAPI.delete(id);
-    if (!result.success) throw new Error(result.error ?? 'فشل حذف الوثيقة');
-  }
-
-  async getNextRef(typeId: number, folderId: number): Promise<string> {
-    return this.api.getNextRef(typeId, folderId);
+    if (!result.success) throw new Error(result.error ?? 'فشل إيقاف الوثيقة');
   }
 
   parseAttachments(doc: ArchiveDocument): Attachment[] {

@@ -9,17 +9,25 @@ import { DocumentCardComponent } from '../document-card/document-card.component'
 import { HasPermissionDirective } from '../../directives/has-permission.directive';
 import { DocumentFormComponent } from '../document-form/document-form.component';
 import { DocumentViewComponent } from '../document-view/document-view.component';
+import { FinalConfirmDialogComponent } from '../dialogs/final-confirm-dialog/final-confirm-dialog.component';
 import { DocumentAccessService } from '../../services/document-access.service';
 import { DocumentService } from '../../services/document.service';
 import { DocumentTypeService } from '../../services/document-type.service';
 import { FolderService } from '../../services/folder.service';
 import { MasterListService } from '../../services/master-list.service';
-import { AuditService } from '../../services/audit.service';
 import { AuthService } from '../../services/auth.service';
 import { ExportImportService } from '../../services/export-import.service';
 import { ToastService } from '../../services/toast.service';
-import { ArchiveDocument, DocumentTypeEntry, ConfidentialityLevel } from '../../models/document.model';
+import { PrintService } from '../../services/print.service';
+import { ArchiveDocument, DocumentTypeEntry, ConfidentialityLevel, SUSPENDED_STATUS } from '../../models/document.model';
 import { Folder } from '../../models/folder.model';
+
+// Fixed prefix of every reference number (see generateArchiveRefNumber in
+// electron/database.ts) — the ref-number search field shows this as a
+// permanent chip so the user only ever types the variable part.
+export const REF_NUMBER_PREFIX = 'م.ب/';
+
+export type StatusFilter = 'all' | 'active' | 'suspended';
 
 @Component({
   selector: 'app-document-grid',
@@ -35,7 +43,6 @@ export class DocumentGridComponent implements OnInit {
   private documentService = inject(DocumentService);
   private documentTypeService = inject(DocumentTypeService);
   private folderService = inject(FolderService);
-  private auditService = inject(AuditService);
   auth = inject(AuthService);
   private exportImport = inject(ExportImportService);
   private toast = inject(ToastService);
@@ -43,11 +50,13 @@ export class DocumentGridComponent implements OnInit {
   private documentAccess = inject(DocumentAccessService);
   private masterListService = inject(MasterListService);
   private route = inject(ActivatedRoute);
+  private printService = inject(PrintService);
 
   documents = signal<ArchiveDocument[]>([]);
   folders = signal<Folder[]>([]);
   documentTypes = signal<DocumentTypeEntry[]>([]);
   authors = signal<{ name: string }[]>([{ name: 'الكل' }]);
+  preparers = signal<{ name: string }[]>([{ name: 'الكل' }]);
   senders = signal<{ name: string }[]>([{ name: 'الكل' }]);
   receivers = signal<{ name: string }[]>([{ name: 'الكل' }]);
   departments = signal<{ name: string }[]>([{ name: 'الكل' }]);
@@ -56,17 +65,31 @@ export class DocumentGridComponent implements OnInit {
   selectedConfidentiality = signal<ConfidentialityLevel | 'الكل'>('الكل');
   selectedFolder = signal<number | 'الكل'>('الكل');
   selectedAuthor = signal<string>('الكل');
+  selectedPreparer = signal<string>('الكل');
   selectedSender = signal<string>('الكل');
   selectedReceiver = signal<string>('الكل');
   selectedDepartment = signal<string>('الكل');
+  // Suspended documents stay in the archive but are hidden from the active
+  // list unless the user explicitly asks for them.
+  selectedStatus = signal<StatusFilter>('active');
   search = signal('');
+  subjectSearch = signal('');
+  refNumberSearch = signal('');
   loading = signal(false);
+
+  readonly refNumberPrefix = REF_NUMBER_PREFIX;
 
   confidentialityLevels: { value: ConfidentialityLevel | 'الكل'; label: string }[] = [
     { value: 'الكل', label: 'الكل' },
     { value: 'عادي', label: '🟢 عادي' },
     { value: 'سري', label: '🟡 سري' },
     { value: 'سري للغاية', label: '🔴 سري للغاية' }
+  ];
+
+  statusFilters: { value: StatusFilter; label: string }[] = [
+    { value: 'active', label: 'النشطة' },
+    { value: 'suspended', label: 'الموقوفة' },
+    { value: 'all', label: 'الكل' }
   ];
 
   async ngOnInit(): Promise<void> {
@@ -99,13 +122,15 @@ export class DocumentGridComponent implements OnInit {
 
   async loadFilterLists(): Promise<void> {
     try {
-      const [authors, senders, receivers, departments] = await Promise.all([
+      const [authors, preparers, senders, receivers, departments] = await Promise.all([
         this.masterListService.getAll('author', true),
+        this.masterListService.getAll('preparer', true),
         this.masterListService.getAll('sender', true),
         this.masterListService.getAll('receiver', true),
         this.masterListService.getAll('department', true)
       ]);
       this.authors.set([{ name: 'الكل' }, ...authors.map(a => ({ name: a.name }))]);
+      this.preparers.set([{ name: 'الكل' }, ...preparers.map(a => ({ name: a.name }))]);
       this.senders.set([{ name: 'الكل' }, ...senders.map(a => ({ name: a.name }))]);
       this.receivers.set([{ name: 'الكل' }, ...receivers.map(a => ({ name: a.name }))]);
       this.departments.set([{ name: 'الكل' }, ...departments.map(a => ({ name: a.name }))]);
@@ -116,15 +141,25 @@ export class DocumentGridComponent implements OnInit {
 
   applyFilters(): void {
     let list = this.documents();
+    const status = this.selectedStatus();
     const typeId = this.selectedTypeId();
     const folder = this.selectedFolder();
     const conf = this.selectedConfidentiality();
     const author = this.selectedAuthor();
+    const preparer = this.selectedPreparer();
     const sender = this.selectedSender();
     const receiver = this.selectedReceiver();
     const department = this.selectedDepartment();
     const term = this.search().trim().toLowerCase();
+    const subjectTerm = this.subjectSearch().trim().toLowerCase();
+    const refSuffix = this.refNumberSearch().trim();
+    const refTerm = refSuffix ? (REF_NUMBER_PREFIX + refSuffix).toLowerCase() : '';
 
+    if (status === 'active') {
+      list = list.filter(d => d.status !== SUSPENDED_STATUS);
+    } else if (status === 'suspended') {
+      list = list.filter(d => d.status === SUSPENDED_STATUS);
+    }
     if (typeId !== 'الكل') {
       list = list.filter(d => d.type_id === typeId);
     }
@@ -136,6 +171,9 @@ export class DocumentGridComponent implements OnInit {
     }
     if (author !== 'الكل') {
       list = list.filter(d => d.author === author);
+    }
+    if (preparer !== 'الكل') {
+      list = list.filter(d => d.writer_name === preparer);
     }
     if (sender !== 'الكل') {
       list = list.filter(d => d.sender === sender);
@@ -163,6 +201,12 @@ export class DocumentGridComponent implements OnInit {
         return searchable.some(value => value.toLowerCase().includes(term));
       });
     }
+    if (subjectTerm) {
+      list = list.filter(d => d.subject.toLowerCase().includes(subjectTerm));
+    }
+    if (refTerm) {
+      list = list.filter(d => d.ref_number.toLowerCase().includes(refTerm));
+    }
     this.filtered.set(list);
   }
 
@@ -186,6 +230,11 @@ export class DocumentGridComponent implements OnInit {
     this.applyFilters();
   }
 
+  setPreparer(name: string): void {
+    this.selectedPreparer.set(name);
+    this.applyFilters();
+  }
+
   setSender(name: string): void {
     this.selectedSender.set(name);
     this.applyFilters();
@@ -201,8 +250,26 @@ export class DocumentGridComponent implements OnInit {
     this.applyFilters();
   }
 
+  setStatus(value: StatusFilter): void {
+    this.selectedStatus.set(value);
+    this.applyFilters();
+  }
+
   setSearch(value: string): void {
     this.search.set(value);
+    this.applyFilters();
+  }
+
+  setSubjectSearch(value: string): void {
+    this.subjectSearch.set(value);
+    this.applyFilters();
+  }
+
+  setRefNumberSearch(value: string): void {
+    // Defensive: if the user pastes a full reference number (prefix included),
+    // strip the prefix so it isn't duplicated against the fixed chip.
+    const stripped = value.startsWith(REF_NUMBER_PREFIX) ? value.slice(REF_NUMBER_PREFIX.length) : value;
+    this.refNumberSearch.set(stripped);
     this.applyFilters();
   }
 
@@ -211,10 +278,14 @@ export class DocumentGridComponent implements OnInit {
     this.selectedConfidentiality.set('الكل');
     this.selectedFolder.set('الكل');
     this.selectedAuthor.set('الكل');
+    this.selectedPreparer.set('الكل');
     this.selectedSender.set('الكل');
     this.selectedReceiver.set('الكل');
     this.selectedDepartment.set('الكل');
+    this.selectedStatus.set('active');
     this.search.set('');
+    this.subjectSearch.set('');
+    this.refNumberSearch.set('');
     this.applyFilters();
   }
 
@@ -280,6 +351,13 @@ export class DocumentGridComponent implements OnInit {
       maxWidth: '95vw',
       data: { doc, folder: this.folders().find(f => f.id === doc.folder_id), print: true }
     });
+  }
+
+  async onPrintLabel(doc: ArchiveDocument): Promise<void> {
+    const allowed = await this.documentAccess.verifyAccess(doc, 'print');
+    if (!allowed) return;
+    if (!doc.barcode) return;
+    this.printService.printBarcodeLabel(doc);
   }
 
   async exportData(): Promise<void> {

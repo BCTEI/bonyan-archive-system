@@ -1,3 +1,136 @@
 .whitespace-pre-wrap {
   white-space: pre-wrap;
 }
+
+.doc-view {
+  display: flex;
+  flex-direction: column;
+  max-height: 85vh;
+}
+
+.doc-view-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--card);
+  padding: 1.5rem 1.5rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.ref-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.35rem 0.85rem;
+  border-radius: 0.6rem;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 700;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 0.02em;
+}
+
+.doc-view-body {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.25rem;
+  overflow-y: auto;
+  min-height: 0;
+  padding: 1.25rem 1.5rem 1.5rem;
+}
+
+@media (min-width: 680px) {
+  .doc-view-body {
+    grid-template-columns: 2fr 1fr;
+    align-items: start;
+  }
+}
+
+.doc-view-main {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+.doc-view-side {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.doc-section {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  padding: 1.1rem 1.25rem;
+}
+
+.doc-section-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.doc-field-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.9rem;
+}
+
+@media (min-width: 640px) {
+  .doc-field-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.doc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.doc-field-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-light);
+}
+
+.doc-field-value {
+  font-size: 0.9rem;
+  color: var(--text);
+  word-break: break-word;
+}
+
+.doc-text-block {
+  font-size: 0.9rem;
+  line-height: 1.7;
+  color: var(--text);
+  background: var(--bg);
+  border-radius: 0.6rem;
+  padding: 0.75rem 0.9rem;
+}
+
+.attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 0.6rem;
+  background: var(--secondary);
+  color: var(--text);
+  font-size: 0.85rem;
+  transition: background-color 0.15s ease;
+
+  &:hover {
+    background: var(--border);
+  }
+}

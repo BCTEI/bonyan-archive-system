@@ -11,21 +11,14 @@
     </button>
 
     <div class="flex items-center gap-2">
-      <mat-icon class="!text-3xl !w-8 !h-8">archive</mat-icon>
+      <div class="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center shrink-0 p-0.5">
+        <img src="assets/images/bonyan-logo-full.png" alt="شعار مركز البنيان" class="w-full h-full rounded-full object-contain">
+      </div>
       <span class="font-bold text-lg hidden md:inline">نظام الأرشيف الإلكتروني</span>
     </div>
   </div>
 
-  <div class="flex-1 max-w-xl mx-4">
-    <div class="relative">
-      <mat-icon class="absolute right-3 top-1/2 -translate-y-1/2 text-white/60">search</mat-icon>
-      <input
-        type="text"
-        placeholder="بحث عام..."
-        (keyup.enter)="onSearch($any($event.target).value)"
-        class="w-full pr-10 pl-4 py-1.5 rounded-lg bg-white/15 border border-white/20 text-white placeholder-white/60 focus:outline-none focus:bg-white/20">
-    </div>
-  </div>
+  <div class="flex-1"></div>
 
   <div class="flex items-center gap-2">
     <a routerLink="/main/dashboard" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: false }"

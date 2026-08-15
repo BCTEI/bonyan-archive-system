@@ -11,10 +11,14 @@
 
   <mat-card class="mb-6">
     <mat-card-content class="p-6">
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div class="text-center p-4 bg-bg rounded-xl">
-          <div class="text-sm text-text-light mb-1">السنة الحالية</div>
+          <div class="text-sm text-text-light mb-1">السنة الحالية للأرشيف</div>
           <div class="text-3xl font-bold text-primary">{{ currentYear }}</div>
+        </div>
+        <div class="text-center p-4 bg-bg rounded-xl">
+          <div class="text-sm text-text-light mb-1">التسلسل السنوي الحالي</div>
+          <div class="text-3xl font-bold text-primary">{{ currentSequence() }}</div>
         </div>
         <div class="text-center p-4 bg-bg rounded-xl">
           <div class="text-sm text-text-light mb-1">عدد الوثائق</div>

@@ -1,0 +1,188 @@
+:host {
+  display: block;
+}
+
+.preview-dialog {
+  display: flex;
+  flex-direction: column;
+  height: 85vh;
+  max-height: 85vh;
+}
+
+.preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-shrink: 0;
+  padding: 1.1rem 1.5rem;
+  border-bottom: 1px solid var(--border);
+  background: var(--card);
+}
+
+.preview-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+  color: var(--primary);
+}
+
+.preview-title-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.preview-name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-sub {
+  font-size: 0.75rem;
+  color: var(--text-light);
+}
+
+.preview-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.preview-body {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+}
+
+// Absolutely filling the (position: relative) preview-body guarantees the
+// iframe's box always exactly matches the available space, regardless of the
+// mat-dialog open animation or flexbox percentage-height timing — letting
+// Chromium's built-in PDF viewer compute its own fit-to-page zoom correctly
+// instead of locking in a cropped size. The viewer handles its own
+// scrolling/zoom/pagination internally, so preview-body must not also scroll.
+.pdf-frame {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.image-frame {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  overflow: auto;
+}
+
+.image-frame img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+}
+
+.docx-frame {
+  flex: 1;
+  padding: 1.25rem;
+  overflow: auto;
+}
+
+.docx-content {
+  background: #ffffff;
+  margin: 0 auto;
+  max-width: 820px;
+  padding: 2rem 2.5rem;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  line-height: 1.8;
+  color: #1c2430;
+  overflow-wrap: break-word;
+
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+  }
+
+  table td,
+  table th {
+    border: 1px solid var(--border);
+    padding: 0.4rem 0.6rem;
+  }
+}
+
+.preview-loading {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  color: var(--text-light);
+}
+
+.preview-fallback {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 2rem;
+  text-align: center;
+  color: var(--text-light);
+}
+
+.fallback-icon {
+  font-size: 3rem;
+  width: 3rem;
+  height: 3rem;
+  color: var(--text-light);
+  margin-bottom: 0.5rem;
+}
+
+.fallback-name {
+  font-weight: 700;
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.fallback-meta {
+  font-size: 0.85rem;
+}
+
+.fallback-note {
+  max-width: 380px;
+  font-size: 0.85rem;
+  margin-bottom: 0.5rem;
+}
+
+@media (max-width: 640px) {
+  .preview-dialog {
+    height: 90vh;
+    max-height: 90vh;
+  }
+
+  .docx-content {
+    padding: 1.25rem;
+  }
+}

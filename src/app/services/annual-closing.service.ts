@@ -16,6 +16,14 @@ export class AnnualClosingService {
     return result.years ?? [];
   }
 
+  // Current archive year is tracked independently of the OS clock — it
+  // advances the moment a year is closed, not when the calendar rolls over.
+  async getCurrentArchiveYear(): Promise<{ year: number; sequence: number }> {
+    const result = await this.api.annualClosingAPI.getCurrentArchiveYear();
+    if (!result.success) throw new Error(result.error ?? 'فشل تحميل السنة الحالية للأرشيف');
+    return { year: result.year!, sequence: result.sequence! };
+  }
+
   async closeYear(year: number): Promise<{ message: string; backupPath?: string }> {
     const result = await this.api.annualClosingAPI.closeYear(year);
     if (!result.success) throw new Error(result.error ?? 'فشل إغلاق السنة');
