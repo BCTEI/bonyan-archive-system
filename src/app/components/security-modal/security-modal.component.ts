@@ -9,11 +9,11 @@ import { MatInputModule } from '@angular/material/input';
 import { ArchiveDocument } from '../../models/document.model';
 import { SecurityService } from '../../services/security.service';
 import { AuthService } from '../../services/auth.service';
-import { DocumentAction } from '../../services/document-access.service';
 
 interface SecurityModalData {
   doc: ArchiveDocument;
-  action: DocumentAction;
+  accessType: 'view' | 'edit';
+  scope?: string;
 }
 
 const LOCKOUT_DURATION_MS = 5 * 60 * 1000;
@@ -41,7 +41,8 @@ export class SecurityModalComponent implements OnInit {
   private authService = inject(AuthService);
 
   doc = this.data.doc;
-  action = this.data.action;
+  accessType = this.data.accessType;
+  scope = this.data.scope ?? 'live';
 
   step = signal<'password' | 'code'>('password');
   password = signal('');
@@ -55,20 +56,16 @@ export class SecurityModalComponent implements OnInit {
   private firstFailureTime: number | null = null;
 
   get actionTitle(): string {
-    switch (this.action) {
+    switch (this.accessType) {
       case 'edit': return 'تعديل الوثيقة';
-      case 'print': return 'طباعة الوثيقة';
-      case 'delete': return 'حذف الوثيقة';
       case 'view': return 'عرض الوثيقة';
       default: return 'الوصول إلى الوثيقة';
     }
   }
 
   get actionIcon(): string {
-    switch (this.action) {
+    switch (this.accessType) {
       case 'edit': return '✏️';
-      case 'print': return '🖨️';
-      case 'delete': return '🗑️';
       case 'view': return '👁️';
       default: return '🔐';
     }
@@ -105,7 +102,10 @@ export class SecurityModalComponent implements OnInit {
     this.errorMessage.set('');
 
     try {
-      const valid = await this.securityService.verifyPassword(user.username, pwd);
+      // documentId is always passed (even for the password-only سري step) so the
+      // main process's verifiedTopSecret unlock is keyed to this document, not
+      // left session-wide/document-agnostic.
+      const valid = await this.securityService.verifyPassword(pwd, this.doc.id, this.scope);
       if (valid) {
         this.failedAttempts = 0;
         this.firstFailureTime = null;
@@ -117,12 +117,11 @@ export class SecurityModalComponent implements OnInit {
           await this.logAccess('password');
           this.dialogRef.close({ verified: true, method: 'password' });
         }
-      } else {
-        this.handleFailedAttempt('كلمة المرور غير صحيحة');
       }
     } catch (err: unknown) {
+      // Server message surfaced verbatim (wrong password, disabled account, etc.).
       const message = err instanceof Error ? err.message : 'فشل التحقق من كلمة المرور';
-      this.errorMessage.set(message);
+      this.handleFailedAttempt(message);
     } finally {
       this.loading.set(false);
     }
@@ -139,14 +138,16 @@ export class SecurityModalComponent implements OnInit {
     this.errorMessage.set('');
 
     try {
-      const valid = await this.securityService.verifyCode(codeValue);
+      // Code is single-use and consumed by the main process on this call
+      // regardless of outcome — documentId must be the real document id so the
+      // unlock lands on `${scope}:${doc.id}`, not thrown away unlinked.
+      const valid = await this.securityService.verifyCode(codeValue, this.doc.id, this.scope);
       if (valid) {
         await this.logAccess('password+code');
         this.dialogRef.close({ verified: true, method: 'password+code' });
-      } else {
-        this.errorMessage.set('رمز التحقق غير صحيح');
       }
     } catch (err: unknown) {
+      // Server message surfaced verbatim, including the rate-limit lockout text.
       const message = err instanceof Error ? err.message : 'فشل التحقق من الرمز';
       this.errorMessage.set(message);
     } finally {
@@ -155,14 +156,7 @@ export class SecurityModalComponent implements OnInit {
   }
 
   private async logAccess(method: string): Promise<void> {
-    const accessType = this.normalizeAccessType(this.action);
-    await this.securityService.logAccess(this.doc.id!, accessType, this.doc.confidentiality, method);
-  }
-
-  private normalizeAccessType(action: DocumentAction): 'view' | 'edit' {
-    // The database access log only supports 'view' and 'edit'.
-    // Map print/delete to 'edit' since they are modification-type actions.
-    return action === 'view' ? 'view' : 'edit';
+    await this.securityService.logAccess(this.doc.id!, this.accessType, this.doc.confidentiality, method);
   }
 
   private handleFailedAttempt(message: string): void {

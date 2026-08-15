@@ -278,7 +278,7 @@ export class DocumentGridComponent implements OnInit {
     this.dialog.open(DocumentViewComponent, {
       width: '850px',
       maxWidth: '95vw',
-      data: { doc, folder: this.folders().find(f => f.id === doc.folder_id), print: true, verified: true }
+      data: { doc, folder: this.folders().find(f => f.id === doc.folder_id), print: true }
     });
   }
 

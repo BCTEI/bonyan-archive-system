@@ -1,6 +1,7 @@
 import { Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -30,6 +31,7 @@ export class AnnualClosingComponent implements OnInit {
   private annualClosingService = inject(AnnualClosingService);
   private documentService = inject(DocumentService);
   private toast = inject(ToastService);
+  private router = inject(Router);
 
   currentYear = new Date().getFullYear();
   documentCount = signal(0);
@@ -89,28 +91,20 @@ export class AnnualClosingComponent implements OnInit {
   }
 
   async viewYear(year: number): Promise<void> {
-    try {
-      const docs = await this.annualClosingService.getArchivedDocuments(year);
-      const count = docs.length;
-      const samples = (docs as Array<{ ref_number?: string }>).slice(0, 5).map(d => d.ref_number ?? '-').join('\n');
-      window.alert(`عدد الوثائق المؤرشفة لسنة ${year}: ${count}\n\n${samples ? 'نماذج:\n' + samples : ''}`);
-    } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'فشل تحميل الوثائق المؤرشفة';
-      this.toast.show(message, 'error');
-    }
+    await this.router.navigate(['/main/annual-closing', year]);
   }
 
   async exportYear(year: ArchivedYear): Promise<void> {
     try {
       const docs = await this.annualClosingService.getArchivedDocuments(year.year);
       const header = ['الرقم المرجعي', 'الموضوع', 'التاريخ', 'المرسل', 'المستلم', 'الملاحظات'];
-      const lines = (docs as Array<Partial<Record<string, unknown>>>).map(d => [
-        String(d['ref_number'] ?? ''),
-        String(d['subject'] ?? ''),
-        String(d['date'] ?? ''),
-        String(d['sender'] ?? ''),
-        String(d['receiver'] ?? ''),
-        String(d['notes'] ?? '')
+      const lines = docs.map(d => [
+        d.ref_number ?? '',
+        d.subject ?? '',
+        d.date ?? '',
+        d.sender ?? '',
+        d.receiver ?? '',
+        d.notes ?? ''
       ]);
       const csv = [header, ...lines]
         .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))

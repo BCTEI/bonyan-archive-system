@@ -34,9 +34,12 @@ export class HeaderComponent {
   currentUser = this.auth.currentUser;
   displayName = computed(() => this.currentUser()?.full_name || this.currentUser()?.username || '');
   roleLabel = computed(() => this.currentUser() ? ROLE_LABELS[this.currentUser()!.role] : '');
-  roleClass = computed(() => `role-${this.currentUser()?.role || 'viewer'}`);
+  roleClass = computed(() => `role-${this.currentUser()?.role || 'employee'}`);
   isDashboard = computed(() => this.router.url.includes('/dashboard'));
-  isAdmin = computed(() => this.currentUser()?.role === 'admin');
+  isAdmin = computed(() => {
+    const role = this.currentUser()?.role;
+    return role === 'general_manager' || role === 'deputy_manager';
+  });
 
   onToggleSidebar(): void {
     this.toggleSidebar.emit();

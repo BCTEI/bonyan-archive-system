@@ -25,6 +25,7 @@ export class UserService {
       full_name: user.full_name,
       password: user.password,
       role: user.role,
+      org_unit_id: user.org_unit_id ?? null,
       is_active: user.is_active ? 1 : 0
     });
     if (!result.success) throw new Error(result.error ?? 'فشل إنشاء المستخدم');
@@ -38,6 +39,7 @@ export class UserService {
       full_name: user.full_name,
       password: user.password,
       role: user.role,
+      org_unit_id: user.org_unit_id !== undefined ? user.org_unit_id : undefined,
       is_active: user.is_active !== undefined ? (user.is_active ? 1 : 0) : undefined
     });
     if (!result.success) throw new Error(result.error ?? 'فشل تحديث المستخدم');

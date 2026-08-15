@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { ArchivedYear } from '../models/annual-closing.model';
+import { ArchiveDocument } from '../models/document.model';
 
 @Injectable({
   providedIn: 'root'
@@ -21,9 +22,22 @@ export class AnnualClosingService {
     return { message: result.message!, backupPath: result.backupPath };
   }
 
-  async getArchivedDocuments(year: number): Promise<unknown[]> {
+  // List view: rows come back WITHOUT body/attachments_json/signature_base64
+  // (see electron/database.ts getArchivedDocuments) but WITH an attachments_count
+  // shim — callers needing full content must fetch by id via getArchivedDocumentById.
+  async getArchivedDocuments(year: number): Promise<ArchiveDocument[]> {
     const result = await this.api.annualClosingAPI.getArchivedDocuments(year);
     if (!result.success) throw new Error(result.error ?? 'فشل تحميل الوثائق المؤرشفة');
-    return result.documents ?? [];
+    return (result.documents ?? []) as ArchiveDocument[];
+  }
+
+  // Detail view: full row. If the doc is سري للغاية and unverified under scope
+  // `archive:<year>:<id>`, the main process returns it stripped (body/attachments
+  // removed) — the caller must run DocumentAccessService.verifyAccess with scope
+  // `archive:<year>` first.
+  async getArchivedDocumentById(year: number, id: number): Promise<ArchiveDocument | undefined> {
+    const result = await this.api.annualClosingAPI.getArchivedDocumentById(year, id);
+    if (!result.success) throw new Error(result.error ?? 'فشل تحميل الوثيقة المؤرشفة');
+    return result.document as ArchiveDocument | undefined;
   }
 }

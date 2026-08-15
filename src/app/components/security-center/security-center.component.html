@@ -1,81 +1,108 @@
-<div class="p-4 max-w-4xl mx-auto" dir="rtl">
-  <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-    <div>
-      <h1 class="text-2xl font-bold text-primary flex items-center gap-2">
-        <mat-icon>security</mat-icon>
-        مركز الأمان
-      </h1>
-      <p class="text-text-light text-sm">إدارة رموز التحقق الخاصة بالوصول إلى الوثائق السرية للغاية</p>
-    </div>
-    <button mat-raised-button color="primary" (click)="generateCode()" [disabled]="generating()">
-      <mat-icon>{{ generating() ? 'hourglass_top' : 'refresh' }}</mat-icon>
-      <span>توليد رمز جديد</span>
-    </button>
+<div class="p-4 max-w-5xl mx-auto" dir="rtl">
+  <div class="mb-6">
+    <h1 class="text-2xl font-bold text-primary flex items-center gap-2">
+      <mat-icon>security</mat-icon>
+      مركز الأمان
+    </h1>
+    <p class="text-text-light text-sm">إدارة رموز التحقق الشخصية للوصول إلى الوثائق السرية للغاية</p>
   </div>
 
   <mat-card class="mb-6">
     <mat-card-header>
       <mat-card-title class="text-primary flex items-center gap-2">
-        <mat-icon>vpn_key</mat-icon>
-        الرمز النشط
+        <mat-icon>add_moderator</mat-icon>
+        إصدار رمز تحقق
       </mat-card-title>
     </mat-card-header>
     <mat-card-content class="p-6">
+      <div class="flex flex-col md:flex-row md:items-end gap-4">
+        <mat-form-field class="flex-1" appearance="outline">
+          <mat-label>المستخدم</mat-label>
+          <mat-select [ngModel]="selectedUserId()" (ngModelChange)="selectedUserId.set($event)" [disabled]="usersLoading()">
+            @for (u of users(); track u.id) {
+              <mat-option [value]="u.id">{{ u.full_name || u.username }} ({{ u.username }})</mat-option>
+            }
+          </mat-select>
+        </mat-form-field>
+
+        <button mat-raised-button color="primary" (click)="generateCode()" [disabled]="generating() || !selectedUserId()">
+          <mat-icon>{{ generating() ? 'hourglass_top' : 'vpn_key' }}</mat-icon>
+          <span>توليد رمز</span>
+        </button>
+      </div>
+    </mat-card-content>
+  </mat-card>
+
+  <mat-card class="mb-6">
+    <mat-card-header>
+      <mat-card-title class="text-primary flex items-center gap-2">
+        <mat-icon>list_alt</mat-icon>
+        الرموز الصادرة
+      </mat-card-title>
+    </mat-card-header>
+    <mat-card-content class="p-0">
       @if (loading()) {
         <div class="flex items-center justify-center p-8">
           <mat-spinner diameter="40"></mat-spinner>
         </div>
-      } @else if (currentCode()?.code) {
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div class="flex-1">
-            <div class="text-sm text-text-light mb-2">رمز التحقق الحالي (للوثائق سرية للغاية)</div>
-            <div class="code-display">
-              <span class="code-number">{{ currentCode()!.code }}</span>
-              <button mat-stroked-button color="primary" (click)="copyCurrentCode()" class="btn-copy">
-                <mat-icon>content_copy</mat-icon>
-                نسخ
-              </button>
-            </div>
-          </div>
-          <div class="text-left min-w-[180px]">
-            <div class="text-sm text-text-light mb-1">تاريخ الانتهاء</div>
-            <div class="font-semibold">{{ formatExpiry(currentCode()?.expires_at) }}</div>
-          </div>
+      } @else if (codes().length === 0) {
+        <div class="text-center text-text-light py-8">
+          <mat-icon class="!text-4xl !w-10 !h-10 mb-2 opacity-40">key_off</mat-icon>
+          <p>لا توجد رموز صادرة حتى الآن</p>
         </div>
       } @else {
-        <div class="text-center text-text-light py-6">
-          <mat-icon class="text-4xl !w-10 !h-10 mb-2">key_off</mat-icon>
-          <p>لا يوجد رمز نشط حالياً</p>
+        <div class="overflow-x-auto">
+          <table mat-table [dataSource]="codes()" class="w-full">
+            <ng-container matColumnDef="username">
+              <th mat-header-cell *matHeaderCellDef>المستخدم</th>
+              <td mat-cell *matCellDef="let c" class="font-medium">{{ c.full_name || c.username }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="status">
+              <th mat-header-cell *matHeaderCellDef>الحالة</th>
+              <td mat-cell *matCellDef="let c">
+                <span class="px-2 py-1 rounded-full text-xs font-semibold" [class]="statusClass(c.status)">
+                  {{ statusLabels[c.status] }}
+                </span>
+              </td>
+            </ng-container>
+
+            <ng-container matColumnDef="generated_at">
+              <th mat-header-cell *matHeaderCellDef>تاريخ الإصدار</th>
+              <td mat-cell *matCellDef="let c">{{ formatDate(c.generated_at) }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="expires_at">
+              <th mat-header-cell *matHeaderCellDef>تاريخ الانتهاء</th>
+              <td mat-cell *matCellDef="let c">{{ formatDate(c.expires_at) }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="generated_by_name">
+              <th mat-header-cell *matHeaderCellDef>أصدره</th>
+              <td mat-cell *matCellDef="let c">{{ c.generated_by_name || '-' }}</td>
+            </ng-container>
+
+            <ng-container matColumnDef="actions">
+              <th mat-header-cell *matHeaderCellDef>إجراءات</th>
+              <td mat-cell *matCellDef="let c">
+                @if (c.status === 'active') {
+                  <button mat-stroked-button color="warn" (click)="revoke(c)">
+                    <mat-icon>block</mat-icon>
+                    إلغاء
+                  </button>
+                }
+              </td>
+            </ng-container>
+
+            <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>
+            <tr mat-row *matRowDef="let row; columns: displayedColumns;"></tr>
+          </table>
         </div>
       }
     </mat-card-content>
   </mat-card>
 
-  @if (generatedCode()) {
-    <mat-card class="border-2 border-primary">
-      <mat-card-header>
-        <mat-card-title class="text-primary flex items-center gap-2">
-          <mat-icon>new_releases</mat-icon>
-          رمز جديد تم إنشاؤه
-        </mat-card-title>
-      </mat-card-header>
-      <mat-card-content class="p-6">
-        <div class="text-center mb-4">
-          <div class="text-sm text-text-light mb-2">رمز التحقق الجديد (سيتم عرضه مرة واحدة فقط)</div>
-          <div class="text-4xl font-bold tracking-widest text-success font-mono">{{ generatedCode() }}</div>
-          <div class="text-sm text-text-light mt-2">تاريخ الانتهاء: {{ formatExpiry(generatedExpiry()) }}</div>
-        </div>
-        <div class="flex justify-center">
-          <button mat-raised-button color="accent" (click)="copyCode()">
-            <mat-icon>content_copy</mat-icon>
-            نسخ
-          </button>
-        </div>
-      </mat-card-content>
-    </mat-card>
-  }
-
-  <mat-card class="mt-6 border border-border">
+  <mat-card class="border border-border">
     <mat-card-header>
       <mat-card-title class="text-primary flex items-center gap-2 text-base">
         <mat-icon>menu_book</mat-icon>
@@ -85,14 +112,15 @@
     <mat-card-content class="p-6">
       <ol class="list-decimal list-inside space-y-2 text-sm text-text mb-4">
         <li>المستخدم يريد فتح وثيقة <strong>سري للغاية</strong></li>
-        <li>يطلب من المدير رمز التحقق الحالي</li>
-        <li>المدير يفتح هذه الصفحة ويعطيه الرمز المعروض أعلاه</li>
-        <li>المستخدم يدخل الرمز في نافذة التحقق</li>
-        <li>الرمز صالح لـ 24 ساعة فقط</li>
+        <li>يطلب من المدير رمز تحقق باسمه من هذه الصفحة</li>
+        <li>المدير يختار المستخدم من القائمة أعلاه ويضغط "توليد رمز"</li>
+        <li>الرمز يظهر مرة واحدة فقط — يجب نسخه أو تسليمه للمستخدم فوراً</li>
+        <li>المستخدم يدخل الرمز في نافذة التحقق الخاصة بالوثيقة</li>
+        <li>الرمز <strong>شخصي</strong> (لهذا المستخدم فقط) و<strong>يُستخدم مرة واحدة</strong> — يُستهلك فور نجاح التحقق، وصالح لـ 24 ساعة فقط</li>
       </ol>
       <p class="warning text-sm text-danger font-medium flex items-center gap-2">
         <mat-icon class="!text-base">warning</mat-icon>
-        ⚠️ عند توليد رمز جديد، يصبح الرمز القديم غير صالح!
+        عند توليد رمز جديد لمستخدم، يصبح رمزه النشط السابق (إن وجد) ملغياً تلقائياً
       </p>
     </mat-card-content>
   </mat-card>

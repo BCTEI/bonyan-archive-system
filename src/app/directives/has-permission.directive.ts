@@ -24,7 +24,7 @@ export class HasPermissionDirective {
       const user = this.auth.currentUser();
       if (!key) return;
 
-      const role = user?.role ?? 'viewer';
+      const role = user?.role ?? 'employee';
       const perms = getRolePermissions(role);
       const allowed = perms[key];
 
