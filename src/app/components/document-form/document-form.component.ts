@@ -50,16 +50,17 @@ export class DocumentFormComponent implements OnInit {
   attachments = signal<Attachment[]>([]);
   drawing = signal(false);
   dragOver = signal(false);
-  generatingRef = signal(false);
   isSaving = signal(false);
   today = new Date().toISOString().split('T')[0];
 
   authors = signal<MasterListEntry[]>([]);
+  preparers = signal<MasterListEntry[]>([]);
   senders = signal<MasterListEntry[]>([]);
   receivers = signal<MasterListEntry[]>([]);
   departments = signal<MasterListEntry[]>([]);
 
   filteredAuthors = signal<MasterListEntry[]>([]);
+  filteredPreparers = signal<MasterListEntry[]>([]);
   filteredSenders = signal<MasterListEntry[]>([]);
   filteredReceivers = signal<MasterListEntry[]>([]);
   filteredDepartments = signal<MasterListEntry[]>([]);
@@ -71,16 +72,21 @@ export class DocumentFormComponent implements OnInit {
 
   confidentialityLevels: ConfidentialityLevel[] = ['عادي', 'سري', 'سري للغاية'];
 
+  // CSV is included both by MIME (browsers variously report text/csv,
+  // application/csv or even application/vnd.ms-excel for it) and by extension.
   allowedTypes = [
     'application/pdf',
     'application/msword',
     'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     'application/vnd.ms-excel',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'text/csv',
+    'application/csv',
     'image/jpeg',
-    'image/png'
+    'image/png',
+    'image/webp'
   ];
-  allowedExts = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png'];
+  allowedExts = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'jpg', 'jpeg', 'png', 'webp'];
 
   async ngOnInit(): Promise<void> {
     const [types, fldrs] = await Promise.all([
@@ -101,9 +107,9 @@ export class DocumentFormComponent implements OnInit {
       const defaultType = types[0];
       this.selectedType.set(defaultType);
       this.doc.set(this.emptyDoc(defaultType?.id ?? 1));
-      if (defaultType) {
-        await this.generateRef();
-      }
+      // ref_number stays empty for a new document — the main process allocates
+      // it from the yearly archive sequence at the moment document:create runs,
+      // so it is never pre-fetched (and never wasted on an abandoned form).
     }
   }
 
@@ -128,17 +134,20 @@ export class DocumentFormComponent implements OnInit {
 
   async loadMasterLists(): Promise<void> {
     try {
-      const [authors, senders, receivers, departments] = await Promise.all([
+      const [authors, preparers, senders, receivers, departments] = await Promise.all([
         this.masterListService.getAll('author', true),
+        this.masterListService.getAll('preparer', true),
         this.masterListService.getAll('sender', true),
         this.masterListService.getAll('receiver', true),
         this.masterListService.getAll('department', true)
       ]);
       this.authors.set(authors);
+      this.preparers.set(preparers);
       this.senders.set(senders);
       this.receivers.set(receivers);
       this.departments.set(departments);
       this.filteredAuthors.set(authors);
+      this.filteredPreparers.set(preparers);
       this.filteredSenders.set(senders);
       this.filteredReceivers.set(receivers);
       this.filteredDepartments.set(departments);
@@ -168,28 +177,14 @@ export class DocumentFormComponent implements OnInit {
     this.doc.update(d => ({ ...d, [key]: value }));
   }
 
-  async generateRef(): Promise<void> {
-    const d = this.doc();
-    this.generatingRef.set(true);
-    const ref = await this.documentService.getNextRef(d.type_id, d.folder_id);
-    this.doc.update(doc => ({ ...doc, ref_number: ref }));
-    this.generatingRef.set(false);
-  }
-
   onTypeChange(typeId: number): void {
     const type = this.documentTypes().find(t => t.id === typeId);
     this.selectedType.set(type);
     this.doc.update(doc => ({ ...doc, type_id: typeId }));
-    if (!this.doc().ref_number) {
-      this.generateRef();
-    }
   }
 
   onFolderChange(folderId: number): void {
     this.doc.update(doc => ({ ...doc, folder_id: folderId }));
-    if (!this.doc().ref_number) {
-      this.generateRef();
-    }
   }
 
   onConfidentialityChange(level: ConfidentialityLevel): void {
@@ -200,9 +195,69 @@ export class DocumentFormComponent implements OnInit {
     return this.documentTypes().find(t => t.id === typeId)?.name ?? '';
   }
 
+  // ── Type-aware correspondence helpers ─────────────────────────────────────
+  // Sender/receiver are shown for EVERY document type (incoming included);
+  // only the labels and the suggestion lists adapt to the type.
+  isOutgoing(): boolean { return this.typeName(this.doc().type_id) === 'صادر'; }
+  isIncoming(): boolean { return this.typeName(this.doc().type_id) === 'وارد'; }
+  isInternalMail(): boolean { return this.typeName(this.doc().type_id) === 'مراسلات'; }
+
+  senderLabel(): string {
+    if (this.isOutgoing()) return 'الجهة المرسلة (المؤسسة)';
+    if (this.isIncoming()) return 'الجهة المرسلة (خارجية)';
+    if (this.isInternalMail()) return 'القسم / الجهة المرسلة';
+    return 'المرسل';
+  }
+
+  receiverLabel(): string {
+    if (this.isOutgoing()) return 'الجهة المستقبلة (خارجية)';
+    if (this.isIncoming()) return 'الجهة المستلمة (داخل المؤسسة)';
+    if (this.isInternalMail()) return 'القسم المستهدف / المستقبل';
+    return 'المستلم';
+  }
+
+  dateLabel(): string {
+    if (this.isOutgoing()) return 'تاريخ الإصدار';
+    if (this.isIncoming()) return 'تاريخ الاستلام';
+    if (this.isInternalMail()) return 'تاريخ المراسلة';
+    return 'التاريخ';
+  }
+
+  /** Internal correspondence is addressed between departments; other types use the sender/receiver master lists. */
+  senderItems(): MasterListEntry[] {
+    return this.isInternalMail() ? this.filteredDepartments() : this.filteredSenders();
+  }
+
+  receiverItems(): MasterListEntry[] {
+    return this.isInternalMail() ? this.filteredDepartments() : this.filteredReceivers();
+  }
+
+  onSenderInput(value: string): void {
+    this.updateDoc('sender', value);
+    if (this.isInternalMail()) this.filterDepartments(value); else this.filterSenders(value);
+  }
+
+  onReceiverInput(value: string): void {
+    this.updateDoc('receiver', value);
+    if (this.isInternalMail()) this.filterDepartments(value); else this.filterReceivers(value);
+  }
+
+  partyListType(): MasterListType {
+    return this.isInternalMail() ? 'department' : 'sender';
+  }
+
+  receiverListType(): MasterListType {
+    return this.isInternalMail() ? 'department' : 'receiver';
+  }
+
   filterAuthors(term: string): void {
     const t = term.toLowerCase();
     this.filteredAuthors.set(this.authors().filter(a => a.name.toLowerCase().includes(t)));
+  }
+
+  filterPreparers(term: string): void {
+    const t = term.toLowerCase();
+    this.filteredPreparers.set(this.preparers().filter(a => a.name.toLowerCase().includes(t)));
   }
 
   filterSenders(term: string): void {
@@ -376,37 +431,39 @@ export class DocumentFormComponent implements OnInit {
       this.toast.show('التاريخ مطلوب', 'warning');
       return;
     }
-    if (!d.sender) {
+    // Trim before validating so whitespace-only values are rejected, and store
+    // the trimmed values so no stray spaces reach the archive.
+    const sender = (d.sender ?? '').trim();
+    const receiver = (d.receiver ?? '').trim();
+    const subject = (d.subject ?? '').trim();
+    if (!sender) {
       this.toast.show('المرسل مطلوب', 'warning');
       return;
     }
-    if (!d.receiver) {
+    if (!receiver) {
+      // Required for every type — incoming documents must name the internal
+      // recipient just as outgoing ones name the external recipient.
       this.toast.show('المستلم مطلوب', 'warning');
       return;
     }
-    if (!d.subject) {
+    if (!subject) {
       this.toast.show('الموضوع مطلوب', 'warning');
       return;
     }
-    if (!d.ref_number) {
-      this.toast.show('يرجى توليد الرقم المرجعي', 'warning');
-      return;
-    }
-    if (type.name === 'صادر' && (!d.receiver || !d.author)) {
-      this.toast.show('يرجى ملء الجهة المستقبلة واسم المؤلف', 'warning');
+    if (type.name === 'صادر' && !(d.author ?? '').trim()) {
+      this.toast.show('يرجى ملء اسم منشئ الرسالة', 'warning');
       return;
     }
     if (type.name === 'وارد' && !d.input_method) {
       this.toast.show('يرجى اختيار طريقة الاستلام', 'warning');
       return;
     }
-    if (type.name === 'مراسلات' && !d.receiver) {
-      this.toast.show('يرجى ملء القسم المستهدف', 'warning');
-      return;
-    }
 
     const payload: ArchiveDocument = {
       ...d,
+      sender,
+      receiver,
+      subject,
       attachments_json: JSON.stringify(this.attachments()),
       created_by: this.auth.currentUser()?.username
     };
@@ -417,9 +474,10 @@ export class DocumentFormComponent implements OnInit {
         await this.documentService.update(payload);
         await this.auditService.log('تعديل', d.ref_number, d.subject);
       } else {
-        const id = await this.documentService.create(payload);
+        const { id, ref_number } = await this.documentService.create(payload);
         payload.id = id;
-        await this.auditService.log('إنشاء', d.ref_number, d.subject);
+        payload.ref_number = ref_number;
+        await this.auditService.log('إنشاء', ref_number, d.subject);
       }
       this.dialogRef.close(true);
     } catch (err: unknown) {

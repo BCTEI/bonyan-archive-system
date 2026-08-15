@@ -63,7 +63,9 @@ $bonyan-archive-system-theme: mat.define-light-theme((
     accent: $bonyan-archive-system-accent,
     warn: $bonyan-archive-system-warn,
   ),
-  typography: mat.define-typography-config(),
+  typography: mat.define-typography-config(
+    $font-family: 'Tajawal, sans-serif'
+  ),
   density: 0
 ));
 
