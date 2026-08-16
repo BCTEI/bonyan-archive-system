@@ -12,7 +12,6 @@
       { "target": "portable", "arch": ["x64"] }
     ],
     "icon": "build/icon.png",
-    "publisherName": "مركز البنيان",
     "signAndEditExecutable": false
   },
   "nsis": {
@@ -31,11 +30,6 @@
     "category": "Office",
     "maintainer": "مركز البنيان <archive@bonyan.ly>",
     "vendor": "مركز البنيان",
-    "icon": "build/icon.png",
-    "desktop": {
-      "Name": "نظام الأرشيف الإلكتروني - مركز البنيان",
-      "Comment": "نظام أرشفة إلكتروني يعمل بدون إنترنت",
-      "Categories": "Office;Database;"
-    }
+    "icon": "build/icon.png"
   }
 }
