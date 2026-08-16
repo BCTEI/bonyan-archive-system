@@ -23,6 +23,7 @@ import { ToastService } from '../../services/toast.service';
 import { UserFormComponent } from './user-form/user-form.component';
 import { UserSessionsComponent } from './user-sessions/user-sessions.component';
 import { FolderPermissionsComponent } from '../folder-permissions/folder-permissions.component';
+import { formatDate } from '../../utils/format-date.util';
 
 @Component({
   selector: 'app-user-management',
@@ -269,12 +270,7 @@ export class UserManagementComponent implements OnInit {
     });
   }
 
-  formatDate(ts?: number | string | null): string {
-    if (ts === null || ts === undefined || ts === '') return '-';
-    const num = typeof ts === 'number' ? ts : Number(ts);
-    if (!isFinite(num)) return '-';
-    return new Date(num * 1000).toLocaleDateString('ar-LY');
-  }
+  formatDate = formatDate;
 
   roleClass(role: string): string {
     return `role-${role}`;

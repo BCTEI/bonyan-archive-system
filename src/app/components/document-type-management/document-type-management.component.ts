@@ -11,9 +11,7 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { DocumentTypeEntry } from '../../models/document.model';
 import { DocumentTypeService } from '../../services/document-type.service';
-import { DatabaseService } from '../../services/database.service';
 import { ToastService } from '../../services/toast.service';
-import { AuditService } from '../../services/audit.service';
 import { DocumentTypeFormComponent } from './document-type-form/document-type-form.component';
 
 @Component({
@@ -36,9 +34,7 @@ import { DocumentTypeFormComponent } from './document-type-form/document-type-fo
 })
 export class DocumentTypeManagementComponent implements OnInit {
   private documentTypeService = inject(DocumentTypeService);
-  private db = inject(DatabaseService);
   private toast = inject(ToastService);
-  private audit = inject(AuditService);
   private dialog = inject(MatDialog);
 
   types = signal<DocumentTypeEntry[]>([]);
@@ -60,8 +56,7 @@ export class DocumentTypeManagementComponent implements OnInit {
       this.types.set(types);
       this.documentCounts.set(counts);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'فشل تحميل أنواع الوثائق';
-      this.toast.show(message, 'error');
+      this.toast.showError(err, 'فشل تحميل أنواع الوثائق');
     } finally {
       this.loading.set(false);
     }
@@ -69,14 +64,7 @@ export class DocumentTypeManagementComponent implements OnInit {
 
   private async loadDocumentCounts(): Promise<Record<number, number>> {
     try {
-      const rows = await this.db.query<{ type_id: number; c: number }>(
-        'SELECT type_id, COUNT(*) as c FROM documents GROUP BY type_id'
-      );
-      const counts: Record<number, number> = {};
-      for (const row of rows) {
-        counts[row.type_id] = row.c;
-      }
-      return counts;
+      return await this.documentTypeService.getCounts();
     } catch {
       return {};
     }
@@ -122,11 +110,9 @@ export class DocumentTypeManagementComponent implements OnInit {
     try {
       await this.documentTypeService.delete(type.id);
       this.toast.show('تم حذف نوع الوثيقة بنجاح', 'success');
-      await this.audit.log('حذف نوع وثيقة', type.prefix, `الاسم: ${type.label}`);
       await this.loadData();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'فشل حذف نوع الوثيقة';
-      this.toast.show(message, 'error');
+      this.toast.showError(err, 'فشل حذف نوع الوثيقة');
     }
   }
 

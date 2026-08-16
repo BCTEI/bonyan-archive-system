@@ -15,6 +15,7 @@ import { SecurityService } from '../../services/security.service';
 import { UserService } from '../../services/user.service';
 import { ToastService } from '../../services/toast.service';
 import { CodeIssuedDialogComponent } from './code-issued-dialog/code-issued-dialog.component';
+import { formatDateTime } from '../../utils/format-date.util';
 
 @Component({
   selector: 'app-security-center',
@@ -135,14 +136,5 @@ export class SecurityCenterComponent implements OnInit {
     }
   }
 
-  formatDate(timestamp: number | null | undefined): string {
-    if (!timestamp) return '-';
-    return new Date(timestamp * 1000).toLocaleString('ar-SA', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  }
+  formatDate = formatDateTime;
 }

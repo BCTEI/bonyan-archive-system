@@ -71,7 +71,7 @@
         <mat-icon>attach_file</mat-icon>
         <span>{{ attachmentsCount() }}</span>
       </span>
-      @if (doc().signature_base64) {
+      @if (doc().has_signature || doc().signature_base64) {
         <span class="flex items-center gap-1" title="موقع">
           <span class="w-2.5 h-2.5 rounded-full bg-success"></span>
           <span>موقع</span>

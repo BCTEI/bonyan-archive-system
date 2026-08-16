@@ -9,7 +9,6 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { OrgUnit, FlatOrgUnit, UNIT_TYPE_LABELS, buildOrgTree, flattenOrgTree } from '../../models/org-unit.model';
 import { OrgUnitService } from '../../services/org-unit.service';
 import { ToastService } from '../../services/toast.service';
-import { AuditService } from '../../services/audit.service';
 import { OrgUnitFormComponent } from './org-unit-form/org-unit-form.component';
 
 @Component({
@@ -30,7 +29,6 @@ import { OrgUnitFormComponent } from './org-unit-form/org-unit-form.component';
 export class OrgUnitManagementComponent implements OnInit {
   private orgUnitService = inject(OrgUnitService);
   private toast = inject(ToastService);
-  private audit = inject(AuditService);
   private dialog = inject(MatDialog);
 
   units = signal<OrgUnit[]>([]);
@@ -73,11 +71,9 @@ export class OrgUnitManagementComponent implements OnInit {
     try {
       await this.orgUnitService.update(unit.id, { is_active: next });
       this.toast.show(`تم ${label} الوحدة "${unit.name}" بنجاح`, 'success');
-      await this.audit.log(`${label} وحدة تنظيمية`, unit.name);
       await this.loadData();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'فشل تغيير الحالة';
-      this.toast.show(message, 'error');
+      this.toast.showError(err, 'فشل تغيير الحالة');
     }
   }
 
@@ -86,11 +82,9 @@ export class OrgUnitManagementComponent implements OnInit {
     try {
       await this.orgUnitService.delete(unit.id);
       this.toast.show('تم حذف الوحدة بنجاح', 'success');
-      await this.audit.log('حذف وحدة تنظيمية', unit.name);
       await this.loadData();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'فشل حذف الوحدة';
-      this.toast.show(message, 'error');
+      this.toast.showError(err, 'فشل حذف الوحدة');
     }
   }
 

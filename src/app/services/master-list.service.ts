@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { MasterListEntry, MasterListInput, MasterListType } from '../models/master-list.model';
+import { unwrap } from '../utils/ipc-result.util';
 
 @Injectable({
   providedIn: 'root'
@@ -10,29 +11,36 @@ export class MasterListService {
   }
 
   async getAll(listType?: MasterListType, activeOnly = false): Promise<MasterListEntry[]> {
-    const result = await this.api.masterListAPI.getAll(listType, activeOnly);
-    if (!result.success) throw new Error(result.error ?? 'فشل تحميل القائمة الرئيسية');
+    const result = unwrap(await this.api.masterListAPI.getAll(listType, activeOnly), 'فشل تحميل القائمة الرئيسية');
     return result.items ?? [];
   }
 
+  /** Loads the five master lists used across the app in one round of parallel IPC calls. */
+  async loadAllLists(activeOnly = false): Promise<{ author: MasterListEntry[]; preparer: MasterListEntry[]; sender: MasterListEntry[]; receiver: MasterListEntry[]; department: MasterListEntry[] }> {
+    const [author, preparer, sender, receiver, department] = await Promise.all([
+      this.getAll('author', activeOnly),
+      this.getAll('preparer', activeOnly),
+      this.getAll('sender', activeOnly),
+      this.getAll('receiver', activeOnly),
+      this.getAll('department', activeOnly)
+    ]);
+    return { author, preparer, sender, receiver, department };
+  }
+
   async create(input: MasterListInput): Promise<number> {
-    const result = await this.api.masterListAPI.create(input);
-    if (!result.success) throw new Error(result.error ?? 'فشل إضافة العنصر');
+    const result = unwrap(await this.api.masterListAPI.create(input), 'فشل إضافة العنصر');
     return result.id!;
   }
 
   async update(id: number, input: Partial<MasterListInput>): Promise<void> {
-    const result = await this.api.masterListAPI.update(id, input);
-    if (!result.success) throw new Error(result.error ?? 'فشل تحديث العنصر');
+    const result = unwrap(await this.api.masterListAPI.update(id, input), 'فشل تحديث العنصر');
   }
 
   async delete(id: number): Promise<void> {
-    const result = await this.api.masterListAPI.delete(id);
-    if (!result.success) throw new Error(result.error ?? 'فشل حذف العنصر');
+    const result = unwrap(await this.api.masterListAPI.delete(id), 'فشل حذف العنصر');
   }
 
   async toggleStatus(id: number, isActive: number): Promise<void> {
-    const result = await this.api.masterListAPI.toggleStatus(id, isActive);
-    if (!result.success) throw new Error(result.error ?? 'فشل تغيير حالة العنصر');
+    const result = unwrap(await this.api.masterListAPI.toggleStatus(id, isActive), 'فشل تغيير حالة العنصر');
   }
 }

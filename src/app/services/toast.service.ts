@@ -19,6 +19,11 @@ export class ToastService {
     setTimeout(() => this.dismiss(toast.id), duration);
   }
 
+  /** Collapses the repeated `catch (err) { const message = err instanceof Error ? err.message : fallback; this.toast.show(message, 'error'); }` idiom. */
+  showError(err: unknown, fallback: string): void {
+    this.show(err instanceof Error ? err.message : fallback, 'error');
+  }
+
   dismiss(id: number): void {
     this.toasts.update(list => list.filter(t => t.id !== id));
   }

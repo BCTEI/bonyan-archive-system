@@ -14,7 +14,6 @@ import { DocumentService } from '../../services/document.service';
 import { DocumentTypeService } from '../../services/document-type.service';
 import { FolderService } from '../../services/folder.service';
 import { MasterListService } from '../../services/master-list.service';
-import { AuditService } from '../../services/audit.service';
 import { AuthService } from '../../services/auth.service';
 import { OrgUnitService } from '../../services/org-unit.service';
 import { SignatureService } from '../../services/signature.service';
@@ -35,7 +34,6 @@ export class DocumentFormComponent implements OnInit {
   private documentTypeService = inject(DocumentTypeService);
   private folderService = inject(FolderService);
   private masterListService = inject(MasterListService);
-  private auditService = inject(AuditService);
   private auth = inject(AuthService);
   private orgUnitService = inject(OrgUnitService);
   private signatureService = inject(SignatureService);
@@ -297,8 +295,7 @@ export class DocumentFormComponent implements OnInit {
       this.quickAddType.set(null);
       this.quickAddName.set('');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'فشل الإضافة';
-      this.toast.show(message, 'error');
+      this.toast.showError(err, 'فشل الإضافة');
     }
   }
 
@@ -470,19 +467,18 @@ export class DocumentFormComponent implements OnInit {
 
     this.isSaving.set(true);
     try {
+      // The main process writes the audit entry for create/update — logging
+      // here too would produce two rows per action.
       if (d.id) {
         await this.documentService.update(payload);
-        await this.auditService.log('تعديل', d.ref_number, d.subject);
       } else {
         const { id, ref_number } = await this.documentService.create(payload);
         payload.id = id;
         payload.ref_number = ref_number;
-        await this.auditService.log('إنشاء', ref_number, d.subject);
       }
       this.dialogRef.close(true);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'فشل الحفظ';
-      this.toast.show(message, 'error');
+      this.toast.showError(err, 'فشل الحفظ');
     } finally {
       this.isSaving.set(false);
     }

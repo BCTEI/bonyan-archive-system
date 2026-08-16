@@ -57,6 +57,9 @@ export interface ArchiveDocument {
   // attachments_json itself is stripped (unverified top-secret rows) or omitted entirely
   // (archive list rows never include attachments_json — see AnnualClosingService).
   attachments_count?: number;
+  // Boolean shim for list rows (document:getAll), which omit signature_base64
+  // itself — lets cards show the "signed" badge without shipping the signature.
+  has_signature?: number;
   created_at?: string;
   updated_at?: string;
   created_by?: string;

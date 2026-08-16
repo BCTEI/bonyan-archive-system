@@ -43,6 +43,16 @@ function resolveBrowserFile(urlPath: string): string {
     filePath = path.join(filePath, 'index.html');
   }
 
+  // Containment check: an URL like app://-/%2e%2e/%2e%2e/archive.db must never
+  // resolve outside the browser bundle, or any renderer script could read
+  // arbitrary local files through this protocol.
+  const resolved = path.resolve(filePath);
+  const root = path.resolve(browserDir);
+  if (resolved !== root && !resolved.startsWith(root + path.sep)) {
+    return path.join(root, 'index.html');
+  }
+  filePath = resolved;
+
   if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
     return filePath;
   }
@@ -171,7 +181,7 @@ function activeUser(): AuthUser | null {
       // top-secret unlocks and this user's rate-limit state so they can't leak
       // into whoever logs in next in this process.
       verifiedTopSecret.clear();
-      clearRateLimit(currentUser.id);
+      clearRateLimit(codeRateLimitKey(currentUser.id));
       currentUser = null;
       return null;
     }
@@ -249,20 +259,22 @@ function canAccessConfidentiality(user: AuthUser, conf: string, docCreatedBy?: s
 // 'archive:<year>:<docId>'. Cleared wholesale on auth:logout.
 const verifiedTopSecret = new Set<string>();
 
-// Per-user in-memory rate limiter for security:verifyCode — 5 failures within a
-// 15-minute window locks that user out of further attempts for 15 minutes.
+// In-memory rate limiter — 5 failures within a 15-minute window locks the key
+// out for 15 minutes. Keys are prefixed by channel: `code:<userId>` for
+// security:verifyCode, `pwd:<username>` for password-based channels (login,
+// auth:verifyPassword, security:verifyPassword).
 interface CodeAttemptState {
   failures: number;
   firstFailureAt: number;
   lockedUntil: number | null;
 }
-const codeAttempts = new Map<number, CodeAttemptState>();
+const codeAttempts = new Map<string, CodeAttemptState>();
 const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000;
 const RATE_LIMIT_MAX_FAILURES = 5;
 const RATE_LIMIT_LOCK_MS = 15 * 60 * 1000;
 
-function checkRateLimit(userId: number): { locked: boolean; message?: string } {
-  const entry = codeAttempts.get(userId);
+function checkRateLimit(key: string): { locked: boolean; message?: string } {
+  const entry = codeAttempts.get(key);
   if (!entry) return { locked: false };
   const now = Date.now();
   if (entry.lockedUntil != null) {
@@ -270,14 +282,14 @@ function checkRateLimit(userId: number): { locked: boolean; message?: string } {
       const minutesLeft = Math.max(1, Math.ceil((entry.lockedUntil - now) / 60000));
       return { locked: true, message: `تم تأمين التحقق مؤقتاً، حاول بعد ${minutesLeft} دقائق` };
     }
-    codeAttempts.delete(userId);
+    codeAttempts.delete(key);
   }
   return { locked: false };
 }
 
-function recordFailedCodeAttempt(userId: number): void {
+function recordFailedCodeAttempt(key: string): void {
   const now = Date.now();
-  let entry = codeAttempts.get(userId);
+  let entry = codeAttempts.get(key);
   if (!entry || now - entry.firstFailureAt > RATE_LIMIT_WINDOW_MS) {
     entry = { failures: 0, firstFailureAt: now, lockedUntil: null };
   }
@@ -285,11 +297,33 @@ function recordFailedCodeAttempt(userId: number): void {
   if (entry.failures >= RATE_LIMIT_MAX_FAILURES) {
     entry.lockedUntil = now + RATE_LIMIT_LOCK_MS;
   }
-  codeAttempts.set(userId, entry);
+  codeAttempts.set(key, entry);
 }
 
-function clearRateLimit(userId: number): void {
-  codeAttempts.delete(userId);
+function clearRateLimit(key: string): void {
+  codeAttempts.delete(key);
+}
+
+function codeRateLimitKey(userId: number): string {
+  return `code:${userId}`;
+}
+
+function passwordRateLimitKey(username: string): string {
+  return `pwd:${username.toLowerCase()}`;
+}
+
+// Window-open policy for both app windows: the renderer only ever needs
+// about:blank popups (print preview via window.open + document.write).
+// Anything else — external URLs, app:// navigations in a new window — is denied
+// so injected script can't escape into a less-controlled browsing context.
+function restrictWindowOpen(contents: Electron.WebContents): void {
+  contents.setWindowOpenHandler(({ url }) => {
+    if (url === 'about:blank' || url === '') {
+      return { action: 'allow' };
+    }
+    console.warn('[Main] Blocked window.open to:', url);
+    return { action: 'deny' };
+  });
 }
 
 function createLoginWindow(): void {
@@ -308,6 +342,7 @@ function createLoginWindow(): void {
     },
   });
 
+  restrictWindowOpen(loginWindow.webContents);
   loginWindow.loadURL(appUrl('login'));
   loginWindow.on('closed', () => {
     loginWindow = null;
@@ -331,6 +366,7 @@ function createMainWindow(): void {
   const mainUrl = appUrl('/main/dashboard');
   console.log('[Main] Loading main window URL:', mainUrl);
 
+  restrictWindowOpen(mainWindow.webContents);
   mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
     console.error('[Main] Main window failed to load:', errorCode, errorDescription);
   });
@@ -345,7 +381,7 @@ function createMainWindow(): void {
     // still tear down the session's top-secret unlocks + rate-limit state.
     if (currentUser) {
       verifiedTopSecret.clear();
-      clearRateLimit(currentUser.id);
+      clearRateLimit(codeRateLimitKey(currentUser.id));
     }
     currentUser = null;
   });
@@ -357,22 +393,6 @@ console.log('[Main] Registering IPC handlers');
 ipcMain.handle('db:init', () => {
   console.log('[Main] Handling db:init');
   return initDb();
-});
-
-ipcMain.handle('db:query', (_event: IpcMainInvokeEvent, sql: string, params?: unknown[]) => {
-  console.log('[Main] Handling db:query');
-  const user = activeUser();
-  if (!user) throw new Error('يجب تسجيل الدخول');
-  if (!hasMinRole(user, 'deputy_manager')) throw new Error('ليس لديك صلاحية');
-  return query(sql, params);
-});
-
-ipcMain.handle('db:run', (_event: IpcMainInvokeEvent, sql: string, params?: unknown[]) => {
-  console.log('[Main] Handling db:run');
-  const user = activeUser();
-  if (!user) return { success: false, error: 'يجب تسجيل الدخول' };
-  if (!hasMinRole(user, 'deputy_manager')) return { success: false, error: 'ليس لديك صلاحية التعديل' };
-  return run(sql, params);
 });
 
 ipcMain.handle('db:export', () => {
@@ -389,12 +409,14 @@ ipcMain.handle('db:import', (_event: IpcMainInvokeEvent, jsonData: string, mode:
   if (!user) return { success: false, error: 'يجب تسجيل الدخول' };
   if (!hasMinRole(user, 'deputy_manager')) return { success: false, error: 'ليس لديك صلاحية الاستيراد' };
   addAudit('استيراد بيانات', undefined, `الوضع: ${mode}`, user.username);
-  return importData(jsonData, mode);
+  return importData(jsonData, mode, user.role);
 });
 
 ipcMain.handle('db:audit', (_event: IpcMainInvokeEvent, action: string, docRef?: string, details?: string) => {
   console.log('[Main] Handling db:audit');
-  addAudit(action, docRef, details, currentUser?.username);
+  const user = activeUser();
+  if (!user) return { success: false, error: 'يجب تسجيل الدخول' };
+  addAudit(action, docRef, details, user.username);
   return true;
 });
 
@@ -404,17 +426,6 @@ ipcMain.handle('audit:clearAll', () => {
   if (!user) return { success: false, error: 'يجب تسجيل الدخول' };
   if (!hasMinRole(user, 'general_manager')) return { success: false, error: 'ليس لديك صلاحية' };
   return clearAudit();
-});
-
-ipcMain.handle('audit:addEntry', (_event: IpcMainInvokeEvent, entry: { action: string; doc_ref?: string; details?: string; username?: string }) => {
-  console.log('[Main] Handling audit:addEntry');
-  try {
-    addAudit(entry.action, entry.doc_ref, entry.details, entry.username ?? currentUser?.username);
-    return { success: true };
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : 'Unknown error';
-    return { success: false, error: message };
-  }
 });
 
 ipcMain.handle('audit:list', (_event: IpcMainInvokeEvent, limit?: number) => {
@@ -454,6 +465,29 @@ ipcMain.handle('db:stats', () => {
       stats.total += 1;
     }
     return { success: true, stats };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+// Per-type document counts scoped to the caller's document visibility and
+// confidentiality clearance — replaces the renderer's old raw-SQL
+// db:query('SELECT type_id, COUNT(*) ...') call for the type-management screen.
+ipcMain.handle('documentType:getCounts', () => {
+  console.log('[Main] Handling documentType:getCounts');
+  try {
+    const user = activeUser();
+    if (!user) return { success: false, error: 'يجب تسجيل الدخول' };
+    const scope = documentScope(user);
+    let sql = 'SELECT d.type_id, d.confidentiality, d.created_by FROM documents d';
+    if (scope.where) sql += ' WHERE ' + scope.where;
+    const rows = query(sql, scope.params) as Array<{ type_id: number; confidentiality: string; created_by: string | null }>;
+    const counts: Record<number, number> = {};
+    for (const row of rows) {
+      if (!canAccessConfidentiality(user, row.confidentiality, row.created_by ?? undefined)) continue;
+      counts[row.type_id] = (counts[row.type_id] ?? 0) + 1;
+    }
+    return { success: true, counts };
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
   }
@@ -513,6 +547,12 @@ ipcMain.handle('auth:login', (_event: IpcMainInvokeEvent, username: string, pass
       console.warn('[Main] DB fallback active:', initErr);
     }
 
+    const pwdKey = passwordRateLimitKey(String(username ?? ''));
+    const limitState = checkRateLimit(pwdKey);
+    if (limitState.locked) {
+      return { success: false, error: limitState.message };
+    }
+
     const result = authenticateUser(username, password);
     if (result.success && result.user) {
       // New session starting: verifiedTopSecret is process-global, so it must be
@@ -520,9 +560,10 @@ ipcMain.handle('auth:login', (_event: IpcMainInvokeEvent, username: string, pass
       // top-secret docs would remain unlocked for whoever logs in next in this
       // same process. Also drop any leftover rate-limit state for whichever user
       // was previously signed in (covers logout-less session handoffs).
-      if (currentUser) clearRateLimit(currentUser.id);
+      if (currentUser) clearRateLimit(codeRateLimitKey(currentUser.id));
       verifiedTopSecret.clear();
       currentUser = result.user;
+      clearRateLimit(pwdKey);
       addSession(currentUser.id, currentUser.username, 'login');
       addAudit('تسجيل دخول', undefined, undefined, currentUser.username);
       console.log('[Main] Returning success=true');
@@ -531,6 +572,7 @@ ipcMain.handle('auth:login', (_event: IpcMainInvokeEvent, username: string, pass
       return { success: true, user: currentUser };
     }
 
+    recordFailedCodeAttempt(pwdKey);
     console.log('[Main] Returning error:', result.error);
     return { success: false, error: result.error ?? 'فشل تسجيل الدخول' };
   } catch (err: unknown) {
@@ -550,7 +592,7 @@ ipcMain.handle('auth:logout', () => {
   if (currentUser) {
     addSession(currentUser.id, currentUser.username, 'logout');
     addAudit('تسجيل خروج', undefined, undefined, currentUser.username);
-    clearRateLimit(currentUser.id);
+    clearRateLimit(codeRateLimitKey(currentUser.id));
   }
   verifiedTopSecret.clear();
   currentUser = null;
@@ -565,8 +607,15 @@ ipcMain.handle('auth:verifyPassword', (_event: IpcMainInvokeEvent, username: str
     const user = activeUser();
     if (!user) return false;
     if (username !== user.username) return false;
+    const limitState = checkRateLimit(passwordRateLimitKey(username));
+    if (limitState.locked) return false;
     initDb();
     const result = authenticateUser(username, password);
+    if (result.success) {
+      clearRateLimit(passwordRateLimitKey(username));
+    } else {
+      recordFailedCodeAttempt(passwordRateLimitKey(username));
+    }
     return result.success;
   } catch (err: unknown) {
     console.error('[Main] auth:verifyPassword exception:', err instanceof Error ? err.message : err);
@@ -705,7 +754,9 @@ ipcMain.handle('user:getTodaySessions', () => {
   console.log('[Main] Handling user:getTodaySessions');
   try {
     const user = activeUser();
-    if (!user) return { success: false, error: 'يجب تسجيل الدخول' };
+    // Login/logout times of every user are not something a regular employee
+    // should see — gate to section_head and above.
+    if (!hasMinRole(user, 'section_head')) return { success: false, error: 'ليس لديك صلاحية' };
     return { success: true, sessions: getTodaySessions() };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';
@@ -985,6 +1036,7 @@ function applyTopSecretGate(doc: Record<string, unknown>, scopeKey: string): Rec
     doc.body = '';
     doc.attachments_json = '[]';
     doc.signature_base64 = null;
+    doc.has_signature = 0;
     doc.locked = true;
   }
   return doc;
@@ -997,12 +1049,25 @@ const DOCUMENT_SELECT_COLUMNS =
   "d.*, dt.name as type, dt.label as type_label, dt.color as type_color, dt.icon as type_icon, " +
   "CASE WHEN json_valid(d.attachments_json) THEN json_array_length(d.attachments_json) ELSE 0 END as attachments_count";
 
+// List-view columns (document:getAll): everything EXCEPT the heavy/sensitive
+// payloads (body, attachments_json, signature_base64) so a grid/dashboard load
+// doesn't pull every document's base64 attachments into the renderer. Mirrors
+// the archived-year list in database.ts (getArchivedDocuments). has_signature
+// keeps the card "signed" badge working without shipping the signature itself.
+const DOCUMENT_LIST_COLUMNS =
+  "d.id, d.ref_number, d.type_id, d.folder_id, d.confidentiality, d.subject, d.sender, d.receiver, " +
+  "d.author, d.writer_name, d.address, d.target, d.content, d.input_method, d.date, d.notes, d.status, " +
+  "d.barcode, d.archive_year, d.created_at, d.updated_at, d.created_by, d.org_unit_id, " +
+  "dt.name as type, dt.label as type_label, dt.color as type_color, dt.icon as type_icon, " +
+  "CASE WHEN json_valid(d.attachments_json) THEN json_array_length(d.attachments_json) ELSE 0 END as attachments_count, " +
+  "CASE WHEN d.signature_base64 IS NOT NULL AND d.signature_base64 != '' THEN 1 ELSE 0 END as has_signature";
+
 ipcMain.handle('document:getAll', () => {
   try {
     const user = activeUser();
     if (!user) return { success: false, error: 'يجب تسجيل الدخول' };
     const scope = documentScope(user);
-    let sql = `SELECT ${DOCUMENT_SELECT_COLUMNS} FROM documents d JOIN document_types dt ON d.type_id = dt.id`;
+    let sql = `SELECT ${DOCUMENT_LIST_COLUMNS} FROM documents d JOIN document_types dt ON d.type_id = dt.id`;
     if (scope.where) sql += ' WHERE ' + scope.where;
     sql += ' ORDER BY d.created_at DESC';
     const docs = query(sql, scope.params) as Array<Record<string, unknown>>;
@@ -1039,9 +1104,10 @@ ipcMain.handle('document:getById', (_event: IpcMainInvokeEvent, id: number) => {
 });
 
 // Resolves a scanned/typed barcode to its document. The barcode never carries
-// document data itself, so this still enforces the same login + confidentiality
-// checks as document:getById — a manipulated or guessed value can only ever
-// resolve to a real row, never bypass access control.
+// document data itself, so this enforces the same login + org-scope +
+// confidentiality + top-secret-gate checks as document:getById — a manipulated
+// or guessed value can only ever resolve to a real row, never bypass access
+// control.
 ipcMain.handle('document:getByBarcode', (_event: IpcMainInvokeEvent, barcode: unknown) => {
   try {
     const user = activeUser();
@@ -1079,10 +1145,14 @@ ipcMain.handle('document:getByBarcode', (_event: IpcMainInvokeEvent, barcode: un
     const rows = query(sql, [barcodeValue, refNumberValue]) as Array<Record<string, unknown>>;
     if (rows.length === 0) return { success: false, error: 'لم يتم العثور على وثيقة بهذا الباركود' };
     const doc = rows[0];
+    if (!canTouchDocument(user, { org_unit_id: doc.org_unit_id as number | null, created_by: doc.created_by as string | null })) {
+      return { success: false, error: 'ليس لديك صلاحية الوصول لهذه الوثيقة' };
+    }
     const conf = doc.confidentiality as string;
     if (!canAccessConfidentiality(user, conf, (doc.created_by as string) ?? undefined)) {
       return { success: false, error: 'ليس لديك صلاحية الوصول لهذه الوثيقة' };
     }
+    applyTopSecretGate(doc, `live:${doc.id}`);
     return { success: true, document: doc };
   } catch (err: unknown) {
     return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
@@ -1102,6 +1172,13 @@ function validateDocumentInput(doc: Record<string, unknown>, isCreate: boolean):
   if (!nonEmpty(doc.receiver)) return 'المستلم مطلوب';
   if (!nonEmpty(doc.subject)) return 'الموضوع مطلوب';
   if (!doc.confidentiality) return 'مستوى السرية مطلوب';
+  // Type-specific rules that used to live only in the renderer form
+  // (document-form.component.ts) — enforced here so a crafted IPC payload
+  // can't skip them. Type names are the stable system names (صادر/وارد/...).
+  const typeRow = query('SELECT name FROM document_types WHERE id = ?', [doc.type_id]) as Array<{ name: string }>;
+  const typeName = typeRow[0]?.name;
+  if (typeName === 'صادر' && !nonEmpty(doc.author)) return 'يرجى ملء اسم منشئ الرسالة';
+  if (typeName === 'وارد' && !nonEmpty(doc.input_method)) return 'يرجى اختيار طريقة الاستلام';
   return null;
 }
 
@@ -1141,13 +1218,8 @@ ipcMain.handle('document:create', (_event: IpcMainInvokeEvent, doc: Record<strin
     const result = run(`
       INSERT INTO documents (
         ref_number, type_id, folder_id, confidentiality, subject, sender, receiver, author, writer_name, address, target, content, input_method,
-<<<<<<< HEAD
-        date, body, notes, status, signature_base64, attachments_json, created_by, org_unit_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-=======
         date, body, notes, status, signature_base64, attachments_json, created_by, org_unit_id, archive_year
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
->>>>>>> 9212cee41ab3eccfcb44c4d78dd95966f126ddb7
     `, [
       ref_number,
       doc.type_id,
@@ -1227,11 +1299,7 @@ ipcMain.handle('document:update', (_event: IpcMainInvokeEvent, doc: Record<strin
     // edit can never rewrite (or collide) a reference number.
     run(`
       UPDATE documents SET
-<<<<<<< HEAD
-        ref_number = ?, type_id = ?, folder_id = ?, confidentiality = ?, subject = ?, sender = ?, receiver = ?,
-=======
         type_id = ?, folder_id = ?, confidentiality = ?, subject = ?, sender = ?, receiver = ?,
->>>>>>> 9212cee41ab3eccfcb44c4d78dd95966f126ddb7
         author = ?, writer_name = ?, address = ?, target = ?, content = ?, input_method = ?,
         date = ?, body = ?, notes = ?, status = ?, signature_base64 = ?, attachments_json = ?, org_unit_id = ?,
         updated_at = strftime('%s','now')
@@ -1349,7 +1417,7 @@ ipcMain.handle('security:verifyCode', (_event: IpcMainInvokeEvent, code: string,
     const user = activeUser();
     if (!user) return { valid: false, error: 'يجب تسجيل الدخول' };
 
-    const limitState = checkRateLimit(user.id);
+    const limitState = checkRateLimit(codeRateLimitKey(user.id));
     if (limitState.locked) {
       addAudit('محاولة تحقق أثناء التأمين', undefined, documentId != null ? `الوثيقة: ${documentId}` : undefined, user.username);
       return { valid: false, error: limitState.message };
@@ -1357,7 +1425,7 @@ ipcMain.handle('security:verifyCode', (_event: IpcMainInvokeEvent, code: string,
 
     const result = verifyAndConsumeUserCode(user.id, code, documentId);
     if (result.success) {
-      clearRateLimit(user.id);
+      clearRateLimit(codeRateLimitKey(user.id));
       addAudit('تحقق رمز سري ناجح', undefined, documentId != null ? `الوثيقة: ${documentId}` : undefined, user.username);
       if (documentId != null) {
         verifiedTopSecret.add(`${scope}:${documentId}`);
@@ -1365,7 +1433,7 @@ ipcMain.handle('security:verifyCode', (_event: IpcMainInvokeEvent, code: string,
       return { valid: true };
     }
 
-    recordFailedCodeAttempt(user.id);
+    recordFailedCodeAttempt(codeRateLimitKey(user.id));
     addAudit('محاولة تحقق رمز فاشلة', undefined, documentId != null ? `الوثيقة: ${documentId}` : undefined, user.username);
     return { valid: false, error: result.error };
   } catch (err: unknown) {
@@ -1377,6 +1445,10 @@ ipcMain.handle('security:verifyPassword', (_event: IpcMainInvokeEvent, password:
   try {
     const user = activeUser();
     if (!user) return { valid: false, error: 'يجب تسجيل الدخول' };
+    const limitState = checkRateLimit(passwordRateLimitKey(user.username));
+    if (limitState.locked) {
+      return { valid: false, error: limitState.message };
+    }
     initDb();
     const result = authenticateUser(user.username, password);
     // NOTE: password verification alone must NOT unlock سري للغاية (top-secret)
@@ -1384,6 +1456,11 @@ ipcMain.handle('security:verifyPassword', (_event: IpcMainInvokeEvent, password:
     // GM/deputy-issued single-use code) down to one factor, since the
     // security-modal runs this step before the code step. Unlocking
     // verifiedTopSecret is the sole responsibility of security:verifyCode.
+    if (result.success) {
+      clearRateLimit(passwordRateLimitKey(user.username));
+    } else {
+      recordFailedCodeAttempt(passwordRateLimitKey(user.username));
+    }
     return { valid: result.success, error: result.error };
   } catch (err: unknown) {
     return { valid: false, error: err instanceof Error ? err.message : 'Unknown error' };
@@ -1408,7 +1485,10 @@ ipcMain.handle('document:logAccess', (_event: IpcMainInvokeEvent, documentId: nu
 ipcMain.handle('passwordReset:request', (_event: IpcMainInvokeEvent, username: string) => {
   try {
     const target = getUserByUsername(username);
-    if (!target) return { success: false, error: 'اسم المستخدم غير موجود' };
+    // Anti-enumeration: unknown usernames get the same generic success the
+    // renderer shows for a real request — the response must not reveal
+    // whether the account exists.
+    if (!target) return { success: true };
     const result = requestPasswordReset(target.id, target.username);
     return result;
   } catch (err: unknown) {
@@ -1629,14 +1709,33 @@ ipcMain.handle('app:print', () => {
   });
 });
 
+// Extensions that may be written to disk and handed to the OS shell. Anything
+// outside this list (or containing path separators / '..') is rejected — the
+// ext value comes from a stored, user-influenced attachment record, and an
+// executable extension plus shell.openPath would be code execution.
+const OPENABLE_ATTACHMENT_EXTS = /^(pdf|png|jpe?g|gif|webp|docx?|xlsx?|pptx?|csv|txt)$/i;
+// ~37.5 MB decoded (base64 inflates by 4/3).
+const MAX_ATTACHMENT_BASE64_LENGTH = 70_000_000;
+
 ipcMain.handle('app:openAttachment', async (_event: IpcMainInvokeEvent, base64: string, name: string, ext: string) => {
   console.log('[Main] Handling app:openAttachment');
   try {
-    const safeName = name.replace(/[^a-zA-Z0-9\u0600-\u06FF\-_\.]/g, '_');
-    const fileName = `${safeName}_${Date.now()}.${ext}`;
+    const user = activeUser();
+    if (!user) return { success: false, message: 'يجب تسجيل الدخول' };
+    if (typeof ext !== 'string' || !OPENABLE_ATTACHMENT_EXTS.test(ext)) {
+      return { success: false, message: 'نوع الملف غير مدعوم للفتح' };
+    }
+    if (typeof base64 !== 'string' || base64.length > MAX_ATTACHMENT_BASE64_LENGTH) {
+      return { success: false, message: 'حجم المرفق كبير جدًا' };
+    }
+    const safeName = String(name).replace(/[^a-zA-Z0-9\u0600-\u06FF\-_\.]/g, '_');
+    const fileName = `${safeName}_${Date.now()}.${ext.toLowerCase()}`;
     const tempPath = path.join(app.getPath('temp'), fileName);
     fs.writeFileSync(tempPath, Buffer.from(base64, 'base64'));
     const errorMsg = await shell.openPath(tempPath);
+    // Best-effort temp cleanup after the OS has had time to hand the file to
+    // the viewer; failures are harmless (OS temp dir gets cleaned anyway).
+    setTimeout(() => { try { fs.unlinkSync(tempPath); } catch { /* ignore */ } }, 60_000);
     return { success: !errorMsg, path: tempPath, message: errorMsg };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error';

@@ -4,15 +4,12 @@ import { contextBridge, ipcRenderer } from 'electron';
 // NEVER expose raw ipcRenderer to the renderer process.
 contextBridge.exposeInMainWorld('electronAPI', {
   dbInit: () => ipcRenderer.invoke('db:init'),
-  dbQuery: (sql: string, params?: unknown[]) => ipcRenderer.invoke('db:query', sql, params),
-  dbRun: (sql: string, params?: unknown[]) => ipcRenderer.invoke('db:run', sql, params),
   exportData: () => ipcRenderer.invoke('db:export'),
   importData: (jsonData: string, mode: 'merge' | 'replace') => ipcRenderer.invoke('db:import', jsonData, mode),
   addAudit: (action: string, docRef?: string, details?: string) => ipcRenderer.invoke('db:audit', action, docRef, details),
   getStats: () => ipcRenderer.invoke('db:stats'),
   auditAPI: {
     clearAll: () => ipcRenderer.invoke('audit:clearAll'),
-    addEntry: (entry: { action: string; doc_ref?: string; details?: string; username?: string }) => ipcRenderer.invoke('audit:addEntry', entry),
     list: (limit?: number) => ipcRenderer.invoke('audit:list', limit),
   },
   print: () => ipcRenderer.invoke('app:print'),
@@ -54,6 +51,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   documentTypeAPI: {
     getAll: (activeOnly?: boolean) => ipcRenderer.invoke('documentType:getAll', activeOnly),
     getById: (id: number) => ipcRenderer.invoke('documentType:getById', id),
+    getCounts: () => ipcRenderer.invoke('documentType:getCounts'),
     create: (data: unknown) => ipcRenderer.invoke('documentType:create', data),
     update: (id: number, data: unknown) => ipcRenderer.invoke('documentType:update', id, data),
     delete: (id: number) => ipcRenderer.invoke('documentType:delete', id),

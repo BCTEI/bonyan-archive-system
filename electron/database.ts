@@ -5,6 +5,10 @@ import bcrypt from 'bcryptjs';
 import { app } from 'electron';
 import crypto from 'crypto';
 
+// Precomputed bcrypt hash of a throwaway password, used by authenticateUser to
+// equalize timing between "unknown user" and "wrong password" paths.
+const DUMMY_PASSWORD_HASH = bcrypt.hashSync('dummy-password-for-timing', 10);
+
 /*
   Fallback in-memory store used only if better-sqlite3 fails to load.
   This is a temporary workaround so the login screen does not hang.
@@ -978,8 +982,8 @@ function seedAdmin(): void {
 
   const hash = bcrypt.hashSync('admin123', 10);
 
-  const existing = db.prepare('SELECT id, username, password_hash, full_name, role, is_active FROM users WHERE username = ?').get('admin') as
-    | { id: number; username: string; password_hash: string; full_name: string | null; role: string; is_active: number }
+  const existing = db.prepare('SELECT id FROM users WHERE username = ?').get('admin') as
+    | { id: number }
     | undefined;
 
   if (!existing) {
@@ -987,38 +991,13 @@ function seedAdmin(): void {
     db.prepare(
       "INSERT INTO users (username, password_hash, full_name, role, is_active) VALUES (?, ?, ?, ?, ?)"
     ).run('admin', hash, 'المدير العام', 'general_manager', 1);
-    console.log('[Database] Default admin user created');
+    console.log('[Database] Default admin user created — change this password immediately');
     return;
   }
 
-  const updates: string[] = [];
-  const values: unknown[] = [];
-
-  if (!bcrypt.compareSync('admin123', existing.password_hash)) {
-    updates.push('password_hash = ?');
-    values.push(hash);
-  }
-  if (existing.role !== 'general_manager') {
-    updates.push('role = ?');
-    values.push('general_manager');
-  }
-  if (existing.is_active !== 1) {
-    updates.push('is_active = ?');
-    values.push(1);
-  }
-
-  if (existing.full_name !== 'المدير العام') {
-    updates.push('full_name = ?');
-    values.push('المدير العام');
-  }
-
-  if (updates.length > 0) {
-    values.push(existing.id);
-    db.prepare(`UPDATE users SET ${updates.join(', ')}, updated_at = strftime('%s','now') WHERE id = ?`).run(...values);
-    console.log('[Database] Updated default admin account:', updates.join(', '));
-  } else {
-    console.log('[Database] Default admin user already valid');
-  }
+  // The default admin is seeded once on first run only. Never rewrite an
+  // existing account: the GM's own password/role/status must persist.
+  console.log('[Database] Admin user already exists — leaving it untouched');
 }
 
 export function query(sql: string, params?: unknown[]): unknown[] {
@@ -1082,6 +1061,9 @@ export function authenticateUser(username: string, password: string): { success:
       (AuthUser & { password_hash: string }) | undefined;
 
     if (!row) {
+      // Run a bcrypt compare against a dummy hash anyway so "unknown user" and
+      // "wrong password" take the same code path and don't form a timing oracle.
+      bcrypt.compareSync(password, DUMMY_PASSWORD_HASH);
       console.log('[Database] User not found');
       return { success: false, error: 'اسم المستخدم أو كلمة المرور غير صحيحة' };
     }
@@ -1148,6 +1130,9 @@ export function createUser(input: UserInput): { success: boolean; id?: number; e
   const { username, full_name, password, role, org_unit_id, is_active } = input;
   if (!username || !password || !role) {
     return { success: false, error: 'بيانات المستخدم غير مكتملة' };
+  }
+  if (password.length < 6) {
+    return { success: false, error: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' };
   }
 
   if (role === 'general_manager') {
@@ -1723,31 +1708,6 @@ export function clearAudit(): { success: boolean; error?: string } {
   }
 }
 
-export function getStats(): Record<string, number> {
-  if (useMemoryFallback) {
-    const stats: Record<string, number> = { total: memoryStore.documents.length };
-    for (const type of memoryStore.document_types) {
-      stats[type.label] = memoryStore.documents.filter((d: any) => d.type_id === type.id).length;
-    }
-    stats['عادي'] = memoryStore.documents.filter((d: any) => d.confidentiality === 'عادي').length;
-    stats['سري'] = memoryStore.documents.filter((d: any) => d.confidentiality === 'سري').length;
-    stats['سري للغاية'] = memoryStore.documents.filter((d: any) => d.confidentiality === 'سري للغاية').length;
-    return stats;
-  }
-  if (!db) throw new Error('Database not initialized');
-  const total = db.prepare('SELECT COUNT(*) as c FROM documents').get() as { c: number };
-  const stats: Record<string, number> = { total: total.c };
-  const typeRows = db.prepare('SELECT dt.label, COUNT(d.id) as c FROM document_types dt LEFT JOIN documents d ON d.type_id = dt.id GROUP BY dt.id').all() as Array<{ label: string; c: number }>;
-  for (const row of typeRows) {
-    stats[row.label] = row.c;
-  }
-  const confRows = db.prepare("SELECT confidentiality, COUNT(*) as c FROM documents GROUP BY confidentiality").all() as Array<{ confidentiality: string; c: number }>;
-  for (const row of confRows) {
-    stats[row.confidentiality] = row.c;
-  }
-  return stats;
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Yearly archive reference sequence
 //
@@ -1782,7 +1742,7 @@ export function getArchiveSequence(year: number): ArchiveSequenceEntry | undefin
   return db.prepare('SELECT * FROM archive_sequences WHERE year = ?').get(year) as ArchiveSequenceEntry | undefined;
 }
 
-export function getNextArchiveSequenceNumber(year: number): number {
+function getNextArchiveSequenceNumber(year: number): number {
   if (useMemoryFallback) {
     let entry = memoryStore.archive_sequences.find(s => s.year === year);
     if (!entry) {
@@ -1839,7 +1799,7 @@ function setCurrentArchiveYear(year: number): void {
 // Consulted before every ref-number allocation so document creation can
 // never depend solely on a frontend-held "current year" value going stale —
 // the archived_years table is the single source of truth.
-export function isArchiveYearClosed(year: number): boolean {
+function isArchiveYearClosed(year: number): boolean {
   if (useMemoryFallback) {
     return memoryStore.archived_years.some(y => y.year === year);
   }
@@ -2653,6 +2613,11 @@ export function closeYear(year: number, adminId: number): { success: boolean; me
     return { success: false, error: 'الجرد السنوي غير مدعوم في وضع الذاكرة المؤقت' };
   }
   if (!db) return { success: false, error: 'قاعدة البيانات غير موجودة' };
+  // `year` is interpolated into the archived_documents_<year> table name below,
+  // so it must be a plain integer — never a string from the renderer.
+  if (!Number.isInteger(year) || year < 2000 || year > 3000) {
+    return { success: false, error: 'سنة غير صالحة' };
+  }
 
   try {
     // A year can only ever be closed once — archived_years is the permanent
@@ -2821,7 +2786,7 @@ export function exportData(): string {
   }, null, 2);
 }
 
-export function importData(jsonData: string, mode: 'merge' | 'replace'): { success: boolean; message: string } {
+export function importData(jsonData: string, mode: 'merge' | 'replace', callerRole?: string): { success: boolean; message: string } {
   if (useMemoryFallback) {
     return { success: false, message: 'الاستيراد غير مدعوم في وضع الذاكرة المؤقت' };
   }
@@ -2841,6 +2806,15 @@ export function importData(jsonData: string, mode: 'merge' | 'replace'): { succe
       master_lists?: Array<Record<string, unknown>>;
       org_units?: Array<Record<string, unknown>>;
     };
+
+    // Replace-mode import deletes and re-inserts the users table wholesale —
+    // without protection a deputy could overwrite the GM's password_hash/role
+    // with attacker-controlled rows from a crafted backup file. Snapshot the
+    // GM rows and re-assert them after the import unless the caller IS a GM.
+    const protectGm = mode === 'replace' && callerRole !== 'general_manager';
+    const gmRows = protectGm
+      ? db.prepare("SELECT * FROM users WHERE role = 'general_manager'").all() as Array<Record<string, unknown>>
+      : [];
 
     if (mode === 'replace') {
       db.exec(`
@@ -2864,14 +2838,20 @@ export function importData(jsonData: string, mode: 'merge' | 'replace'): { succe
     const insertOrgUnit = db.prepare('INSERT OR REPLACE INTO org_units (id, name, unit_type, parent_id, is_active, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
     const insertDoc = db.prepare(`
       INSERT OR REPLACE INTO documents (
-        id, ref_number, type_id, folder_id, confidentiality, subject, sender, receiver, author, address, target, content, input_method,
-        date, body, notes, status, signature_base64, attachments_json, created_at, updated_at, created_by, org_unit_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        id, ref_number, type_id, folder_id, confidentiality, subject, sender, receiver, author, writer_name, address, target, content, input_method,
+        date, body, notes, status, barcode, signature_base64, attachments_json, created_at, updated_at, created_by, org_unit_id, archive_year
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     const insertCounter = db.prepare('INSERT OR REPLACE INTO counters (key, value) VALUES (?, ?)');
     const insertAudit = db.prepare('INSERT OR REPLACE INTO audit_log (id, action, doc_ref, details, username, timestamp) VALUES (?, ?, ?, ?, ?, ?)');
     const insertUser = db.prepare('INSERT OR REPLACE INTO users (id, username, password_hash, full_name, role, org_unit_id, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)');
     const insertMasterList = db.prepare('INSERT OR REPLACE INTO master_lists (id, list_type, name, name_en, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?)');
+    // These three are part of the backup format (exportData) and must round-trip
+    // through restore — otherwise replace-mode wipes access history, pending
+    // password resets, and the record of closed years.
+    const insertAccessLog = db.prepare('INSERT OR REPLACE INTO document_access_log (id, document_id, user_id, user_username, access_type, confidentiality_level, verification_method, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    const insertResetRequest = db.prepare('INSERT OR REPLACE INTO password_reset_requests (id, user_id, username, request_date, status, approved_by, approved_at, new_password_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+    const insertArchivedYear = db.prepare('INSERT OR REPLACE INTO archived_years (year, archived_at, archived_by, document_count, backup_path, notes) VALUES (?, ?, ?, ?, ?, ?)');
 
     const tx = db.transaction(() => {
       if (data.folders) {
@@ -2934,6 +2914,7 @@ export function importData(jsonData: string, mode: 'merge' | 'replace'): { succe
             item.sender ?? null,
             item.receiver ?? null,
             item.author ?? null,
+            item.writer_name ?? null,
             item.address ?? null,
             item.target ?? null,
             item.content ?? null,
@@ -2942,12 +2923,14 @@ export function importData(jsonData: string, mode: 'merge' | 'replace'): { succe
             item.body ?? null,
             item.notes ?? null,
             item.status ?? 'قيد الاعتماد',
+            item.barcode ?? null,
             item.signature_base64 ?? null,
             item.attachments_json ?? '[]',
             item.created_at ?? new Date().toISOString(),
             item.updated_at ?? new Date().toISOString(),
             item.created_by ?? null,
-            (item.org_unit_id as number | undefined) ?? null
+            (item.org_unit_id as number | undefined) ?? null,
+            (item.archive_year as number | undefined) ?? null
           );
         }
       }
@@ -2995,13 +2978,62 @@ export function importData(jsonData: string, mode: 'merge' | 'replace'): { succe
           );
         }
       }
+      if (data.document_access_log) {
+        for (const item of data.document_access_log) {
+          insertAccessLog.run(
+            (item.id as number | undefined) ?? null,
+            item.document_id,
+            item.user_id,
+            item.user_username,
+            item.access_type,
+            item.confidentiality_level,
+            item.verification_method ?? null,
+            (item.timestamp as number | undefined) ?? Math.floor(Date.now() / 1000)
+          );
+        }
+      }
+      if (data.password_reset_requests) {
+        for (const item of data.password_reset_requests) {
+          insertResetRequest.run(
+            (item.id as number | undefined) ?? null,
+            item.user_id,
+            item.username,
+            (item.request_date as number | undefined) ?? Math.floor(Date.now() / 1000),
+            item.status ?? 'pending',
+            (item.approved_by as number | undefined) ?? null,
+            (item.approved_at as number | undefined) ?? null,
+            item.new_password_hash ?? null
+          );
+        }
+      }
+      if (data.archived_years) {
+        for (const item of data.archived_years) {
+          insertArchivedYear.run(
+            item.year,
+            (item.archived_at as number | undefined) ?? Math.floor(Date.now() / 1000),
+            (item.archived_by as number | undefined) ?? null,
+            (item.document_count as number | undefined) ?? null,
+            item.backup_path ?? null,
+            item.notes ?? null
+          );
+        }
+      }
     });
 
     tx();
-    // Imported documents never carry archive_year (it isn't part of the
-    // backup format) — backfill it the same way pre-migration rows are, so
-    // restored documents can still be picked up by closeYear() later instead
-    // of being silently stuck with archive_year = NULL forever.
+    if (protectGm) {
+      for (const gm of gmRows) {
+        insertUser.run(
+          gm.id, gm.username, gm.password_hash, gm.full_name ?? null, gm.role,
+          (gm.org_unit_id as number | null | undefined) ?? null,
+          gm.is_active ?? 1, gm.created_at ?? new Date().toISOString(), gm.updated_at ?? new Date().toISOString()
+        );
+      }
+    }
+    // Old backups predate archive_year in the export format — backfill it the
+    // same way pre-migration rows are, so restored documents can still be
+    // picked up by closeYear() later instead of staying archive_year = NULL.
+    // Newer backups carry archive_year on each row and are unaffected.
     migrateDocumentsArchiveYear();
     return { success: true, message: 'تم استيراد البيانات بنجاح' };
   } catch (err: unknown) {

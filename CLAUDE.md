@@ -21,7 +21,7 @@ ng test                      # Karma/Jasmine — configured but not meaningfully
 
 There is no `ng serve` dev loop — the app depends on Electron's IPC/DB layer, so `bun run start` (full rebuild + relaunch) is the actual iteration cycle. There is no lint configuration. CI (`.github/workflows/ci.yml`) builds Windows/Linux artifacts on every push.
 
-Default login: `admin` / `admin123` (auto-seeded on first `initDb()` if the `users` table is empty; see `DEBUG.md` for login troubleshooting). DB lives at `%APPDATA%/bonyan-archive-system/archive.db` (Windows) or `~/.config/bonyan-archive-system/archive.db` (Linux).
+Default login: `admin` / `admin123` — seeded **once** on first `initDb()` when the `users` table is empty, and never reset afterwards: once the GM changes the password, `admin123` stops working (see `DEBUG.md` for login troubleshooting). DB lives at `%APPDATA%/bonyan-archive-system/archive.db` (Windows) or `~/.config/bonyan-archive-system/archive.db` (Linux).
 
 ## Architecture
 

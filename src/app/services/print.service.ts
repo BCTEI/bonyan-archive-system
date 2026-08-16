@@ -82,7 +82,7 @@ export class PrintService {
       <html dir="rtl">
       <head>
         <meta charset="UTF-8">
-        <title>ملصق باركود - ${doc.ref_number}</title>
+        <title>ملصق باركود - ${this.escapeHtml(doc.ref_number)}</title>
         <style>
           @page { size: 80mm 50mm; margin: 3mm; }
           * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -100,7 +100,7 @@ export class PrintService {
       </head>
       <body>
         <div class="label">
-          <div class="ref">${doc.ref_number}</div>
+          <div class="ref">${this.escapeHtml(doc.ref_number)}</div>
           ${barcodeSvg}
         </div>
       </body>
@@ -112,7 +112,9 @@ export class PrintService {
     return value
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
   }
 
   private inputMethodLabel(method: string): string {
@@ -211,7 +213,7 @@ export class PrintService {
         </div>
         <div class="footer-barcode">
           ${barcodeSvg}
-          <span>${doc.ref_number}</span>
+          <span>${this.escapeHtml(doc.ref_number)}</span>
         </div>
       </div>`;
   }
@@ -242,7 +244,8 @@ export class PrintService {
     } else if (kind === 'pdf' && att.base64) {
       frameContent = `<embed src="data:application/pdf;base64,${att.base64}" type="application/pdf">`;
     } else if (kind === 'docx' && docxHtml) {
-      // Trusted content: generated locally by mammoth from the attachment's own bytes, never from user-typed HTML input.
+      // docxHtml is DOMPurify-sanitized inside convertDocxToHtml — the bytes
+      // come from a user-uploaded attachment, so never bypass that step.
       frameContent = `<div class="docx-print-content">${docxHtml}</div>`;
     } else if (!att.base64) {
       frameContent = `
@@ -267,7 +270,7 @@ export class PrintService {
             <div class="p2-file-name">${this.escapeHtml(att.name)}.${this.escapeHtml(ext)}</div>
             <div class="p2-file-sub">مرفق ${index + 1} من ${total}</div>
           </div>
-          <div class="p2-follow-badge">تابع للرقم الإشاري: ${doc.ref_number}</div>
+          <div class="p2-follow-badge">تابع للرقم الإشاري: ${this.escapeHtml(doc.ref_number)}</div>
         </div>
         <div class="p2-frame ${hasContent ? 'has-content' : ''} ${kind === 'docx' ? 'docx-frame' : ''}">
           ${frameContent}
@@ -286,6 +289,12 @@ export class PrintService {
     }
 
     const typeLabel = `${doc.type_icon ?? ''} ${doc.type_label ?? doc.type ?? '—'}`.trim();
+    // The signature is stored as a base64 data URI from the canvas, but it
+    // round-trips through the DB — only render it if it still looks like one,
+    // so a tampered value can't break out of the <img src> attribute.
+    const signatureSrc = doc.signature_base64 && /^data:image\/(?:png|jpe?g|webp);base64,[A-Za-z0-9+/=\s]+$/.test(doc.signature_base64)
+      ? doc.signature_base64
+      : null;
     const logoBlock = logoDataUri
       ? `<img src="${logoDataUri}" alt="شعار مركز البنيان">`
       : `<span class="seal-initials">م.ب</span>`;
@@ -315,7 +324,7 @@ export class PrintService {
       <html dir="rtl" lang="ar">
       <head>
         <meta charset="UTF-8">
-        <title>${doc.ref_number} — ${this.escapeHtml(doc.subject)}</title>
+        <title>${this.escapeHtml(doc.ref_number)} — ${this.escapeHtml(doc.subject)}</title>
         <style>
           :root {
             --navy-deep: #0f2140;
@@ -559,18 +568,13 @@ export class PrintService {
               <div class="org-name">مركز البنيان لتقنية والصناعات الهندسية</div>
               <div class="system-name">نظام الأرشيف الإلكتروني</div>
               <div class="org-place">مصراتة — ليبيا</div>
-<<<<<<< HEAD
             </div>
             <div class="ref-wrap">
               <div class="ref-label">الرقم الإشاري</div>
-              <div class="ref-badge">${doc.ref_number}</div>
+              <div class="ref-badge">${this.escapeHtml(doc.ref_number)}</div>
             </div>
           </div>
 
-=======
-            </div>
-          </div>
->>>>>>> 34f7b21f5b35a8c45089ea5b89eb73571562b5a5
           <div class="subject-strip">
             <span class="subject-eyebrow">الموضوع</span>
             <span class="subject-value">${this.escapeHtml(doc.subject)}</span>
@@ -617,10 +621,10 @@ export class PrintService {
             </div>
           </div>
 
-          ${doc.signature_base64 ? `
+          ${signatureSrc ? `
           <div class="card">
             <div class="card-header"><span>التوقيع الإلكتروني</span></div>
-            <div class="card-body"><img src="${doc.signature_base64}" class="signature-img" alt="التوقيع"></div>
+            <div class="card-body"><img src="${signatureSrc}" class="signature-img" alt="التوقيع"></div>
           </div>` : ''}
 
           ${this.buildBarcodeFooter(doc, printedAt, printedBy)}

@@ -1,6 +1,6 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { DomSanitizer, SafeResourceUrl, SafeHtml } from '@angular/platform-browser';
+import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -39,7 +39,7 @@ export class AttachmentPreviewComponent implements OnInit {
 
   pdfUrl?: SafeResourceUrl;
   imageUrl?: string;
-  docxHtml?: SafeHtml;
+  docxHtml?: string;
 
   ngOnInit(): void {
     const ext = (this.attachment.ext || '').toLowerCase();
@@ -60,8 +60,9 @@ export class AttachmentPreviewComponent implements OnInit {
   private async loadDocx(): Promise<void> {
     this.loading.set(true);
     try {
-      const html = await convertDocxToHtml(this.attachment.base64);
-      this.docxHtml = this.sanitizer.bypassSecurityTrustHtml(html);
+      // convertDocxToHtml already runs the output through DOMPurify, so this
+      // string can go straight into [innerHTML] without a trust bypass.
+      this.docxHtml = await convertDocxToHtml(this.attachment.base64);
     } catch (err) {
       console.error('[AttachmentPreview] DOCX conversion failed:', err);
       this.conversionFailed.set(true);
