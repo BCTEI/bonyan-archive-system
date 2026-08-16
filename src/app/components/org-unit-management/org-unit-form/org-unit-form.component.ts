@@ -11,7 +11,6 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { OrgUnit, OrgUnitInput, FlatOrgUnit, UNIT_TYPE_LABELS, buildOrgTree, flattenOrgTree } from '../../../models/org-unit.model';
 import { OrgUnitService } from '../../../services/org-unit.service';
 import { ToastService } from '../../../services/toast.service';
-import { AuditService } from '../../../services/audit.service';
 
 const NO_PARENT_VALUE = '__NONE__';
 
@@ -37,7 +36,6 @@ export class OrgUnitFormComponent {
   private data = inject<{ unit?: OrgUnit; parentUnit?: OrgUnit; allUnits: OrgUnit[] }>(MAT_DIALOG_DATA);
   private orgUnitService = inject(OrgUnitService);
   private toast = inject(ToastService);
-  private audit = inject(AuditService);
 
   readonly NO_PARENT_VALUE = NO_PARENT_VALUE;
   readonly unitTypeLabels = UNIT_TYPE_LABELS;
@@ -93,19 +91,18 @@ export class OrgUnitFormComponent {
 
     try {
       this.loading.set(true);
+      // Main process logs the audit entry for create/update — no renderer-side log.
       if (this.isEdit && this.unit?.id) {
         await this.orgUnitService.update(this.unit.id, payload);
         this.toast.show('تم تحديث الوحدة التنظيمية بنجاح', 'success');
-        await this.audit.log('تعديل وحدة تنظيمية', payload.name);
       } else {
         await this.orgUnitService.create(payload);
         this.toast.show('تم إنشاء الوحدة التنظيمية بنجاح', 'success');
-        await this.audit.log('إنشاء وحدة تنظيمية', payload.name);
       }
       this.dialogRef.close(true);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'خطأ غير معروف';
-      this.toast.show(message, 'error');
+      this.toast.showError(err, 'خطأ غير معروف');
       this.errors.set({ name: message });
     } finally {
       this.loading.set(false);

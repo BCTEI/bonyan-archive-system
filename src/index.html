@@ -5,8 +5,10 @@
   <title>نظام الأرشيف الإلكتروني - مركز البنيان</title>
   <base href="./">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Offline desktop app: everything (scripts, styles, fonts, images) is
+       served from the local app:// bundle or inlined data/blob URIs. -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' data: blob:; object-src 'self' data:; frame-src 'self' data:">
   <link rel="icon" type="image/x-icon" href="favicon.ico">
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
 </head>
 <body class="mat-typography">
   <app-root></app-root>

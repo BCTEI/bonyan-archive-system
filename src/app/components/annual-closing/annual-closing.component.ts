@@ -11,6 +11,7 @@ import { ArchivedYear } from '../../models/annual-closing.model';
 import { AnnualClosingService } from '../../services/annual-closing.service';
 import { DocumentService } from '../../services/document.service';
 import { ToastService } from '../../services/toast.service';
+import { formatDate } from '../../utils/format-date.util';
 
 @Component({
   selector: 'app-annual-closing',
@@ -128,10 +129,5 @@ export class AnnualClosingComponent implements OnInit {
     }
   }
 
-  formatDate(ts?: number | string | null): string {
-    if (ts === null || ts === undefined || ts === '') return '-';
-    const num = typeof ts === 'number' ? ts : Number(ts);
-    if (!isFinite(num)) return '-';
-    return new Date(num * 1000).toLocaleDateString('ar-LY');
-  }
+  formatDate = formatDate;
 }

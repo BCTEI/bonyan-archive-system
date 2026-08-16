@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { Folder } from '../models/folder.model';
+import { unwrap } from '../utils/ipc-result.util';
 
 @Injectable({
   providedIn: 'root'
@@ -10,14 +11,12 @@ export class FolderService {
   }
 
   async getAll(): Promise<Folder[]> {
-    const result = await this.api.folderCategoryAPI.getAll(true);
-    if (!result.success) throw new Error(result.error ?? 'فشل تحميل المجلدات');
+    const result = unwrap(await this.api.folderCategoryAPI.getAll(true), 'فشل تحميل المجلدات');
     return result.folders ?? [];
   }
 
   async getAllWithCounts(): Promise<Folder[]> {
-    const result = await this.api.folderCategoryAPI.getAllWithCounts();
-    if (!result.success) throw new Error(result.error ?? 'فشل تحميل المجلدات');
+    const result = unwrap(await this.api.folderCategoryAPI.getAllWithCounts(), 'فشل تحميل المجلدات');
     return result.folders ?? [];
   }
 

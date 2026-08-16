@@ -122,18 +122,13 @@ export class DocumentGridComponent implements OnInit {
 
   async loadFilterLists(): Promise<void> {
     try {
-      const [authors, preparers, senders, receivers, departments] = await Promise.all([
-        this.masterListService.getAll('author', true),
-        this.masterListService.getAll('preparer', true),
-        this.masterListService.getAll('sender', true),
-        this.masterListService.getAll('receiver', true),
-        this.masterListService.getAll('department', true)
-      ]);
-      this.authors.set([{ name: 'الكل' }, ...authors.map(a => ({ name: a.name }))]);
-      this.preparers.set([{ name: 'الكل' }, ...preparers.map(a => ({ name: a.name }))]);
-      this.senders.set([{ name: 'الكل' }, ...senders.map(a => ({ name: a.name }))]);
-      this.receivers.set([{ name: 'الكل' }, ...receivers.map(a => ({ name: a.name }))]);
-      this.departments.set([{ name: 'الكل' }, ...departments.map(a => ({ name: a.name }))]);
+      const lists = await this.masterListService.loadAllLists(true);
+      const withAll = (items: { name: string }[]) => [{ name: 'الكل' }, ...items.map(a => ({ name: a.name }))];
+      this.authors.set(withAll(lists.author));
+      this.preparers.set(withAll(lists.preparer));
+      this.senders.set(withAll(lists.sender));
+      this.receivers.set(withAll(lists.receiver));
+      this.departments.set(withAll(lists.department));
     } catch {
       // ignore - filters fall back to "الكل" only
     }

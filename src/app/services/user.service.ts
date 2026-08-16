@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { User, UserSession, UserFolderPermission } from '../models/user.model';
+import { unwrap } from '../utils/ipc-result.util';
 
 @Injectable({
   providedIn: 'root'
@@ -20,39 +21,35 @@ export class UserService {
 
   async create(user: Omit<User, 'id' | 'created_at' | 'updated_at'> & { password: string; confirmPassword: string }): Promise<number> {
     this.validate(user);
-    const result = await window.electronAPI.userAPI.create({
+    const result = unwrap(await window.electronAPI.userAPI.create({
       username: user.username,
       full_name: user.full_name,
       password: user.password,
       role: user.role,
       org_unit_id: user.org_unit_id ?? null,
       is_active: user.is_active ? 1 : 0
-    });
-    if (!result.success) throw new Error(result.error ?? 'فشل إنشاء المستخدم');
+    }), 'فشل إنشاء المستخدم');
     return result.id ?? 0;
   }
 
   async update(id: number, user: Partial<User> & { password?: string; confirmPassword?: string }): Promise<void> {
     this.validate(user, true);
-    const result = await window.electronAPI.userAPI.update(id, {
+    const result = unwrap(await window.electronAPI.userAPI.update(id, {
       username: user.username,
       full_name: user.full_name,
       password: user.password,
       role: user.role,
       org_unit_id: user.org_unit_id !== undefined ? user.org_unit_id : undefined,
       is_active: user.is_active !== undefined ? (user.is_active ? 1 : 0) : undefined
-    });
-    if (!result.success) throw new Error(result.error ?? 'فشل تحديث المستخدم');
+    }), 'فشل تحديث المستخدم');
   }
 
   async delete(id: number): Promise<void> {
-    const result = await window.electronAPI.userAPI.delete(id);
-    if (!result.success) throw new Error(result.error ?? 'فشل حذف المستخدم');
+    const result = unwrap(await window.electronAPI.userAPI.delete(id), 'فشل حذف المستخدم');
   }
 
   async toggleStatus(id: number, isActive: boolean): Promise<void> {
-    const result = await window.electronAPI.userAPI.toggleStatus(id, isActive ? 1 : 0);
-    if (!result.success) throw new Error(result.error ?? 'فشل تغيير الحالة');
+    const result = unwrap(await window.electronAPI.userAPI.toggleStatus(id, isActive ? 1 : 0), 'فشل تغيير الحالة');
   }
 
   async getSessions(userId?: number): Promise<UserSession[]> {
@@ -80,8 +77,7 @@ export class UserService {
   }
 
   async setFolderPermissions(userId: number, permissions: UserFolderPermission[]): Promise<void> {
-    const result = await window.electronAPI.userAPI.setFolderPermissions(userId, permissions);
-    if (!result.success) throw new Error(result.error ?? 'فشل حفظ الصلاحيات');
+    const result = unwrap(await window.electronAPI.userAPI.setFolderPermissions(userId, permissions), 'فشل حفظ الصلاحيات');
   }
 
   private validate(user: Partial<User> & { password?: string; confirmPassword?: string }, isEdit = false): void {

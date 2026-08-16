@@ -48,15 +48,12 @@ export interface UserCodeEntry {
 
 export interface ElectronAPI {
   dbInit: () => Promise<boolean>;
-  dbQuery: (sql: string, params?: unknown[]) => Promise<unknown[]>;
-  dbRun: (sql: string, params?: unknown[]) => Promise<{ lastInsertRowid: number | bigint; changes: number }>;
   exportData: () => Promise<string>;
   importData: (jsonData: string, mode: 'merge' | 'replace') => Promise<{ success: boolean; message: string }>;
   addAudit: (action: string, docRef?: string, details?: string) => Promise<boolean>;
   getStats: () => Promise<{ success: boolean; stats?: { total: number; [key: string]: number }; error?: string }>;
   auditAPI: {
     clearAll: () => Promise<{ success: boolean; error?: string }>;
-    addEntry: (entry: { action: string; doc_ref?: string; details?: string; username?: string }) => Promise<{ success: boolean; error?: string }>;
     list: (limit?: number) => Promise<{ success: boolean; entries?: AuditEntry[]; error?: string }>;
   };
   print: () => Promise<{ success: boolean; message: string }>;
@@ -95,6 +92,7 @@ export interface ElectronAPI {
   documentTypeAPI: {
     getAll: (activeOnly?: boolean) => Promise<{ success: boolean; types?: DocumentTypeEntry[]; error?: string }>;
     getById: (id: number) => Promise<{ success: boolean; type?: DocumentTypeEntry; error?: string }>;
+    getCounts: () => Promise<{ success: boolean; counts?: Record<number, number>; error?: string }>;
     create: (data: unknown) => Promise<{ success: boolean; id?: number; error?: string }>;
     update: (id: number, data: unknown) => Promise<{ success: boolean; error?: string }>;
     delete: (id: number) => Promise<{ success: boolean; error?: string }>;

@@ -80,6 +80,9 @@ $bonyan-archive-system-theme: mat.define-light-theme((
 @import '@fontsource/tajawal/500.css';
 @import '@fontsource/tajawal/700.css';
 @import '@fontsource/tajawal/800.css';
+// Material Icons bundled locally — the app is offline-first and must not pull
+// the icon font from fonts.googleapis.com at runtime.
+@import '@fontsource/material-icons/index.css';
 
 :root {
   --primary: #1e3a5f;

@@ -9,7 +9,6 @@ import { MatInputModule } from '@angular/material/input';
 import { DocumentTypeEntry } from '../../../models/document.model';
 import { DocumentTypeService } from '../../../services/document-type.service';
 import { ToastService } from '../../../services/toast.service';
-import { AuditService } from '../../../services/audit.service';
 
 interface FormData {
   type?: DocumentTypeEntry;
@@ -36,7 +35,6 @@ export class DocumentTypeFormComponent {
   private data = inject<FormData>(MAT_DIALOG_DATA);
   private documentTypeService = inject(DocumentTypeService);
   private toast = inject(ToastService);
-  private audit = inject(AuditService);
 
   type = this.data.type;
   isEdit = !!this.type;
@@ -74,19 +72,18 @@ export class DocumentTypeFormComponent {
 
     try {
       this.loading.set(true);
+      // Main process logs the audit entry for create/update — no renderer-side log.
       if (this.isEdit && this.type?.id) {
         await this.documentTypeService.update(this.type.id, payload);
         this.toast.show('تم تحديث نوع الوثيقة بنجاح', 'success');
-        await this.audit.log('تعديل نوع وثيقة', this.type.prefix, `الاسم: ${payload.label}`);
       } else {
-        const id = await this.documentTypeService.create(payload);
+        await this.documentTypeService.create(payload);
         this.toast.show('تم إنشاء نوع الوثيقة بنجاح', 'success');
-        await this.audit.log('إنشاء نوع وثيقة', payload.prefix, `الاسم: ${payload.label} (معرف: ${id})`);
       }
       this.dialogRef.close(true);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'خطأ غير معروف';
-      this.toast.show(message, 'error');
+      this.toast.showError(err, 'خطأ غير معروف');
       this.parseErrors(message);
     } finally {
       this.loading.set(false);

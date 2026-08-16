@@ -47,7 +47,7 @@
   @if (step() === 'password') {
     <mat-form-field class="w-full" appearance="outline">
       <mat-label>كلمة المرور</mat-label>
-      <input matInput [type]="hidePassword() ? 'password' : 'text'" [ngModel]="password()" (ngModelChange)="password.set($event)" (keyup.enter)="verifyPassword()" [disabled]="locked()" placeholder="كلمة المرور الخاصة بك">
+      <input matInput [type]="hidePassword() ? 'password' : 'text'" [ngModel]="password()" (ngModelChange)="password.set($event)" (keyup.enter)="verifyPassword()" [disabled]="loading()" placeholder="كلمة المرور الخاصة بك">
       <button mat-icon-button matSuffix type="button" (click)="hidePassword.set(!hidePassword())" [attr.aria-label]="hidePassword() ? 'إظهار كلمة المرور' : 'إخفاء كلمة المرور'">
         <mat-icon>{{ hidePassword() ? 'visibility_off' : 'visibility' }}</mat-icon>
       </button>
@@ -55,7 +55,7 @@
 
     <div class="flex justify-end gap-2 mt-6">
       <button mat-button (click)="close()" [disabled]="loading()">إلغاء</button>
-      <button mat-raised-button color="primary" (click)="verifyPassword()" [disabled]="loading() || locked()">
+      <button mat-raised-button color="primary" (click)="verifyPassword()" [disabled]="loading()">
         @if (loading()) {
           جاري التحقق...
         } @else {

@@ -69,7 +69,6 @@ export class DashboardComponent implements AfterViewInit {
     await this.loadStats();
     await this.loadAudit();
     await this.loadSessions();
-    await this.loadRecentDocuments();
     this.renderChart();
   }
 
@@ -84,14 +83,7 @@ export class DashboardComponent implements AfterViewInit {
 
   async loadMasterLists(): Promise<void> {
     try {
-      const [author, preparer, sender, receiver, department] = await Promise.all([
-        this.masterListService.getAll('author', true),
-        this.masterListService.getAll('preparer', true),
-        this.masterListService.getAll('sender', true),
-        this.masterListService.getAll('receiver', true),
-        this.masterListService.getAll('department', true)
-      ]);
-      this.masterLists.set({ author, preparer, sender, receiver, department });
+      this.masterLists.set(await this.masterListService.loadAllLists(true));
     } catch {
       this.masterLists.set({ author: [], preparer: [], sender: [], receiver: [], department: [] });
     }
@@ -101,14 +93,22 @@ export class DashboardComponent implements AfterViewInit {
     try {
       const docs = await this.documentService.getAll();
       this.allDocuments.set(docs);
+      // Server returns rows ordered by created_at DESC — the "recent" widget is
+      // just the head of the same list, no second full-table fetch needed.
+      this.recentDocuments.set(docs.slice(0, 5));
     } catch {
       this.allDocuments.set([]);
+      this.recentDocuments.set([]);
     }
   }
 
   async loadStats(): Promise<void> {
-    const s = await this.db.getStats();
-    this.stats.set(s);
+    try {
+      const s = await this.db.getStats();
+      this.stats.set(s);
+    } catch {
+      this.stats.set({ total: 0 });
+    }
   }
 
   async loadAudit(): Promise<void> {
@@ -122,15 +122,6 @@ export class DashboardComponent implements AfterViewInit {
       this.todaySessions.set(sessions);
     } catch {
       this.todaySessions.set([]);
-    }
-  }
-
-  async loadRecentDocuments(): Promise<void> {
-    try {
-      const docs = await this.documentService.getAll();
-      this.recentDocuments.set(docs.slice(0, 5));
-    } catch {
-      this.recentDocuments.set([]);
     }
   }
 
@@ -239,8 +230,7 @@ export class DashboardComponent implements AfterViewInit {
       URL.revokeObjectURL(url);
       this.toast.show('تم تصدير البيانات', 'success');
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'فشل التصدير';
-      this.toast.show(message, 'error');
+      this.toast.showError(err, 'فشل التصدير');
     }
   }
 
@@ -256,8 +246,7 @@ export class DashboardComponent implements AfterViewInit {
       await this.loadAllDocuments();
       this.renderChart();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'فشل الاستيراد';
-      this.toast.show(message, 'error');
+      this.toast.showError(err, 'فشل الاستيراد');
     } finally {
       input.value = '';
     }

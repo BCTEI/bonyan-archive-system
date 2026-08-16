@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { OrgUnit, OrgUnitInput, OrgUnitNode, FlatOrgUnit, buildOrgTree, flattenOrgTree } from '../models/org-unit.model';
+import { unwrap } from '../utils/ipc-result.util';
 
 @Injectable({
   providedIn: 'root'
@@ -10,8 +11,7 @@ export class OrgUnitService {
   }
 
   async getAll(activeOnly = false): Promise<OrgUnit[]> {
-    const result = await this.api.orgUnitAPI.getAll(activeOnly);
-    if (!result.success) throw new Error(result.error ?? 'فشل تحميل الوحدات التنظيمية');
+    const result = unwrap(await this.api.orgUnitAPI.getAll(activeOnly), 'فشل تحميل الوحدات التنظيمية');
     return result.units ?? [];
   }
 
@@ -26,18 +26,15 @@ export class OrgUnitService {
   }
 
   async create(data: OrgUnitInput): Promise<number> {
-    const result = await this.api.orgUnitAPI.create(data);
-    if (!result.success) throw new Error(result.error ?? 'فشل إنشاء الوحدة التنظيمية');
+    const result = unwrap(await this.api.orgUnitAPI.create(data), 'فشل إنشاء الوحدة التنظيمية');
     return result.id!;
   }
 
   async update(id: number, data: Partial<OrgUnitInput>): Promise<void> {
-    const result = await this.api.orgUnitAPI.update(id, data);
-    if (!result.success) throw new Error(result.error ?? 'فشل تحديث الوحدة التنظيمية');
+    const result = unwrap(await this.api.orgUnitAPI.update(id, data), 'فشل تحديث الوحدة التنظيمية');
   }
 
   async delete(id: number): Promise<void> {
-    const result = await this.api.orgUnitAPI.delete(id);
-    if (!result.success) throw new Error(result.error ?? 'فشل حذف الوحدة التنظيمية');
+    const result = unwrap(await this.api.orgUnitAPI.delete(id), 'فشل حذف الوحدة التنظيمية');
   }
 }

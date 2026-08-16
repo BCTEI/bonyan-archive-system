@@ -4,13 +4,6 @@ import { Injectable } from '@angular/core';
   providedIn: 'root'
 })
 export class SignatureService {
-  getBlankCanvas(width: number, height: number): HTMLCanvasElement {
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    return canvas;
-  }
-
   isEmpty(canvas: HTMLCanvasElement): boolean {
     const ctx = canvas.getContext('2d');
     if (!ctx) {

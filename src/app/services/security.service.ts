@@ -1,5 +1,6 @@
 import { Injectable } from '@angular/core';
 import { UserCodeEntry } from '../models/security.model';
+import { unwrap } from '../utils/ipc-result.util';
 
 // Per-user single-use verification codes (Task 1.1 backend): an admin issues a
 // code targeted at a specific user, shown once; that user consumes it against a
@@ -15,8 +16,7 @@ export class SecurityService {
   }
 
   async listCodes(): Promise<UserCodeEntry[]> {
-    const result = await this.api.securityAPI.listCodes();
-    if (!result.success) throw new Error(result.error ?? 'فشل تحميل الرموز الصادرة');
+    const result = unwrap(await this.api.securityAPI.listCodes(), 'فشل تحميل الرموز الصادرة');
     return result.codes ?? [];
   }
 
@@ -29,8 +29,7 @@ export class SecurityService {
   }
 
   async revokeCode(codeId: number): Promise<void> {
-    const result = await this.api.securityAPI.revokeCode(codeId);
-    if (!result.success) throw new Error(result.error ?? 'فشل إلغاء الرمز');
+    const result = unwrap(await this.api.securityAPI.revokeCode(codeId), 'فشل إلغاء الرمز');
   }
 
   /**

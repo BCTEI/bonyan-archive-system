@@ -11,7 +11,6 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { Folder, FolderInput } from '../../../models/folder.model';
 import { FolderCategoryService } from '../../../services/folder-category.service';
 import { ToastService } from '../../../services/toast.service';
-import { AuditService } from '../../../services/audit.service';
 
 const NEW_GROUP_VALUE = '__NEW__';
 
@@ -37,7 +36,6 @@ export class FolderFormComponent {
   private data = inject<{ folder?: Folder; groups: string[] }>(MAT_DIALOG_DATA);
   private folderService = inject(FolderCategoryService);
   private toast = inject(ToastService);
-  private audit = inject(AuditService);
 
   readonly NEW_GROUP_VALUE = NEW_GROUP_VALUE;
 
@@ -82,19 +80,18 @@ export class FolderFormComponent {
 
     try {
       this.loading.set(true);
+      // Main process logs the audit entry for create/update — no renderer-side log.
       if (this.isEdit && this.folder?.id) {
         await this.folderService.update(this.folder.id, payload);
         this.toast.show('تم تحديث التصنيف بنجاح', 'success');
-        await this.audit.log('تعديل تصنيف مجلد', payload.name, `المجموعة: ${payload.group_name}`);
       } else {
         await this.folderService.create(payload);
         this.toast.show('تم إنشاء التصنيف بنجاح', 'success');
-        await this.audit.log('إنشاء تصنيف مجلد', payload.name, `المجموعة: ${payload.group_name}`);
       }
       this.dialogRef.close(true);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'خطأ غير معروف';
-      this.toast.show(message, 'error');
+      this.toast.showError(err, 'خطأ غير معروف');
       this.parseErrors(message);
     } finally {
       this.loading.set(false);

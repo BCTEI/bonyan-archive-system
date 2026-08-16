@@ -11,7 +11,6 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { Folder } from '../../models/folder.model';
 import { FolderCategoryService } from '../../services/folder-category.service';
 import { ToastService } from '../../services/toast.service';
-import { AuditService } from '../../services/audit.service';
 import { FolderFormComponent } from './folder-form/folder-form.component';
 
 interface FolderGroup {
@@ -39,7 +38,6 @@ interface FolderGroup {
 export class FolderCategoryManagementComponent implements OnInit {
   private folderService = inject(FolderCategoryService);
   private toast = inject(ToastService);
-  private audit = inject(AuditService);
   private dialog = inject(MatDialog);
 
   folders = signal<Folder[]>([]);
@@ -64,8 +62,7 @@ export class FolderCategoryManagementComponent implements OnInit {
       this.groups.set(groups);
       this.buildGroups(folders);
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'فشل تحميل التصنيفات';
-      this.toast.show(message, 'error');
+      this.toast.showError(err, 'فشل تحميل التصنيفات');
     } finally {
       this.loading.set(false);
     }
@@ -107,11 +104,9 @@ export class FolderCategoryManagementComponent implements OnInit {
     try {
       await this.folderService.update(folder.id, { is_active: next });
       this.toast.show(`تم ${label} التصنيف "${folder.name}" بنجاح`, 'success');
-      await this.audit.log(`${label} تصنيف مجلد`, folder.name, `المجموعة: ${folder.group_name}`);
       await this.loadData();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'فشل تغيير الحالة';
-      this.toast.show(message, 'error');
+      this.toast.showError(err, 'فشل تغيير الحالة');
     }
   }
 
@@ -121,11 +116,9 @@ export class FolderCategoryManagementComponent implements OnInit {
     try {
       await this.folderService.delete(folder.id);
       this.toast.show('تم حذف التصنيف بنجاح', 'success');
-      await this.audit.log('حذف تصنيف مجلد', folder.name, `المجموعة: ${folder.group_name}`);
       await this.loadData();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'فشل حذف التصنيف';
-      this.toast.show(message, 'error');
+      this.toast.showError(err, 'فشل حذف التصنيف');
     }
   }
 

@@ -16,9 +16,6 @@ interface SecurityModalData {
   scope?: string;
 }
 
-const LOCKOUT_DURATION_MS = 5 * 60 * 1000;
-const MAX_ATTEMPTS = 3;
-
 @Component({
   selector: 'app-security-modal',
   standalone: true,
@@ -49,11 +46,7 @@ export class SecurityModalComponent implements OnInit {
   code = signal('');
   loading = signal(false);
   errorMessage = signal('');
-  locked = signal(false);
   hidePassword = signal(true);
-
-  private failedAttempts = 0;
-  private firstFailureTime: number | null = null;
 
   async ngOnInit(): Promise<void> {
     if (this.doc.confidentiality === 'عادي') {
@@ -68,8 +61,6 @@ export class SecurityModalComponent implements OnInit {
   }
 
   async verifyPassword(): Promise<void> {
-    if (this.locked()) return;
-
     const pwd = this.password().trim();
     if (!pwd) {
       this.errorMessage.set('يرجى إدخال كلمة المرور');
@@ -91,9 +82,6 @@ export class SecurityModalComponent implements OnInit {
       // left session-wide/document-agnostic.
       const valid = await this.securityService.verifyPassword(pwd, this.doc.id, this.scope);
       if (valid) {
-        this.failedAttempts = 0;
-        this.firstFailureTime = null;
-
         if (this.doc.confidentiality === 'سري للغاية') {
           this.step.set('code');
           this.password.set('');
@@ -103,9 +91,10 @@ export class SecurityModalComponent implements OnInit {
         }
       }
     } catch (err: unknown) {
-      // Server message surfaced verbatim (wrong password, disabled account, etc.).
+      // Server message surfaced verbatim — wrong password, disabled account, or
+      // the main-process rate-limit lockout text (5 attempts / 15 minutes).
       const message = err instanceof Error ? err.message : 'فشل التحقق من كلمة المرور';
-      this.handleFailedAttempt(message);
+      this.errorMessage.set(message);
     } finally {
       this.loading.set(false);
     }
@@ -136,32 +125,6 @@ export class SecurityModalComponent implements OnInit {
       this.errorMessage.set(message);
     } finally {
       this.loading.set(false);
-    }
-  }
-
-  private handleFailedAttempt(message: string): void {
-    const now = Date.now();
-
-    if (this.firstFailureTime === null || now - this.firstFailureTime > LOCKOUT_DURATION_MS) {
-      this.failedAttempts = 1;
-      this.firstFailureTime = now;
-      this.errorMessage.set(message);
-      return;
-    }
-
-    this.failedAttempts += 1;
-
-    if (this.failedAttempts >= MAX_ATTEMPTS) {
-      this.locked.set(true);
-      this.errorMessage.set('تم تأمين الوصول لمدة 5 دقائق');
-      setTimeout(() => {
-        this.locked.set(false);
-        this.failedAttempts = 0;
-        this.firstFailureTime = null;
-        this.errorMessage.set('');
-      }, LOCKOUT_DURATION_MS);
-    } else {
-      this.errorMessage.set(message);
     }
   }
 

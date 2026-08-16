@@ -7,6 +7,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { UserSession } from '../../../models/user.model';
 import { UserService } from '../../../services/user.service';
 import { ToastService } from '../../../services/toast.service';
+import { formatDateTime } from '../../../utils/format-date.util';
 
 @Component({
   selector: 'app-user-sessions',
@@ -43,8 +44,5 @@ export class UserSessionsComponent implements OnInit {
     }
   }
 
-  formatDate(ts?: number): string {
-    if (!ts) return '-';
-    return new Date(ts * 1000).toLocaleString('ar-LY');
-  }
+  formatDate = formatDateTime;
 }
