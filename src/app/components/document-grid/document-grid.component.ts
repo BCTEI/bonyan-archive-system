@@ -325,16 +325,37 @@ export class DocumentGridComponent implements OnInit {
     });
   }
 
-  async onDelete(doc: ArchiveDocument): Promise<void> {
-    // Verify access first for "سري للغاية" (and "سري") documents.
+  /**
+   * "Delete" is no longer destructive: the user is asked to confirm a
+   * suspension, and the main process sets status = 'موقوف' (audited with
+   * previous/new status). The document row, reference number and
+   * attachments always remain in the archive. Access verification
+   * (password/code for سري/سري للغاية) is required before the dialog.
+   */
+  async onSuspend(doc: ArchiveDocument): Promise<void> {
     const verified = await this.documentAccess.verifyAccess(doc, 'delete');
     if (!verified) return;
 
-    if (!confirm('هل أنت متأكد من حذف الوثيقة؟')) return;
-    await this.documentService.delete(doc.id!);
-    await this.auditService.log('حذف', doc.ref_number, doc.subject);
-    await this.loadData();
-    this.toast.show('تم حذف الوثيقة', 'success');
+    const ref = this.dialog.open(FinalConfirmDialogComponent, {
+      width: '440px',
+      maxWidth: '95vw',
+      data: {
+        title: 'إيقاف الوثيقة',
+        message: `هل أنت متأكد من إيقاف الوثيقة «${doc.subject}» (${doc.ref_number})؟`,
+        warning: 'ستبقى الوثيقة محفوظة بشكل دائم في الأرشيف مع مرفقاتها ورقمها المرجعي، ولن تظهر بعد الآن ضمن الوثائق النشطة.',
+        confirmText: 'إيقاف الوثيقة'
+      }
+    });
+    ref.afterClosed().subscribe(async confirmed => {
+      if (!confirmed) return;
+      try {
+        await this.documentService.suspend(doc.id!);
+        await this.loadData();
+        this.toast.show('تم إيقاف الوثيقة ونقلها خارج القائمة النشطة', 'success');
+      } catch (err: unknown) {
+        this.toast.showError(err, 'فشل إيقاف الوثيقة');
+      }
+    });
   }
 
   async onPrint(doc: ArchiveDocument): Promise<void> {
