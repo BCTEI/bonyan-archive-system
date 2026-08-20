@@ -30,7 +30,7 @@
       <div class="activity-list">
         @for (session of todaySessions(); track session.id) {
           <div class="activity-item" [class.login]="session.action === 'login'" [class.logout]="session.action === 'logout'">
-            <div class="activity-icon">{{ session.action === 'login' ? '🔑' : '🚪' }}</div>
+            <div class="activity-icon"><mat-icon>{{ session.action === 'login' ? 'login' : 'logout' }}</mat-icon></div>
             <div class="activity-details">
               <div class="activity-title">
                 <strong>{{ session.username }}</strong>
@@ -39,8 +39,8 @@
                 </span>
               </div>
               <div class="activity-meta">
-                <span>🕐 {{ formatSessionTime(session.timestamp) }}</span>
-                @if (session.device_info) { <span>💻 {{ session.device_info }}</span> }
+                <span class="inline-flex items-center gap-1"><mat-icon class="!text-sm !w-4 !h-4">schedule</mat-icon> {{ formatSessionTime(session.timestamp) }}</span>
+                @if (session.device_info) { <span class="inline-flex items-center gap-1"><mat-icon class="!text-sm !w-4 !h-4">computer</mat-icon> {{ session.device_info }}</span> }
               </div>
             </div>
           </div>
@@ -50,14 +50,14 @@
         }
       </div>
       <div class="card-footer text-left">
-        <a routerLink="/main/audit" class="text-primary text-sm hover:underline">عرض السجل الكامل →</a>
+        <a routerLink="/main/audit" class="text-primary text-sm hover:underline">عرض السجل الكامل ←</a>
       </div>
     </mat-card>
   </div>
 
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <mat-card class="dashboard-card lg:col-span-2 p-4">
-      <h2 class="text-lg font-bold text-primary mb-4">📝 آخر الوثائق المضافة</h2>
+      <h2 class="text-lg font-bold text-primary mb-4 flex items-center gap-2"><mat-icon>description</mat-icon> آخر الوثائق المضافة</h2>
       <div class="recent-docs">
         @for (doc of recentDocuments(); track doc.id) {
           <div class="recent-doc-item" [routerLink]="['/main/documents']">
@@ -76,54 +76,54 @@
     </mat-card>
 
     <mat-card class="dashboard-card p-4">
-      <h2 class="text-lg font-bold text-primary mb-4">⚡ إجراءات سريعة</h2>
+      <h2 class="text-lg font-bold text-primary mb-4 flex items-center gap-2"><mat-icon>bolt</mat-icon> إجراءات سريعة</h2>
       <div class="actions-grid">
         @if (rolePermissions.canCreateDocument) {
           <a routerLink="/main/documents" class="action-btn">
-            <span class="icon">➕</span>
+            <span class="icon"><mat-icon>add</mat-icon></span>
             <span>وثيقة جديدة</span>
           </a>
         }
         <a routerLink="/main/documents" class="action-btn">
-          <span class="icon">📂</span>
+          <span class="icon"><mat-icon>folder_open</mat-icon></span>
           <span>عرض الوثائق</span>
         </a>
         @if (rolePermissions.canViewAudit) {
           <a routerLink="/main/audit" class="action-btn">
-            <span class="icon">📋</span>
+            <span class="icon"><mat-icon>history</mat-icon></span>
             <span>سجل التدقيق</span>
           </a>
         }
         @if (rolePermissions.canManageUsers) {
           <a routerLink="/main/users" class="action-btn">
-            <span class="icon">👥</span>
+            <span class="icon"><mat-icon>group</mat-icon></span>
             <span>إدارة المستخدمين</span>
           </a>
         }
         @if (rolePermissions.canManageSecurity) {
           <a routerLink="/main/security" class="action-btn">
-            <span class="icon">🔐</span>
+            <span class="icon"><mat-icon>security</mat-icon></span>
             <span>مركز الأمان</span>
           </a>
         }
         @if (rolePermissions.canCloseYear) {
           <a routerLink="/main/annual-closing" class="action-btn">
-            <span class="icon">📅</span>
+            <span class="icon"><mat-icon>event</mat-icon></span>
             <span>الجرد السنوي</span>
           </a>
         }
         @if (rolePermissions.canManageMasterLists) {
           <a routerLink="/main/master-lists" class="action-btn">
-            <span class="icon">📋</span>
+            <span class="icon"><mat-icon>list_alt</mat-icon></span>
             <span>القوائم الرئيسية</span>
           </a>
         }
         <button type="button" class="action-btn" (click)="exportData()">
-          <span class="icon">📥</span>
+          <span class="icon"><mat-icon>download</mat-icon></span>
           <span>تصدير البيانات</span>
         </button>
         <label class="action-btn cursor-pointer">
-          <span class="icon">📤</span>
+          <span class="icon"><mat-icon>upload</mat-icon></span>
           <span>استيراد البيانات</span>
           <input type="file" accept=".json,application/json" class="hidden" (change)="importData($event)">
         </label>
@@ -137,7 +137,7 @@
       @for (entry of recentAudit(); track entry.id) {
         <div class="border-b border-border pb-2 last:border-0">
           <div class="flex items-center justify-between">
-            <span class="text-sm font-medium px-2 py-0.5 rounded" [class]="actionClass(entry.action)">{{ entry.action }}</span>
+            <span class="text-sm font-medium px-2 py-0.5 rounded" [ngClass]="actionClass(entry.action)">{{ entry.action }}</span>
             <span class="text-xs text-text-light">{{ entry.timestamp }}</span>
           </div>
           <div class="text-xs text-text-light mt-1">

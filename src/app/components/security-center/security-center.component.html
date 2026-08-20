@@ -15,7 +15,7 @@
       </mat-card-title>
     </mat-card-header>
     <mat-card-content class="p-6">
-      <div class="flex flex-col md:flex-row md:items-end gap-4">
+      <div class="flex flex-col md:flex-row md:items-center gap-4">
         <mat-form-field class="flex-1" appearance="outline">
           <mat-label>المستخدم</mat-label>
           <mat-select [ngModel]="selectedUserId()" (ngModelChange)="selectedUserId.set($event)" [disabled]="usersLoading()">
@@ -54,12 +54,12 @@
         <div class="overflow-x-auto">
           <table mat-table [dataSource]="codes()" class="w-full">
             <ng-container matColumnDef="username">
-              <th mat-header-cell *matHeaderCellDef>المستخدم</th>
+              <th mat-header-cell *matHeaderCellDef class="whitespace-nowrap">المستخدم</th>
               <td mat-cell *matCellDef="let c" class="font-medium">{{ c.full_name || c.username }}</td>
             </ng-container>
 
             <ng-container matColumnDef="status">
-              <th mat-header-cell *matHeaderCellDef>الحالة</th>
+              <th mat-header-cell *matHeaderCellDef class="whitespace-nowrap">الحالة</th>
               <td mat-cell *matCellDef="let c">
                 <span class="px-2 py-1 rounded-full text-xs font-semibold" [class]="statusClass(c.status)">
                   {{ statusLabels[c.status] }}
@@ -68,22 +68,22 @@
             </ng-container>
 
             <ng-container matColumnDef="generated_at">
-              <th mat-header-cell *matHeaderCellDef>تاريخ الإصدار</th>
+              <th mat-header-cell *matHeaderCellDef class="whitespace-nowrap">تاريخ الإصدار</th>
               <td mat-cell *matCellDef="let c">{{ formatDate(c.generated_at) }}</td>
             </ng-container>
 
             <ng-container matColumnDef="expires_at">
-              <th mat-header-cell *matHeaderCellDef>تاريخ الانتهاء</th>
+              <th mat-header-cell *matHeaderCellDef class="whitespace-nowrap">تاريخ الانتهاء</th>
               <td mat-cell *matCellDef="let c">{{ formatDate(c.expires_at) }}</td>
             </ng-container>
 
             <ng-container matColumnDef="generated_by_name">
-              <th mat-header-cell *matHeaderCellDef>أصدره</th>
+              <th mat-header-cell *matHeaderCellDef class="whitespace-nowrap">أصدره</th>
               <td mat-cell *matCellDef="let c">{{ c.generated_by_name || '-' }}</td>
             </ng-container>
 
             <ng-container matColumnDef="actions">
-              <th mat-header-cell *matHeaderCellDef>إجراءات</th>
+              <th mat-header-cell *matHeaderCellDef class="whitespace-nowrap">إجراءات</th>
               <td mat-cell *matCellDef="let c">
                 @if (c.status === 'active') {
                   <button mat-stroked-button color="warn" (click)="revoke(c)">
@@ -102,11 +102,11 @@
     </mat-card-content>
   </mat-card>
 
-  <mat-card class="border border-border">
+  <mat-card>
     <mat-card-header>
       <mat-card-title class="text-primary flex items-center gap-2 text-base">
         <mat-icon>menu_book</mat-icon>
-        📖 كيفية استخدام رمز التحقق
+        كيفية استخدام رمز التحقق
       </mat-card-title>
     </mat-card-header>
     <mat-card-content class="p-6">

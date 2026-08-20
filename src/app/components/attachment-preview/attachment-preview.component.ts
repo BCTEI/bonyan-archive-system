@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { DomSanitizer, SafeResourceUrl } from '@angular/platform-browser';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
@@ -26,7 +26,7 @@ const IMAGE_MIME: Record<string, string> = {
   templateUrl: './attachment-preview.component.html',
   styleUrl: './attachment-preview.component.scss'
 })
-export class AttachmentPreviewComponent implements OnInit {
+export class AttachmentPreviewComponent implements OnInit, OnDestroy {
   private dialogRef = inject(MatDialogRef<AttachmentPreviewComponent>);
   data = inject<{ attachment: Attachment; refNumber?: string }>(MAT_DIALOG_DATA);
   private sanitizer = inject(DomSanitizer);
@@ -40,12 +40,18 @@ export class AttachmentPreviewComponent implements OnInit {
   pdfUrl?: SafeResourceUrl;
   imageUrl?: string;
   docxHtml?: string;
+  private pdfObjectUrl?: string;
 
   ngOnInit(): void {
     const ext = (this.attachment.ext || '').toLowerCase();
     if (ext === 'pdf') {
       this.kind = 'pdf';
-      this.pdfUrl = this.sanitizer.bypassSecurityTrustResourceUrl(`data:application/pdf;base64,${this.attachment.base64}`);
+      // A Blob URL (instead of a data: URL) lets Chromium's built-in PDF
+      // viewer load the document — data: URLs render blank in the iframe.
+      const bytes = Uint8Array.from(atob(this.attachment.base64), c => c.charCodeAt(0));
+      const blob = new Blob([bytes], { type: 'application/pdf' });
+      this.pdfObjectUrl = URL.createObjectURL(blob);
+      this.pdfUrl = this.sanitizer.bypassSecurityTrustResourceUrl(this.pdfObjectUrl);
     } else if (IMAGE_EXTS.includes(ext)) {
       this.kind = 'image';
       this.imageUrl = `data:${IMAGE_MIME[ext]};base64,${this.attachment.base64}`;
@@ -93,5 +99,12 @@ export class AttachmentPreviewComponent implements OnInit {
 
   close(): void {
     this.dialogRef.close();
+  }
+
+  ngOnDestroy(): void {
+    if (this.pdfObjectUrl) {
+      URL.revokeObjectURL(this.pdfObjectUrl);
+      this.pdfObjectUrl = undefined;
+    }
   }
 }

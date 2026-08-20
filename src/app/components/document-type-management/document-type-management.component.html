@@ -1,12 +1,15 @@
 <div class="p-4 max-w-7xl mx-auto">
   <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
     <div>
-      <h1 class="text-2xl font-bold text-primary">📑 إدارة أنواع الوثائق</h1>
+      <h1 class="text-2xl font-bold text-primary flex items-center gap-2">
+        <mat-icon>description</mat-icon>
+        إدارة أنواع الوثائق
+      </h1>
       <p class="text-text-light text-sm">إنشاء وتعديل أنواع الوثائق والبادئات</p>
     </div>
     <button mat-raised-button color="primary" (click)="openForm()">
       <mat-icon>add</mat-icon>
-      <span>➕ إضافة نوع جديد</span>
+      <span>إضافة نوع جديد</span>
     </button>
   </div>
 
@@ -33,7 +36,7 @@
       @for (type of filteredTypes(); track type.id) {
         <div class="type-card bg-card rounded-xl shadow-sm border border-border p-4 relative">
           @if (isSystem(type)) {
-            <span class="system-badge">🔒 نظامي</span>
+            <span class="system-badge"><mat-icon class="!text-sm !w-4 !h-4 align-middle">lock</mat-icon> نظامي</span>
           }
 
           <div class="flex items-start gap-3 mb-3">
@@ -43,7 +46,7 @@
               [style.color]="type.color">
               {{ type.icon }}
             </div>
-            <div class="flex-1 min-w-0">
+            <div class="flex-1 min-w-0 pe-20">
               <h3 class="font-bold text-lg truncate">{{ type.label }}</h3>
               <p class="text-sm text-text-light truncate">{{ type.name }}</p>
             </div>

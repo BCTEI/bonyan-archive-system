@@ -1,4 +1,4 @@
-<h2 mat-dialog-title class="text-right">🔐 صلاحيات المجلدات — {{ user.full_name || user.username }}</h2>
+<h2 mat-dialog-title class="text-right flex items-center gap-2"><mat-icon>lock</mat-icon> صلاحيات المجلدات — {{ user.full_name || user.username }}</h2>
 
 <mat-dialog-content class="text-right">
   @if (loading()) {
@@ -27,14 +27,14 @@
           @for (group of groups(); track group.name) {
             <tr class="bg-slate-100 font-bold">
               <td colspan="5" class="py-2 px-3 cursor-pointer" (click)="toggleGroup(group)">
-                <mat-icon class="!text-sm align-middle">{{ group.expanded ? 'expand_more' : 'chevron_left' }}</mat-icon>
+                <mat-icon class="!text-base !w-5 !h-5 align-middle">{{ group.expanded ? 'expand_more' : 'chevron_left' }}</mat-icon>
                 {{ group.name }}
               </td>
             </tr>
             @if (group.expanded) {
               @for (folder of group.folders; track folder.id) {
                 <tr>
-                  <td class="pr-6">{{ folder.id }} — {{ folder.name }}</td>
+                  <td class="pr-6">{{ folder.name }}</td>
                   <td><mat-checkbox [(ngModel)]="permissions()[folder.id].can_view"></mat-checkbox></td>
                   <td><mat-checkbox [(ngModel)]="permissions()[folder.id].can_create"></mat-checkbox></td>
                   <td><mat-checkbox [(ngModel)]="permissions()[folder.id].can_edit"></mat-checkbox></td>
@@ -51,5 +51,8 @@
 
 <mat-dialog-actions align="end">
   <button mat-button (click)="close()">إلغاء</button>
-  <button mat-raised-button color="primary" (click)="save()">💾 حفظ الصلاحيات</button>
+  <button mat-raised-button color="primary" (click)="save()">
+    <mat-icon>save</mat-icon>
+    <span>حفظ الصلاحيات</span>
+  </button>
 </mat-dialog-actions>

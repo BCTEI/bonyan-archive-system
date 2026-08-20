@@ -10,7 +10,7 @@
       المعلومات الأساسية
     </h3>
 
-    <div class="form-group full-width mb-4">
+    <div class="mb-4">
       <label class="block text-sm font-medium mb-2">نوع الملف <span class="text-red-500">*</span></label>
       <div class="type-options grid grid-cols-1 md:grid-cols-3 gap-3">
         @for (t of documentTypes(); track t.id) {
@@ -29,14 +29,14 @@
       @if (doc().ref_number) {
         <span class="px-3 py-1 rounded-lg bg-primary text-white font-bold">{{ doc().ref_number }}</span>
       } @else {
-        <span class="px-3 py-1 rounded-lg border border-dashed border-border text-text-light text-sm" style="font-family:monospace">
-          م.ب/؟/{{ doc().folder_id }}
+        <span class="ref-chip px-3 py-1 rounded-lg border border-dashed border-border text-text-light text-sm">
+          م.ب/؟/—
         </span>
         <span class="text-xs text-text-light">يُولَّد الرقم تلقائياً عند الحفظ</span>
       }
     </div>
 
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+    <div class="grid grid-cols-1 gap-4 mb-4" [ngClass]="showOrgUnitControl() ? 'md:grid-cols-2' : 'md:grid-cols-1'">
       <div>
         <label class="block text-sm font-medium mb-1">المجلد <span class="text-red-500">*</span></label>
         <select [ngModel]="doc().folder_id" (ngModelChange)="onFolderChange(+$event)"
@@ -57,35 +57,35 @@
             }
           </select>
           @if (isHeadRole() && !doc().org_unit_id) {
-            <p class="text-xs text-warning mt-1">
-              ⚠️ لم يتم تحديد وحدة — ستظهر الوثيقة للمدير العام ونائبه فقط
+            <p class="text-xs text-warning mt-1 flex items-center gap-1">
+              <mat-icon class="text-warning !text-sm !w-4 !h-4">warning</mat-icon> لم يتم تحديد وحدة — ستظهر الوثيقة للمدير العام ونائبه فقط
             </p>
           }
         </div>
       }
     </div>
 
-    <div class="form-group full-width mb-4">
+    <div class="mb-4">
       <label class="block text-sm font-medium mb-2">مستوى السرية <span class="text-red-500">*</span></label>
       <div class="confidentiality-options grid grid-cols-1 md:grid-cols-3 gap-3">
         <div (click)="onConfidentialityChange('عادي')"
-             class="conf-option border rounded-xl p-3 cursor-pointer transition"
+             class="conf-option border rounded-xl p-3 cursor-pointer transition text-center"
              [ngClass]="{'border-success bg-success/5': doc().confidentiality === 'عادي', 'border-border': doc().confidentiality !== 'عادي'}">
-          <span class="conf-icon text-xl">🟢</span>
+          <span class="conf-icon text-xl"><mat-icon class="text-success !text-xl !w-5 !h-5">lock_open</mat-icon></span>
           <span class="conf-label font-bold block">عادي</span>
           <span class="conf-desc text-xs text-text-light">لا يحتاج كلمة مرور إضافية</span>
         </div>
         <div (click)="onConfidentialityChange('سري')"
-             class="conf-option secret border rounded-xl p-3 cursor-pointer transition"
+             class="conf-option secret border rounded-xl p-3 cursor-pointer transition text-center"
              [ngClass]="{'border-warning bg-warning/5': doc().confidentiality === 'سري', 'border-border': doc().confidentiality !== 'سري'}">
-          <span class="conf-icon text-xl">🟡</span>
+          <span class="conf-icon text-xl"><mat-icon class="text-warning !text-xl !w-5 !h-5">lock</mat-icon></span>
           <span class="conf-label font-bold block">سري</span>
           <span class="conf-desc text-xs text-text-light">يتطلب إعادة إدخال كلمة المرور</span>
         </div>
         <div (click)="onConfidentialityChange('سري للغاية')"
-             class="conf-option top-secret border rounded-xl p-3 cursor-pointer transition"
+             class="conf-option top-secret border rounded-xl p-3 cursor-pointer transition text-center"
              [ngClass]="{'border-danger bg-danger/5': doc().confidentiality === 'سري للغاية', 'border-border': doc().confidentiality !== 'سري للغاية'}">
-          <span class="conf-icon text-xl">🔴</span>
+          <span class="conf-icon text-xl"><mat-icon class="text-danger !text-xl !w-5 !h-5">gpp_maybe</mat-icon></span>
           <span class="conf-label font-bold block">سري للغاية</span>
           <span class="conf-desc text-xs text-text-light">يتطلب كلمة المرور + رمز تحقق من النظام</span>
         </div>
@@ -149,7 +149,7 @@
       <div>
         <label class="block text-sm font-medium mb-1">{{ senderLabel() }} <span class="text-red-500">*</span></label>
         <div class="flex gap-2">
-          <mat-form-field class="flex-1" appearance="outline">
+          <mat-form-field class="flex-1" appearance="outline" subscriptSizing="dynamic">
             <input matInput [ngModel]="doc().sender" (ngModelChange)="onSenderInput($event)"
                    [matAutocomplete]="senderAuto" placeholder="اختر أو اكتب...">
             <mat-autocomplete #senderAuto="matAutocomplete">
@@ -158,7 +158,7 @@
               }
             </mat-autocomplete>
           </mat-form-field>
-          <button mat-stroked-button type="button" (click)="openQuickAdd(partyListType(), doc().sender ?? '')" class="!min-w-[44px]">
+          <button mat-stroked-button type="button" (click)="openQuickAdd(partyListType(), doc().sender ?? '')" class="!min-w-[44px] mt-[10px]">
             <mat-icon>add</mat-icon>
           </button>
         </div>
@@ -166,7 +166,7 @@
       <div>
         <label class="block text-sm font-medium mb-1">{{ receiverLabel() }} <span class="text-red-500">*</span></label>
         <div class="flex gap-2">
-          <mat-form-field class="flex-1" appearance="outline">
+          <mat-form-field class="flex-1" appearance="outline" subscriptSizing="dynamic">
             <input matInput [ngModel]="doc().receiver" (ngModelChange)="onReceiverInput($event)"
                    [matAutocomplete]="receiverAuto" placeholder="اختر أو اكتب...">
             <mat-autocomplete #receiverAuto="matAutocomplete">
@@ -175,7 +175,7 @@
               }
             </mat-autocomplete>
           </mat-form-field>
-          <button mat-stroked-button type="button" (click)="openQuickAdd(receiverListType(), doc().receiver ?? '')" class="!min-w-[44px]">
+          <button mat-stroked-button type="button" (click)="openQuickAdd(receiverListType(), doc().receiver ?? '')" class="!min-w-[44px] mt-[10px]">
             <mat-icon>add</mat-icon>
           </button>
         </div>
@@ -187,7 +187,7 @@
         <div>
           <label class="block text-sm font-medium mb-1">منشئ الرسالة <span class="text-red-500">*</span></label>
           <div class="flex gap-2">
-            <mat-form-field class="flex-1" appearance="outline">
+            <mat-form-field class="flex-1" appearance="outline" subscriptSizing="dynamic">
               <input matInput [ngModel]="doc().author" (ngModelChange)="updateDoc('author', $event); filterAuthors($event)"
                      [matAutocomplete]="authorAuto" placeholder="اختر أو اكتب...">
               <mat-autocomplete #authorAuto="matAutocomplete">
@@ -196,7 +196,7 @@
                 }
               </mat-autocomplete>
             </mat-form-field>
-            <button mat-stroked-button type="button" (click)="openQuickAdd('author', doc().author ?? '')" class="!min-w-[44px]">
+            <button mat-stroked-button type="button" (click)="openQuickAdd('author', doc().author ?? '')" class="!min-w-[44px] mt-[10px]">
               <mat-icon>add</mat-icon>
             </button>
           </div>
@@ -204,7 +204,7 @@
         <div>
           <label class="block text-sm font-medium mb-1">معد الرسالة</label>
           <div class="flex gap-2">
-            <mat-form-field class="flex-1" appearance="outline">
+            <mat-form-field class="flex-1" appearance="outline" subscriptSizing="dynamic">
               <input matInput [ngModel]="doc().writer_name" (ngModelChange)="updateDoc('writer_name', $event); filterPreparers($event)"
                      [matAutocomplete]="preparerAuto" placeholder="اختر أو اكتب...">
               <mat-autocomplete #preparerAuto="matAutocomplete">
@@ -213,7 +213,7 @@
                 }
               </mat-autocomplete>
             </mat-form-field>
-            <button mat-stroked-button type="button" (click)="openQuickAdd('preparer', doc().writer_name ?? '')" class="!min-w-[44px]">
+            <button mat-stroked-button type="button" (click)="openQuickAdd('preparer', doc().writer_name ?? '')" class="!min-w-[44px] mt-[10px]">
               <mat-icon>add</mat-icon>
             </button>
           </div>
@@ -254,6 +254,19 @@
       </div>
     }
   </section>
+
+  @if (quickAddType()) {
+    <div class="mb-4 p-4 rounded-xl border border-primary bg-primary/5">
+      <h4 class="font-bold text-primary mb-2 flex items-center gap-1"><mat-icon class="!text-xl !w-5 !h-5">add_circle</mat-icon> إضافة {{ quickAddType() === 'author' ? 'منشئ رسالة' : quickAddType() === 'preparer' ? 'معد رسالة' : quickAddType() === 'sender' ? 'جهة مرسلة' : quickAddType() === 'receiver' ? 'جهة مستقبلة' : 'قسم' }} جديد</h4>
+      <div class="flex gap-2">
+        <input type="text" [ngModel]="quickAddName()" (ngModelChange)="quickAddName.set($event)"
+               class="flex-1 px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary"
+               placeholder="الاسم..." (keyup.enter)="confirmQuickAdd()">
+        <button mat-raised-button color="primary" type="button" (click)="confirmQuickAdd()">إضافة</button>
+        <button mat-stroked-button type="button" (click)="cancelQuickAdd()">إلغاء</button>
+      </div>
+    </div>
+  }
 
   <!-- ═══════════════ الملاحظات والتوقيع والمرفقات ═══════════════ -->
   <section class="border border-border rounded-xl p-4 mb-4">
@@ -299,9 +312,9 @@
       @if (attachments().length > 0) {
         <div class="flex flex-wrap gap-2 mt-3">
           @for (att of attachments(); track att.name + att.ext) {
-            <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary text-sm">
+            <div class="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-secondary text-sm min-w-0 max-w-full">
               <mat-icon class="!text-base">attachment</mat-icon>
-              <span>{{ att.name }}.{{ att.ext }}</span>
+              <span class="truncate">{{ att.name }}.{{ att.ext }}</span>
               <button mat-icon-button class="!w-6 !h-6" (click)="removeAttachment($index)">
                 <mat-icon class="!text-base">close</mat-icon>
               </button>
@@ -312,26 +325,13 @@
     </div>
   </section>
 
-  @if (quickAddType()) {
-    <div class="mb-4 p-4 rounded-xl border border-primary bg-primary/5">
-      <h4 class="font-bold text-primary mb-2">➕ إضافة {{ quickAddType() === 'author' ? 'منشئ رسالة' : quickAddType() === 'preparer' ? 'معد رسالة' : quickAddType() === 'sender' ? 'جهة مرسلة' : quickAddType() === 'receiver' ? 'جهة مستقبلة' : 'قسم' }} جديد</h4>
-      <div class="flex gap-2">
-        <input type="text" [ngModel]="quickAddName()" (ngModelChange)="quickAddName.set($event)"
-               class="flex-1 px-3 py-2 rounded-lg border border-border bg-bg focus:outline-none focus:border-primary"
-               placeholder="الاسم..." (keyup.enter)="confirmQuickAdd()">
-        <button mat-raised-button color="primary" type="button" (click)="confirmQuickAdd()">إضافة</button>
-        <button mat-stroked-button type="button" (click)="cancelQuickAdd()">إلغاء</button>
-      </div>
-    </div>
-  }
-
-  <div class="flex justify-end gap-3">
+  <div class="flex justify-end gap-3 sticky bottom-0 bg-white py-3 -mx-6 px-6 border-t border-border">
     <button mat-button type="button" (click)="cancel()" [disabled]="isSaving()">إلغاء</button>
     <button mat-raised-button color="primary" type="button" (click)="save()" [disabled]="isSaving()">
       @if (isSaving()) {
-        <mat-icon class="animate-spin">refresh</mat-icon>
-      }
-      @if (isSaving()) {
+        <ng-container>
+          <mat-icon class="animate-spin">refresh</mat-icon>
+        </ng-container>
         <span>جاري الحفظ...</span>
       } @else {
         <span>حفظ الوثيقة</span>

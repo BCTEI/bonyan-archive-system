@@ -1,10 +1,16 @@
 <div class="p-4 max-w-7xl mx-auto">
   <mat-tab-group>
-    <mat-tab label="👥 المستخدمين">
+    <mat-tab>
+      <ng-template matTabLabel>
+        <span class="inline-flex items-center gap-1">
+          <mat-icon class="!text-base !w-5 !h-5">group</mat-icon>
+          المستخدمين
+        </span>
+      </ng-template>
       <div class="pt-4">
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 class="text-2xl font-bold text-primary">👥 إدارة المستخدمين</h1>
+            <h1 class="text-2xl font-bold text-primary flex items-center gap-2"><mat-icon>group</mat-icon> إدارة المستخدمين</h1>
             <p class="text-text-light text-sm">إنشاء وتعديل وإدارة صلاحيات المستخدمين</p>
           </div>
           <button mat-raised-button color="primary" (click)="openForm()">
@@ -16,15 +22,20 @@
         <!-- Stats Cards -->
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
           <div class="bg-card p-4 rounded-xl shadow-sm border border-border flex items-center gap-3">
-            <div class="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center text-xl">👥</div>
+            <div class="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center text-primary">
+              <mat-icon>group</mat-icon>
+            </div>
             <div><div class="text-2xl font-bold">{{ users().length }}</div><div class="text-xs text-text-light">إجمالي المستخدمين</div></div>
           </div>
           @for (entry of roleEntries; track entry[0]) {
             <div class="bg-card p-4 rounded-xl shadow-sm border border-border flex items-center gap-3">
-              <div class="w-10 h-10 rounded-lg flex items-center justify-center text-xl role-chip" [class]="roleClass(entry[0])">
-                {{ roleCounts[entry[0]] }}
+              <div class="w-10 h-10 rounded-lg flex items-center justify-center role-chip" [class]="roleClass(entry[0])">
+                <mat-icon>person</mat-icon>
               </div>
-              <div class="text-xs text-text-light">{{ entry[1] }}</div>
+              <div>
+                <div class="text-2xl font-bold">{{ roleCounts[entry[0]] }}</div>
+                <div class="text-xs text-text-light">{{ entry[1] }}</div>
+              </div>
             </div>
           }
         </div>
@@ -58,11 +69,11 @@
           </div>
         </div>
 
-        <div class="bg-card rounded-xl shadow-sm border border-border overflow-hidden">
+        <div class="bg-card rounded-xl shadow-sm border border-border overflow-hidden overflow-x-auto">
           @if (loading()) {
             <div class="p-8 text-center text-text-light">جاري تحميل المستخدمين...</div>
           } @else {
-            <table mat-table [dataSource]="paginatedUsers()" class="w-full">
+            <table mat-table [dataSource]="paginatedUsers()" class="w-full min-w-[900px]">
               <ng-container matColumnDef="id">
                 <th mat-header-cell *matHeaderCellDef>المعرف</th>
                 <td mat-cell *matCellDef="let u">{{ u.id }}</td>
@@ -162,10 +173,16 @@
       </div>
     </mat-tab>
 
-    <mat-tab label="⏳ طلبات إعادة تعيين كلمة المرور">
+    <mat-tab>
+      <ng-template matTabLabel>
+        <span class="inline-flex items-center gap-1">
+          <mat-icon class="!text-base !w-5 !h-5">schedule</mat-icon>
+          طلبات إعادة تعيين كلمة المرور
+        </span>
+      </ng-template>
       <div class="pt-4">
         <div class="flex items-center justify-between mb-4">
-          <h2 class="text-xl font-bold text-primary">⏳ طلبات إعادة تعيين كلمة المرور</h2>
+          <h2 class="text-xl font-bold text-primary flex items-center gap-2"><mat-icon>schedule</mat-icon> طلبات إعادة تعيين كلمة المرور</h2>
           <button mat-stroked-button color="primary" (click)="loadPendingRequests()">
             <mat-icon>refresh</mat-icon>
             تحديث
@@ -180,39 +197,46 @@
             <p>لا توجد طلبات معلقة</p>
           </div>
         } @else {
-          <table mat-table [dataSource]="pendingRequests()" class="w-full bg-card rounded-xl shadow-sm border border-border">
-            <ng-container matColumnDef="username">
-              <th mat-header-cell *matHeaderCellDef>المستخدم</th>
-              <td mat-cell *matCellDef="let req" class="font-medium">{{ req.username }}</td>
-            </ng-container>
+          <div class="bg-card rounded-xl shadow-sm border border-border overflow-hidden overflow-x-auto">
+            <table mat-table [dataSource]="pendingRequests()" class="w-full">
+              <ng-container matColumnDef="username">
+                <th mat-header-cell *matHeaderCellDef>المستخدم</th>
+                <td mat-cell *matCellDef="let req" class="font-medium">{{ req.username }}</td>
+              </ng-container>
 
-            <ng-container matColumnDef="request_date">
-              <th mat-header-cell *matHeaderCellDef>التاريخ</th>
-              <td mat-cell *matCellDef="let req">{{ formatDate(req.request_date) }}</td>
-            </ng-container>
+              <ng-container matColumnDef="request_date">
+                <th mat-header-cell *matHeaderCellDef>التاريخ</th>
+                <td mat-cell *matCellDef="let req">{{ formatDate(req.request_date) }}</td>
+              </ng-container>
 
-            <ng-container matColumnDef="status">
-              <th mat-header-cell *matHeaderCellDef>الحالة</th>
-              <td mat-cell *matCellDef="let req">
-                <span class="px-2 py-1 rounded-full text-xs bg-warning/10 text-warning">⏳ قيد الانتظار</span>
-              </td>
-            </ng-container>
+              <ng-container matColumnDef="status">
+                <th mat-header-cell *matHeaderCellDef>الحالة</th>
+                <td mat-cell *matCellDef="let req">
+                  <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs bg-warning/10 text-warning">
+                    <mat-icon class="!text-sm">schedule</mat-icon>
+                    قيد الانتظار
+                  </span>
+                </td>
+              </ng-container>
 
-            <ng-container matColumnDef="actions">
-              <th mat-header-cell *matHeaderCellDef>إجراء</th>
-              <td mat-cell *matCellDef="let req">
-                <button mat-raised-button color="primary" class="me-2" (click)="approveReset(req)">
-                  ✅ موافقة
-                </button>
-                <button mat-stroked-button color="warn" (click)="rejectReset(req)">
-                  ❌ رفض
-                </button>
-              </td>
-            </ng-container>
+              <ng-container matColumnDef="actions">
+                <th mat-header-cell *matHeaderCellDef>إجراء</th>
+                <td mat-cell *matCellDef="let req">
+                  <button mat-raised-button color="primary" class="me-2" (click)="approveReset(req)">
+                    <mat-icon>check</mat-icon>
+                    موافقة
+                  </button>
+                  <button mat-stroked-button color="warn" (click)="rejectReset(req)">
+                    <mat-icon>close</mat-icon>
+                    رفض
+                  </button>
+                </td>
+              </ng-container>
 
-            <tr mat-header-row *matHeaderRowDef="requestColumns"></tr>
-            <tr mat-row *matRowDef="let row; columns: requestColumns;"></tr>
-          </table>
+              <tr mat-header-row *matHeaderRowDef="requestColumns"></tr>
+              <tr mat-row *matRowDef="let row; columns: requestColumns;"></tr>
+            </table>
+          </div>
         }
       </div>
     </mat-tab>

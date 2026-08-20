@@ -38,15 +38,15 @@
 
   &:hover { background: var(--bg); }
 
-  &.login { border-right: 3px solid #059669; }
-  &.logout { border-right: 3px solid #d97706; }
+  &.login { border-right: 3px solid var(--success); }
+  &.logout { border-right: 3px solid var(--warning); }
 
   .activity-icon { font-size: 1.3rem; width: 36px; text-align: center; }
   .activity-details { flex: 1; }
   .activity-title { display: flex; justify-content: space-between; margin-bottom: 0.25rem; }
   .action-badge { font-size: 0.75rem; padding: 0.125rem 0.5rem; border-radius: 9999px; }
-  .action-badge.login { background: #d1fae5; color: #059669; }
-  .action-badge.logout { background: #ffedd5; color: #d97706; }
+  .action-badge.login { background: color-mix(in srgb, var(--success) 12%, transparent); color: var(--success); }
+  .action-badge.logout { background: color-mix(in srgb, var(--warning) 12%, transparent); color: var(--warning); }
   .activity-meta { font-size: 0.8rem; color: var(--text-light); display: flex; gap: 0.75rem; }
 }
 
@@ -97,9 +97,6 @@
   &:hover { background: var(--bg); }
 
   .doc-type-badge { font-size: 0.7rem; padding: 0.125rem 0.5rem; border-radius: 9999px; }
-  .doc-type-badge.sad { background: #d1fae5; color: #059669; }
-  .doc-type-badge.war { background: #dbeafe; color: #2563eb; }
-  .doc-type-badge.mur { background: #ffedd5; color: #d97706; }
   .doc-ref { font-family: monospace; font-size: 0.8rem; color: var(--primary); font-weight: 700; }
   .doc-subject { flex: 1; font-size: 0.85rem; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .doc-date { font-size: 0.75rem; color: var(--text-light); }

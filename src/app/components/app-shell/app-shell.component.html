@@ -63,10 +63,20 @@
       <nav class="breadcrumb" aria-label="مسار التنقل">
         @for (crumb of breadcrumb(); track crumb.label; let last = $last) {
           @if (!last && crumb.link) {
-            <a [routerLink]="crumb.link" class="crumb-link">{{ crumb.label }}</a>
+            <a [routerLink]="crumb.link" class="crumb-link">
+              @if (crumb.icon) {
+                <mat-icon class="crumb-icon">{{ crumb.icon }}</mat-icon>
+              }
+              {{ crumb.label }}
+            </a>
             <span class="crumb-separator">/</span>
           } @else {
-            <span class="crumb-current">{{ crumb.label }}</span>
+            <span class="crumb-current">
+              @if (crumb.icon) {
+                <mat-icon class="crumb-icon">{{ crumb.icon }}</mat-icon>
+              }
+              {{ crumb.label }}
+            </span>
           }
         }
       </nav>

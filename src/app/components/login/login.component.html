@@ -1,7 +1,7 @@
 <div class="login-bg min-h-screen flex items-center justify-center p-4">
   <div class="login-card w-full max-w-[380px] p-8 text-center">
-    <div class="w-24 h-24 sm:w-28 sm:h-28 rounded-full bg-white/10 flex items-center justify-center mx-auto mb-4 p-1.5">
-      <img src="assets/images/bonyan-logo-full.png" alt="شعار مركز البنيان" class="w-full h-full rounded-full object-contain">
+    <div class="w-24 h-24 sm:w-28 sm:h-28 mx-auto mb-4">
+      <img src="assets/images/bonyan-logo-full.png" alt="شعار مركز البنيان" class="w-full h-full rounded-full object-contain shadow-lg">
     </div>
     <h1 class="text-white text-xl font-bold mb-1">نظام الأرشيف الإلكتروني</h1>
     <p class="text-white/70 mb-6">مركز البنيان</p>
@@ -22,9 +22,9 @@
         <label class="block text-white/80 text-sm mb-1">كلمة المرور</label>
         <div class="relative">
           <input [type]="hidePassword ? 'password' : 'text'" [(ngModel)]="password" (keyup.enter)="login()" autocomplete="current-password"
-                 class="w-full px-4 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/40 focus:outline-none focus:border-white/50">
+                 class="w-full px-4 pl-10 py-2.5 rounded-lg bg-white/10 border border-white/20 text-white placeholder-white/40 focus:outline-none focus:border-white/50">
           <button type="button" (click)="hidePassword = !hidePassword" class="absolute left-3 top-1/2 -translate-y-1/2 text-white/60 hover:text-white">
-            <mat-icon class="!text-lg">{{ hidePassword ? 'visibility_off' : 'visibility' }}</mat-icon>
+            <mat-icon>{{ hidePassword ? 'visibility_off' : 'visibility' }}</mat-icon>
           </button>
         </div>
       </div>
@@ -36,7 +36,7 @@
         <span>تذكرني</span>
       </label>
       <button type="button" (click)="showForgotPassword()" class="text-white/80 text-sm hover:text-white underline">
-        🔑 نسيت كلمة المرور؟
+        <mat-icon class="!text-base align-middle ml-1">vpn_key</mat-icon> نسيت كلمة المرور؟
       </button>
     </div>
 

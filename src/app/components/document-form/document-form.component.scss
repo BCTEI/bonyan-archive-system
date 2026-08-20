@@ -2,6 +2,10 @@ canvas {
   touch-action: none;
 }
 
+.ref-chip {
+  font-family: monospace;
+}
+
 .type-option {
   &:hover {
     border-color: var(--primary);

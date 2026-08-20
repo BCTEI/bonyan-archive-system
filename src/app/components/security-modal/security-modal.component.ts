@@ -56,14 +56,6 @@ export class SecurityModalComponent implements OnInit {
     }
   }
 
-  get actionIcon(): string {
-    switch (this.accessType) {
-      case 'edit': return '✏️';
-      case 'view': return '👁️';
-      default: return '🔐';
-    }
-  }
-
   async ngOnInit(): Promise<void> {
     if (this.doc.confidentiality === 'عادي') {
       this.dialogRef.close({ verified: true, method: 'none' });

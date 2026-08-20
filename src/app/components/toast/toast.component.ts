@@ -11,7 +11,7 @@ import { ToastService } from '../../services/toast.service';
   template: `
     <div class="fixed top-4 left-4 z-[9999] flex flex-col gap-2">
       @for (toast of toastService.toasts(); track toast.id) {
-        <div class="toast-item flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg text-white min-w-[280px]"
+        <div class="toast-item flex items-center gap-3 px-4 py-3 rounded-lg shadow-lg text-white min-w-[280px] max-w-sm"
              [ngClass]="typeClass(toast.type)">
           <mat-icon>{{ typeIcon(toast.type) }}</mat-icon>
           <span class="flex-1 text-sm font-medium">{{ toast.message }}</span>

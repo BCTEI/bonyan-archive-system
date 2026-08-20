@@ -338,7 +338,12 @@ export class DocumentFormComponent implements OnInit {
     const rect = canvas.getBoundingClientRect();
     const clientX = 'touches' in e ? (e.touches[0]?.clientX ?? e.changedTouches[0]?.clientX) : e.clientX;
     const clientY = 'touches' in e ? (e.touches[0]?.clientY ?? e.changedTouches[0]?.clientY) : e.clientY;
-    return { x: clientX - rect.left, y: clientY - rect.top };
+    // Scale from CSS pixels to canvas backing-store pixels — w-full stretches
+    // the fixed 600x150 canvas, so raw client coords land offset/distorted.
+    return {
+      x: (clientX - rect.left) * (canvas.width / rect.width),
+      y: (clientY - rect.top) * (canvas.height / rect.height)
+    };
   }
 
   clearSignature(): void {

@@ -14,7 +14,7 @@ import { MatIconModule } from '@angular/material/icon';
             <p class="text-sm text-text-light mb-1">{{ label() }}</p>
             <p class="text-3xl font-bold text-primary">{{ value() }}</p>
           </div>
-          <mat-icon [style.color]="color()" class="scale-150">{{ icon() }}</mat-icon>
+          <mat-icon [style.color]="color()" class="!text-4xl !w-9 !h-9">{{ icon() }}</mat-icon>
         </div>
       </mat-card-content>
     </mat-card>

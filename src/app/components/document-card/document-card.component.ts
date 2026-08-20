@@ -51,15 +51,6 @@ export class DocumentCardComponent {
     return { bg: `${color}20`, text: color };
   }
 
-  confClass(level: string): string {
-    switch (level) {
-      case 'عادي': return 'bg-success/10 text-success';
-      case 'سري': return 'bg-warning/10 text-warning';
-      case 'سري للغاية': return 'bg-danger/10 text-danger';
-      default: return 'bg-secondary text-text';
-    }
-  }
-
   highlighted(text: string): string {
     const term = this.highlight().trim();
     if (!term || !text) return text;

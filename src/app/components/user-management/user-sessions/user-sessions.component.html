@@ -11,10 +11,7 @@
         <th mat-header-cell *matHeaderCellDef>الإجراء</th>
         <td mat-cell *matCellDef="let s">
           <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium"
-                [class.bg-green-100]="s.action === 'login'"
-                [class.text-green-700]="s.action === 'login'"
-                [class.bg-orange-100]="s.action === 'logout'"
-                [class.text-orange-700]="s.action === 'logout'">
+                [ngClass]="s.action === 'login' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'">
             <mat-icon class="!text-sm">{{ s.action === 'login' ? 'login' : 'logout' }}</mat-icon>
             {{ s.action === 'login' ? 'دخول' : 'خروج' }}
           </span>
@@ -28,7 +25,7 @@
 
       <ng-container matColumnDef="device_info">
         <th mat-header-cell *matHeaderCellDef>الجهاز</th>
-        <td mat-cell *matCellDef="let s">{{ s.device_info || '-' }}</td>
+        <td mat-cell *matCellDef="let s" class="max-w-[220px] truncate">{{ s.device_info || '-' }}</td>
       </ng-container>
 
       <tr mat-header-row *matHeaderRowDef="displayedColumns"></tr>

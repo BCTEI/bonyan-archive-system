@@ -51,6 +51,7 @@ export class ArchiveBrowserComponent implements OnInit {
   folders = signal<Folder[]>([]);
   filtered = signal<ArchiveDocument[]>([]);
   loading = signal(false);
+  visibleCount = signal(24);
 
   search = signal('');
   selectedTypeId = signal<number | 'الكل'>('الكل');
@@ -147,6 +148,10 @@ export class ArchiveBrowserComponent implements OnInit {
   setSearch(value: string): void {
     this.search.set(value);
     this.applyFilters();
+  }
+
+  showMore(): void {
+    this.visibleCount.update(c => c + 24);
   }
 
   folderName(folderId: number): string {

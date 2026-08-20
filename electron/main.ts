@@ -360,6 +360,9 @@ function createMainWindow(): void {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      // Chromium's built-in PDF viewer is a plugin in Electron and is disabled
+      // by default — without this the PDF preview iframe renders blank.
+      plugins: true,
     },
   });
 

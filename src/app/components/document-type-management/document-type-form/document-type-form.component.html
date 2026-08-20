@@ -1,5 +1,5 @@
 <h2 mat-dialog-title class="text-right">
-  {{ isEdit ? '✏️ تعديل نوع وثيقة' : '➕ إضافة نوع جديد' }}
+  {{ isEdit ? 'تعديل نوع وثيقة' : 'إضافة نوع جديد' }}
 </h2>
 
 <mat-dialog-content class="text-right">
@@ -22,14 +22,14 @@
 
     <mat-form-field class="w-full" appearance="outline">
       <mat-label>الأيقونة *</mat-label>
-      <input matInput [(ngModel)]="icon" autocomplete="off" maxlength="2">
+      <input matInput [(ngModel)]="icon" autocomplete="off" maxlength="8">
       <mat-hint>أدخل رمزاً تعبيرياً واحداً مثل 📄 أو 📤</mat-hint>
       @if (errors()['icon']) {
         <mat-error>{{ errors()['icon'] }}</mat-error>
       }
     </mat-form-field>
 
-    <div class="flex items-center gap-3">
+    <div class="flex items-start gap-3">
       <div class="flex-1">
         <mat-form-field class="w-full" appearance="outline">
           <mat-label>اللون *</mat-label>
@@ -41,11 +41,11 @@
       </div>
       <input
         type="color"
-        class="color-picker"
+        class="color-picker mt-1"
         [(ngModel)]="color"
         title="اختيار اللون">
       <div
-        class="color-preview"
+        class="color-preview mt-1"
         [style.background-color]="color()">
         {{ icon() }}
       </div>
@@ -75,6 +75,6 @@
 <mat-dialog-actions align="end">
   <button mat-button (click)="close()" [disabled]="loading()">إلغاء</button>
   <button mat-raised-button color="primary" (click)="save()" [disabled]="loading()">
-    @if (loading()) { جاري الحفظ... } @else { 💾 حفظ }
+    @if (loading()) { جاري الحفظ... } @else { حفظ }
   </button>
 </mat-dialog-actions>

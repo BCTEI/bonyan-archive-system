@@ -31,11 +31,11 @@ export class MasterListManagementComponent implements OnInit {
   loading = signal(false);
 
   tabs: { value: MasterListType; label: string; icon: string }[] = [
-    { value: 'author', label: '✍️ منشئو الرسالة', icon: 'edit' },
-    { value: 'preparer', label: '📝 معدو الرسالة', icon: 'assignment_ind' },
-    { value: 'sender', label: '📤 الجهات المرسلة', icon: 'send' },
-    { value: 'receiver', label: '📥 الجهات المستقبلة', icon: 'mark_email_read' },
-    { value: 'department', label: '🏢 الأقسام', icon: 'account_balance' }
+    { value: 'author', label: 'منشئو الرسالة', icon: 'edit' },
+    { value: 'preparer', label: 'معدو الرسالة', icon: 'assignment_ind' },
+    { value: 'sender', label: 'الجهات المرسلة', icon: 'send' },
+    { value: 'receiver', label: 'الجهات المستقبلة', icon: 'mark_email_read' },
+    { value: 'department', label: 'الأقسام', icon: 'account_balance' }
   ];
 
   async ngOnInit(): Promise<void> {

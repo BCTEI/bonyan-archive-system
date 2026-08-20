@@ -18,23 +18,32 @@
     </div>
   </div>
 
-  <div class="flex-1"></div>
-
-  <div class="flex items-center gap-2">
+  <div class="flex items-center gap-2 ms-auto">
     <a routerLink="/main/dashboard" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: false }"
        class="home-btn hidden sm:inline-flex" [class.active]="isDashboard()">
-      🏠 الرئيسية
+      <mat-icon>home</mat-icon>
+      الرئيسية
     </a>
 
     @if (isAdmin()) {
-      <a routerLink="/main/org-units" class="header-btn hidden lg:inline-flex" title="الهيكل التنظيمي">🏛️</a>
-      <a routerLink="/main/document-types" class="header-btn hidden lg:inline-flex" title="أنواع الوثائق">📑</a>
-      <a routerLink="/main/folder-categories" class="header-btn hidden lg:inline-flex" title="التصنيفات">📂</a>
-      <a routerLink="/main/security" class="header-btn hidden lg:inline-flex" title="مركز الأمان">🔐</a>
-      <a routerLink="/main/annual-closing" class="header-btn hidden lg:inline-flex" title="الجرد السنوي">📅</a>
+      <a routerLink="/main/org-units" class="header-btn hidden lg:inline-flex" title="الهيكل التنظيمي" aria-label="الهيكل التنظيمي">
+        <mat-icon>account_balance</mat-icon>
+      </a>
+      <a routerLink="/main/document-types" class="header-btn hidden lg:inline-flex" title="أنواع الوثائق" aria-label="أنواع الوثائق">
+        <mat-icon>description</mat-icon>
+      </a>
+      <a routerLink="/main/folder-categories" class="header-btn hidden lg:inline-flex" title="التصنيفات" aria-label="التصنيفات">
+        <mat-icon>folder</mat-icon>
+      </a>
+      <a routerLink="/main/security" class="header-btn hidden lg:inline-flex" title="مركز الأمان" aria-label="مركز الأمان">
+        <mat-icon>security</mat-icon>
+      </a>
+      <a routerLink="/main/annual-closing" class="header-btn hidden lg:inline-flex" title="الجرد السنوي" aria-label="الجرد السنوي">
+        <mat-icon>event_available</mat-icon>
+      </a>
     }
 
-    <div class="hidden sm:flex flex-col items-end leading-tight mr-2">
+    <div class="hidden sm:flex flex-col items-end leading-tight">
       <span class="text-sm font-medium">{{ displayName() }}</span>
       <span class="text-xs px-2 py-0.5 rounded-full role-badge" [class]="roleClass()">{{ roleLabel() }}</span>
     </div>
@@ -52,16 +61,6 @@
         <span>تغيير كلمة المرور</span>
       </button>
       <mat-divider></mat-divider>
-      <button mat-menu-item (click)="logout()">
-        <mat-icon>logout</mat-icon>
-        <span>تسجيل الخروج</span>
-      </button>
-    </mat-menu>
-
-    <button mat-icon-button [matMenuTriggerFor]="userMenu" class="!text-white">
-      <mat-icon>account_circle</mat-icon>
-    </button>
-    <mat-menu #userMenu="matMenu">
       <button mat-menu-item (click)="logout()">
         <mat-icon>logout</mat-icon>
         <span>تسجيل الخروج</span>

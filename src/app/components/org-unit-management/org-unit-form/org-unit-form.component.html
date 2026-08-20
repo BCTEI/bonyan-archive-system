@@ -1,5 +1,5 @@
 <h2 mat-dialog-title class="text-right">
-  {{ isEdit ? '✏️ تعديل وحدة تنظيمية' : '➕ إضافة وحدة تنظيمية' }}
+  {{ isEdit ? 'تعديل وحدة تنظيمية' : 'إضافة وحدة تنظيمية' }}
 </h2>
 
 <mat-dialog-content class="text-right">
@@ -44,6 +44,6 @@
 <mat-dialog-actions align="end">
   <button mat-button (click)="close()" [disabled]="loading()">إلغاء</button>
   <button mat-raised-button color="primary" (click)="save()" [disabled]="loading()">
-    @if (loading()) { جاري الحفظ... } @else { 💾 حفظ }
+    @if (loading()) { جاري الحفظ... } @else { حفظ }
   </button>
 </mat-dialog-actions>

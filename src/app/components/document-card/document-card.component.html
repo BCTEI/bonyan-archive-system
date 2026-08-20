@@ -8,13 +8,14 @@
               [style.color]="typeStyle().text">
           {{ doc().type_icon }} {{ doc().type_label ?? doc().type }}
         </span>
-        <span class="confidentiality-badge"
-              [class.normal]="doc().confidentiality === 'عادي'"
-              [class.secret]="doc().confidentiality === 'سري'"
-              [class.top-secret]="doc().confidentiality === 'سري للغاية'">
-          {{ doc().confidentiality === 'عادي' ? '🟢' : doc().confidentiality === 'سري' ? '🟡' : '🔴' }}
-          {{ doc().confidentiality }}
-        </span>
+        @if (doc().confidentiality !== 'عادي') {
+          <span class="confidentiality-badge"
+                [class.normal]="doc().confidentiality === 'عادي'"
+                [class.secret]="doc().confidentiality === 'سري'"
+                [class.top-secret]="doc().confidentiality === 'سري للغاية'">
+            {{ doc().confidentiality }}
+          </span>
+        }
         @if (doc().status === 'موقوف') {
           <span class="px-2 py-0.5 rounded text-xs text-white bg-danger">موقوف</span>
         } @else if (doc().status === 'معتمد') {

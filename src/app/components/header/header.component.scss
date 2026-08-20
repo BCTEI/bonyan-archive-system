@@ -20,11 +20,11 @@
   background-color: rgba(255, 255, 255, 0.25);
 }
 
-.role-general_manager { background-color: #dc2626; }
+.role-general_manager { background-color: var(--danger); }
 .role-deputy_manager { background-color: #ea580c; }
-.role-dept_head { background-color: #d97706; }
-.role-section_head { background-color: #2563eb; }
-.role-employee { background-color: #059669; }
+.role-dept_head { background-color: var(--warning); }
+.role-section_head { background-color: var(--info); }
+.role-employee { background-color: var(--success); }
 
 .home-btn,
 .header-btn {
@@ -56,4 +56,11 @@
 .header-btn {
   padding: 0.5rem;
   font-size: 1.1rem;
+}
+
+.home-btn mat-icon,
+.header-btn mat-icon {
+  font-size: 1.25rem;
+  width: 1.25rem;
+  height: 1.25rem;
 }

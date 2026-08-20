@@ -17,9 +17,9 @@
           @for (folder of filteredFolders(grouped().get(group) ?? []); track folder.id) {
             <button (click)="selectFolder(folder)"
                     class="folder-item flex items-center justify-between w-full text-right px-3 py-2 rounded-lg text-sm hover:bg-secondary transition"
-                    [class.bg-secondary]="selectedFolderId() === folder.id">
+                    [ngClass]="selectedFolderId() === folder.id ? 'bg-primary/10 text-primary font-bold' : ''">
               <span class="truncate">{{ folder.name }}</span>
-              <span class="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">{{ folder.document_count }}</span>
+              <span class="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">{{ folder.document_count ?? 0 }}</span>
             </button>
           }
         </div>

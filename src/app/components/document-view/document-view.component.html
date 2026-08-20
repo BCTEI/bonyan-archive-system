@@ -10,12 +10,11 @@
         </span>
         <span class="px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1"
               [class]="confClass(doc.confidentiality)">
-          {{ doc.confidentiality === 'عادي' ? '🟢' : doc.confidentiality === 'سري' ? '🟡' : '🔴' }}
           {{ doc.confidentiality }}
         </span>
         <span class="px-2.5 py-1 rounded-lg text-xs font-bold text-white"
               [class.bg-success]="doc.status === 'معتمد'"
-              [class.bg-warning]="doc.status === 'قيد الاعتماد'"
+              [class.bg-warning]="doc.status !== 'معتمد' && doc.status !== 'موقوف'"
               [class.bg-danger]="doc.status === 'موقوف'">{{ doc.status }}</span>
       </div>
       <h2 class="text-lg font-bold text-text leading-snug break-words">{{ doc.subject }}</h2>
@@ -51,10 +50,6 @@
           <div class="doc-field">
             <span class="doc-field-label">نوع الوثيقة</span>
             <span class="doc-field-value">{{ doc.type_icon }} {{ doc.type_label ?? doc.type }}</span>
-          </div>
-          <div class="doc-field">
-            <span class="doc-field-label">التصنيف</span>
-            <span class="doc-field-value">{{ folder ? ('#' + folder.id + ' — ' + folder.name) : '—' }}</span>
           </div>
           <div class="doc-field">
             <span class="doc-field-label">التاريخ</span>

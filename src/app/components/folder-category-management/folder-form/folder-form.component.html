@@ -1,5 +1,5 @@
 <h2 mat-dialog-title class="text-right">
-  {{ isEdit ? '✏️ تعديل تصنيف' : '➕ إضافة تصنيف جديد' }}
+  {{ isEdit ? 'تعديل تصنيف' : 'إضافة تصنيف جديد' }}
 </h2>
 
 <mat-dialog-content class="text-right">
@@ -18,9 +18,9 @@
         @for (g of existingGroups; track g) {
           <mat-option [value]="g">{{ g }}</mat-option>
         }
-        <mat-option [value]="NEW_GROUP_VALUE">➕ مجموعة جديدة...</mat-option>
+        <mat-option [value]="NEW_GROUP_VALUE">مجموعة جديدة...</mat-option>
       </mat-select>
-      @if (errors()['group']) {
+      @if (!isNewGroup() && errors()['group']) {
         <mat-error>{{ errors()['group'] }}</mat-error>
       }
     </mat-form-field>
@@ -29,7 +29,7 @@
       <mat-form-field class="w-full" appearance="outline">
         <mat-label>اسم المجموعة الجديدة *</mat-label>
         <input matInput [ngModel]="newGroupName()" (ngModelChange)="newGroupName.set($event)" autocomplete="off">
-        @if (errors()['group']) {
+        @if (isNewGroup() && errors()['group']) {
           <mat-error>{{ errors()['group'] }}</mat-error>
         }
       </mat-form-field>
@@ -47,6 +47,6 @@
 <mat-dialog-actions align="end">
   <button mat-button (click)="close()" [disabled]="loading()">إلغاء</button>
   <button mat-raised-button color="primary" (click)="save()" [disabled]="loading()">
-    @if (loading()) { جاري الحفظ... } @else { 💾 حفظ }
+    @if (loading()) { جاري الحفظ... } @else { حفظ }
   </button>
 </mat-dialog-actions>

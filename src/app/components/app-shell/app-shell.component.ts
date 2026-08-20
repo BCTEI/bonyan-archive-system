@@ -69,9 +69,9 @@ export class AppShellComponent implements OnInit, OnDestroy {
     }
   }
 
-  breadcrumb(): { label: string; link?: string }[] {
+  breadcrumb(): { label: string; link?: string; icon?: string }[] {
     const url = this.router.url.split('?')[0];
-    const crumbs: { label: string; link?: string }[] = [{ label: '🏠 الرئيسية', link: '/main/dashboard' }];
+    const crumbs: { label: string; link?: string; icon?: string }[] = [{ label: 'الرئيسية', link: '/main/dashboard', icon: 'home' }];
     if (url.includes('/documents')) crumbs.push({ label: 'الوثائق' });
     if (url.includes('/audit')) crumbs.push({ label: 'سجل التدقيق' });
     if (url.includes('/users')) crumbs.push({ label: 'إدارة المستخدمين' });

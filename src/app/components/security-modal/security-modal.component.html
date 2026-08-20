@@ -4,9 +4,9 @@
         [class.text-warning]="doc.confidentiality === 'سري'"
         [class.text-danger]="doc.confidentiality === 'سري للغاية'">
       @if (doc.confidentiality === 'سري للغاية') {
-        🔴 {{ actionIcon }} {{ actionTitle }} — وثيقة سرية للغاية
+        <mat-icon class="text-danger">lock</mat-icon> {{ actionTitle }} — وثيقة سرية للغاية
       } @else {
-        🔒 {{ actionIcon }} {{ actionTitle }} — وثيقة سرية
+        <mat-icon class="text-warning">lock</mat-icon> {{ actionTitle }} — وثيقة سرية
       }
     </h2>
     <button mat-icon-button (click)="close()" aria-label="إغلاق">
@@ -16,7 +16,7 @@
 
   <div class="mb-6">
     <p class="text-text-light text-sm mb-2">
-      هذه الوثيقة مصنفة كـ <strong>{{ doc.confidentiality }}</strong>.
+      الوثيقة {{ doc.ref_number }} مصنفة كـ <strong>{{ doc.confidentiality }}</strong>.
     </p>
 
     @if (step() === 'password') {
@@ -38,7 +38,7 @@
   </div>
 
   @if (errorMessage()) {
-    <div class="mb-4 p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm">
+    <div class="mb-4 p-3 rounded-lg bg-danger/10 border border-danger/30 text-danger text-sm">
       {{ errorMessage() }}
     </div>
   }
@@ -61,7 +61,7 @@
           @if (doc.confidentiality === 'سري للغاية') {
             التالي
           } @else {
-            ✔ تأكيد
+            تأكيد
           }
         }
       </button>
@@ -78,7 +78,7 @@
         @if (loading()) {
           جاري التحقق...
         } @else {
-          ✔ تأكيد
+          تأكيد
         }
       </button>
     </div>

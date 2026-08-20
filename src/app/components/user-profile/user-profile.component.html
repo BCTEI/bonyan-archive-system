@@ -7,7 +7,7 @@
   <mat-card>
     <mat-card-header>
       <div mat-card-avatar class="profile-avatar">
-        <mat-icon class="text-4xl">account_circle</mat-icon>
+        <mat-icon class="!text-4xl !w-9 !h-9">account_circle</mat-icon>
       </div>
       <mat-card-title>{{ auth.currentUser()?.full_name || auth.currentUser()?.username }}</mat-card-title>
       <mat-card-subtitle>{{ roleLabels[auth.currentUser()?.role ?? 'employee'] }}</mat-card-subtitle>

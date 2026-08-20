@@ -88,7 +88,7 @@ export class PrintService {
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { font-family: 'Tajawal', Arial, sans-serif; }
           .label {
-            width: 74mm; height: 44mm;
+            width: 73mm; min-height: 43mm; height: auto;
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             gap: 4px; border: 1px dashed #94a3b8; border-radius: 4px; padding: 4px;
           }
@@ -224,7 +224,9 @@ export class PrintService {
     const kind = this.attachmentKind(ext, !!docxHtml);
     const note = kind === 'unsupported'
       ? 'غير قابل للمعاينة عند الطباعة — يُرجى فتح المرفق يدويًا'
-      : 'يُطبع في الصفحة التالية';
+      : kind === 'pdf'
+        ? 'ملف PDF — يُطبع من عارض المرفقات'
+        : 'يُطبع في الصفحة التالية';
     return `
       <div class="att-row">
         <span class="att-chip" style="background:${chip.bg};color:${chip.fg}">${chip.label}</span>
@@ -241,8 +243,15 @@ export class PrintService {
 
     if (kind === 'image' && att.base64) {
       frameContent = `<img src="data:${this.imageMime(ext)};base64,${att.base64}" alt="${this.escapeHtml(att.name)}">`;
-    } else if (kind === 'pdf' && att.base64) {
-      frameContent = `<embed src="data:application/pdf;base64,${att.base64}" type="application/pdf">`;
+    } else if (kind === 'pdf') {
+      // <embed> with a base64 PDF does not paint into the print raster — the
+      // sheet would come out blank, so show the same styled placeholder used
+      // for unsupported types instead.
+      frameContent = `
+        <div class="p2-placeholder">
+          <div class="icon">📄</div>
+          <p>ملف PDF — يُطبع من عارض المرفقات داخل النظام.</p>
+        </div>`;
     } else if (kind === 'docx' && docxHtml) {
       // docxHtml is DOMPurify-sanitized inside convertDocxToHtml — the bytes
       // come from a user-uploaded attachment, so never bypass that step.
@@ -261,7 +270,7 @@ export class PrintService {
         </div>`;
     }
 
-    const hasContent = kind === 'image' || kind === 'pdf' || kind === 'docx';
+    const hasContent = kind === 'image' || kind === 'docx';
 
     return `
       <div class="sheet">
@@ -327,8 +336,8 @@ export class PrintService {
         <title>${this.escapeHtml(doc.ref_number)} — ${this.escapeHtml(doc.subject)}</title>
         <style>
           :root {
-            --navy-deep: #0f2140;
-            --navy: #16305c;
+            --navy-deep: #152c49;
+            --navy: #1e3a5f;
             --navy-mid: #274a82;
             --gold: #a9862f;
             --gold-soft: #d9c284;
@@ -354,7 +363,7 @@ export class PrintService {
 
           .sheet {
             width: 210mm;
-            min-height: 297mm;
+            min-height: 296mm;
             box-sizing: border-box;
             padding: 16mm 15mm 14mm;
             background: var(--paper);
@@ -544,7 +553,8 @@ export class PrintService {
             align-items: initial;
             justify-content: initial;
             overflow: visible;
-            padding: 18px 20px;
+            border: none;
+            padding: 0;
           }
           .docx-print-content { font-size: 10pt; line-height: 1.8; color: var(--ink); text-align: right; }
           .docx-print-content img { max-width: 100%; height: auto; }

@@ -1,12 +1,12 @@
 <h2 mat-dialog-title class="text-right">
-  {{ isEdit ? '✏️ تعديل مستخدم' : '➕ إضافة مستخدم جديد' }}
+  {{ isEdit ? 'تعديل مستخدم' : 'إضافة مستخدم جديد' }}
 </h2>
 
 <mat-dialog-content class="text-right">
   <div class="space-y-4 min-w-[320px]">
     <mat-form-field class="w-full" appearance="outline">
       <mat-label>اسم المستخدم *</mat-label>
-      <input matInput [(ngModel)]="username" [disabled]="isEdit" autocomplete="off" placeholder="اسم المستخدم">
+      <input matInput [(ngModel)]="username" [disabled]="isEdit" autocomplete="off">
       <mat-hint>3-20 حرف، أحرف إنجليزية وأرقام وشرطة سفلية</mat-hint>
       @if (errors()['username']) {
         <mat-error>{{ errors()['username'] }}</mat-error>
@@ -15,21 +15,21 @@
 
     <mat-form-field class="w-full" appearance="outline">
       <mat-label>الاسم الكامل</mat-label>
-      <input matInput [(ngModel)]="fullName" autocomplete="off" placeholder="الاسم الكامل">
+      <input matInput [(ngModel)]="fullName" autocomplete="off">
     </mat-form-field>
 
     <mat-form-field class="w-full" appearance="outline">
       <mat-label>كلمة المرور {{ isEdit ? '' : '*' }}</mat-label>
       <input matInput [type]="showPassword() ? 'text' : 'password'"
-             [(ngModel)]="password" autocomplete="new-password" placeholder="كلمة المرور">
-      <button matSuffix mat-icon-button type="button"
+             [(ngModel)]="password" autocomplete="new-password">
+      <button matSuffix mat-icon-button type="button" class="me-1"
               (click)="toggleShowPassword()"
               [attr.aria-label]="showPassword() ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'">
         <mat-icon>{{ showPassword() ? 'visibility_off' : 'visibility' }}</mat-icon>
       </button>
       <button matSuffix mat-icon-button type="button"
               (click)="generatePassword()" aria-label="توليد كلمة مرور قوية">
-        <mat-icon>casino</mat-icon>
+        <mat-icon>vpn_key</mat-icon>
       </button>
       <mat-hint>{{ isEdit ? 'اتركها فارغة إذا لا تريد التغيير' : '6 أحرف على الأقل — أو استخدم زر التوليد' }}</mat-hint>
       @if (errors()['password']) {
@@ -40,7 +40,7 @@
     <mat-form-field class="w-full" appearance="outline">
       <mat-label>تأكيد كلمة المرور</mat-label>
       <input matInput [type]="showPassword() ? 'text' : 'password'"
-             [(ngModel)]="confirmPassword" autocomplete="new-password" placeholder="تأكيد كلمة المرور">
+             [(ngModel)]="confirmPassword" autocomplete="new-password">
     </mat-form-field>
 
     <mat-form-field class="w-full" appearance="outline">
@@ -78,6 +78,6 @@
 <mat-dialog-actions align="end">
   <button mat-button (click)="close()" [disabled]="loading()">إلغاء</button>
   <button mat-raised-button color="primary" (click)="save()" [disabled]="loading()">
-    @if (loading()) { جاري الحفظ... } @else { 💾 حفظ }
+    @if (loading()) { جاري الحفظ... } @else { <mat-icon>save</mat-icon> حفظ }
   </button>
 </mat-dialog-actions>
