@@ -72,11 +72,13 @@
                 <span class="doc-field-value">{{ doc.sender }}</span>
               </div>
             }
-            @if (doc.type === 'صادر') {
+            @if (doc.type === 'صادر' || doc.type === 'وارد') {
               <div class="doc-field">
                 <span class="doc-field-label">منشئ الرسالة</span>
                 <span class="doc-field-value">{{ doc.author || 'غير محدد' }}</span>
               </div>
+            }
+            @if (doc.type === 'صادر') {
               <div class="doc-field">
                 <span class="doc-field-label">معد الرسالة</span>
                 <span class="doc-field-value">{{ doc.writer_name || 'غير محدد' }}</span>

@@ -1059,7 +1059,7 @@ const DOCUMENT_SELECT_COLUMNS =
 // keeps the card "signed" badge working without shipping the signature itself.
 const DOCUMENT_LIST_COLUMNS =
   "d.id, d.ref_number, d.type_id, d.folder_id, d.confidentiality, d.subject, d.sender, d.receiver, " +
-  "d.author, d.writer_name, d.address, d.target, d.content, d.input_method, d.date, d.notes, d.status, " +
+  "d.message_author, d.message_preparer, d.address, d.target, d.content, d.input_method, d.date, d.notes, d.status, " +
   "d.barcode, d.archive_year, d.created_at, d.updated_at, d.created_by, d.org_unit_id, " +
   "dt.name as type, dt.label as type_label, dt.color as type_color, dt.icon as type_icon, " +
   "CASE WHEN json_valid(d.attachments_json) THEN json_array_length(d.attachments_json) ELSE 0 END as attachments_count, " +
@@ -1180,7 +1180,7 @@ function validateDocumentInput(doc: Record<string, unknown>, isCreate: boolean):
   // can't skip them. Type names are the stable system names (صادر/وارد/...).
   const typeRow = query('SELECT name FROM document_types WHERE id = ?', [doc.type_id]) as Array<{ name: string }>;
   const typeName = typeRow[0]?.name;
-  if (typeName === 'صادر' && !nonEmpty(doc.author)) return 'يرجى ملء اسم منشئ الرسالة';
+  if (typeName === 'صادر' && !nonEmpty(doc.message_author ?? doc.author)) return 'يرجى ملء اسم منشئ الرسالة';
   if (typeName === 'وارد' && !nonEmpty(doc.input_method)) return 'يرجى اختيار طريقة الاستلام';
   return null;
 }
@@ -1220,7 +1220,7 @@ ipcMain.handle('document:create', (_event: IpcMainInvokeEvent, doc: Record<strin
 
     const result = run(`
       INSERT INTO documents (
-        ref_number, type_id, folder_id, confidentiality, subject, sender, receiver, author, writer_name, address, target, content, input_method,
+        ref_number, type_id, folder_id, confidentiality, subject, sender, receiver, message_author, message_preparer, address, target, content, input_method,
         date, body, notes, status, signature_base64, attachments_json, created_by, org_unit_id, archive_year
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `, [
@@ -1231,8 +1231,8 @@ ipcMain.handle('document:create', (_event: IpcMainInvokeEvent, doc: Record<strin
       doc.subject,
       doc.sender ?? null,
       doc.receiver ?? null,
-      doc.author ?? null,
-      doc.writer_name ?? null,
+      doc.message_author ?? doc.author ?? null,
+      doc.message_preparer ?? doc.writer_name ?? null,
       doc.address ?? null,
       doc.target ?? null,
       doc.content ?? null,
@@ -1303,7 +1303,7 @@ ipcMain.handle('document:update', (_event: IpcMainInvokeEvent, doc: Record<strin
     run(`
       UPDATE documents SET
         type_id = ?, folder_id = ?, confidentiality = ?, subject = ?, sender = ?, receiver = ?,
-        author = ?, writer_name = ?, address = ?, target = ?, content = ?, input_method = ?,
+        message_author = ?, message_preparer = ?, address = ?, target = ?, content = ?, input_method = ?,
         date = ?, body = ?, notes = ?, status = ?, signature_base64 = ?, attachments_json = ?, org_unit_id = ?,
         updated_at = strftime('%s','now')
       WHERE id = ?
@@ -1314,8 +1314,8 @@ ipcMain.handle('document:update', (_event: IpcMainInvokeEvent, doc: Record<strin
       doc.subject,
       doc.sender ?? null,
       doc.receiver ?? null,
-      doc.author ?? null,
-      doc.writer_name ?? null,
+      doc.message_author ?? doc.author ?? null,
+      doc.message_preparer ?? doc.writer_name ?? null,
       doc.address ?? null,
       doc.target ?? null,
       doc.content ?? null,

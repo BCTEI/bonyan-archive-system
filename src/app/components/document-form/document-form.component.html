@@ -182,10 +182,10 @@
       </div>
     </div>
 
-    @if (isOutgoing()) {
+    @if (isOutgoing() || isIncoming()) {
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
         <div>
-          <label class="block text-sm font-medium mb-1">منشئ الرسالة <span class="text-red-500">*</span></label>
+          <label class="block text-sm font-medium mb-1">منشئ الرسالة @if (isOutgoing()) { <span class="text-red-500">*</span> }</label>
           <div class="flex gap-2">
             <mat-form-field class="flex-1" appearance="outline" subscriptSizing="dynamic">
               <input matInput [ngModel]="doc().author" (ngModelChange)="updateDoc('author', $event); filterAuthors($event)"
@@ -201,23 +201,25 @@
             </button>
           </div>
         </div>
-        <div>
-          <label class="block text-sm font-medium mb-1">معد الرسالة</label>
-          <div class="flex gap-2">
-            <mat-form-field class="flex-1" appearance="outline" subscriptSizing="dynamic">
-              <input matInput [ngModel]="doc().writer_name" (ngModelChange)="updateDoc('writer_name', $event); filterPreparers($event)"
-                     [matAutocomplete]="preparerAuto" placeholder="اختر أو اكتب...">
-              <mat-autocomplete #preparerAuto="matAutocomplete">
-                @for (item of filteredPreparers(); track item.id) {
-                  <mat-option [value]="item.name">{{ item.name }}</mat-option>
-                }
-              </mat-autocomplete>
-            </mat-form-field>
-            <button mat-stroked-button type="button" (click)="openQuickAdd('preparer', doc().writer_name ?? '')" class="!min-w-[44px] mt-[10px]">
-              <mat-icon>add</mat-icon>
-            </button>
+        @if (isOutgoing()) {
+          <div>
+            <label class="block text-sm font-medium mb-1">معد الرسالة</label>
+            <div class="flex gap-2">
+              <mat-form-field class="flex-1" appearance="outline" subscriptSizing="dynamic">
+                <input matInput [ngModel]="doc().writer_name" (ngModelChange)="updateDoc('writer_name', $event); filterPreparers($event)"
+                       [matAutocomplete]="preparerAuto" placeholder="اختر أو اكتب...">
+                <mat-autocomplete #preparerAuto="matAutocomplete">
+                  @for (item of filteredPreparers(); track item.id) {
+                    <mat-option [value]="item.name">{{ item.name }}</mat-option>
+                  }
+                </mat-autocomplete>
+              </mat-form-field>
+              <button mat-stroked-button type="button" (click)="openQuickAdd('preparer', doc().writer_name ?? '')" class="!min-w-[44px] mt-[10px]">
+                <mat-icon>add</mat-icon>
+              </button>
+            </div>
           </div>
-        </div>
+        }
       </div>
     }
 

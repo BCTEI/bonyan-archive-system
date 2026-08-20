@@ -111,7 +111,8 @@ async def main():
           if (inputs.length < 2) return 'no-inputs';
           setVal(inputs[0], 'admin');
           setVal(inputs[1], 'admin123');
-          const btn = document.querySelector('button[type="submit"]') || document.querySelector('button');
+          const btn = [...document.querySelectorAll('button')].find(x => x.textContent.includes('تسجيل الدخول'));
+          if (!btn) return 'btn-not-found';
           btn.click();
           return 'submitted';
         })()

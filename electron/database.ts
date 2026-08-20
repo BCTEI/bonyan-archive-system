@@ -77,8 +77,8 @@ interface InMemoryDocument {
   subject: string;
   sender?: string;
   receiver?: string;
-  author?: string;
-  writer_name?: string;
+  message_author?: string;
+  message_preparer?: string;
   address?: string;
   target?: string;
   content?: string;
@@ -227,8 +227,8 @@ const memoryStore: InMemoryStore = {
   password_reset_requests: [],
   archived_years: [],
   master_lists: [
-    { id: 1, list_type: 'author', name: 'أحمد علي', name_en: null, is_active: 1, created_at: Date.now() },
-    { id: 2, list_type: 'author', name: 'محمد خالد', name_en: null, is_active: 1, created_at: Date.now() },
+    { id: 1, list_type: 'message_author', name: 'أحمد علي', name_en: null, is_active: 1, created_at: Date.now() },
+    { id: 2, list_type: 'message_author', name: 'محمد خالد', name_en: null, is_active: 1, created_at: Date.now() },
     { id: 3, list_type: 'sender', name: 'وزارة الدفاع', name_en: null, is_active: 1, created_at: Date.now() },
     { id: 4, list_type: 'sender', name: 'القيادة العامة', name_en: null, is_active: 1, created_at: Date.now() },
     { id: 5, list_type: 'receiver', name: 'مركز البنيان', name_en: null, is_active: 1, created_at: Date.now() },
@@ -344,7 +344,7 @@ export function initDb(): { success: boolean; error?: string } {
         subject TEXT NOT NULL,
         sender TEXT,
         receiver TEXT,
-        author TEXT,
+        message_author TEXT,
         address TEXT,
         target TEXT,
         content TEXT,
@@ -462,7 +462,7 @@ export function initDb(): { success: boolean; error?: string } {
 
       CREATE TABLE IF NOT EXISTS master_lists (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        list_type TEXT NOT NULL CHECK(list_type IN ('author', 'sender', 'receiver', 'department')),
+        list_type TEXT NOT NULL CHECK(list_type IN ('message_author', 'sender', 'receiver', 'department', 'preparer')),
         name TEXT NOT NULL,
         name_en TEXT,
         is_active INTEGER DEFAULT 1,
@@ -497,14 +497,16 @@ export function initDb(): { success: boolean; error?: string } {
     migrateRoles();
     migrateRolesV2();
     seedAdmin();
+    migrateDocumentsAuthorRename();
     migrateDocumentsColumns();
     seedDocumentTypes();
     migrateDocumentTypeId();
     migrateFolderSystemFlags();
     migrateDocumentConfidentiality();
     migrateDocumentBarcode();
-    seedMasterLists();
     migrateMasterListsPreparerType();
+    migrateMasterListsAuthorRename();
+    seedMasterLists();
     createPostMigrationIndexes();
     migrateDocumentsOrgUnit();
     migrateDocumentsArchiveYear();
@@ -525,9 +527,47 @@ export function getInitError(): string | null {
   return initError;
 }
 
+// Renames the documents author/preparer columns to their canonical names:
+// author → message_author (منشئ الرسالة) and writer_name → message_preparer
+// (معد الرسالة). Must run BEFORE migrateDocumentsColumns, which would otherwise
+// ADD the new columns as empty columns first and block the renames. Also applied
+// to every archived_documents_<year> snapshot table, which inherits the old
+// column names from `CREATE TABLE ... AS SELECT * FROM documents` at closing
+// time. Idempotent: each rename is guarded by PRAGMA table_info.
+function migrateDocumentsAuthorRename(): void {
+  if (!db || useMemoryFallback) return;
+  const renames: Array<[string, string]> = [
+    ['author', 'message_author'],
+    ['writer_name', 'message_preparer']
+  ];
+  const tables = ['documents'];
+  try {
+    const archived = db.prepare(
+      "SELECT name FROM sqlite_master WHERE type = 'table' AND name LIKE 'archived_documents_%'"
+    ).all() as Array<{ name: string }>;
+    for (const row of archived) tables.push(row.name);
+  } catch (err) {
+    console.error('[Database] Failed to enumerate archived document tables:', err instanceof Error ? err.message : err);
+  }
+  for (const table of tables) {
+    try {
+      const columns = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+      const names = new Set(columns.map(c => c.name));
+      for (const [oldName, newName] of renames) {
+        if (names.has(oldName) && !names.has(newName)) {
+          db.exec(`ALTER TABLE ${table} RENAME COLUMN ${oldName} TO ${newName}`);
+          console.log(`[Database] Renamed ${table}.${oldName} to ${newName}`);
+        }
+      }
+    } catch (err) {
+      console.error(`[Database] Failed to rename author columns on ${table}:`, err instanceof Error ? err.message : err);
+    }
+  }
+}
+
 function migrateDocumentsColumns(): void {
   if (!db || useMemoryFallback) return;
-  const columns = ['author', 'writer_name', 'address', 'target', 'content', 'input_method', 'status', 'created_by'];
+  const columns = ['message_author', 'message_preparer', 'address', 'target', 'content', 'input_method', 'status', 'created_by'];
   for (const col of columns) {
     try {
       db.exec(`ALTER TABLE documents ADD COLUMN ${col} TEXT`);
@@ -561,8 +601,8 @@ function seedMasterLists(): void {
     INSERT INTO master_lists (list_type, name, name_en, is_active) VALUES (?, ?, ?, ?)
   `);
   const tx = db.transaction(() => {
-    insert.run('author', 'أحمد علي', null, 1);
-    insert.run('author', 'محمد خالد', null, 1);
+    insert.run('message_author', 'أحمد علي', null, 1);
+    insert.run('message_author', 'محمد خالد', null, 1);
     insert.run('sender', 'وزارة الدفاع', null, 1);
     insert.run('sender', 'القيادة العامة', null, 1);
     insert.run('receiver', 'مركز البنيان', null, 1);
@@ -604,6 +644,42 @@ function migrateMasterListsPreparerType(): void {
   });
   tx();
   console.log('[Database] Widened master_lists.list_type to allow preparer');
+}
+
+// Renames the master_lists.list_type value 'author' → 'message_author'
+// (منشئ الرسالة, message author — distinct from documents.created_by, the file
+// creator). list_type is guarded by a CHECK constraint that SQLite can't ALTER
+// in place, so this follows the same rebuild pattern as
+// migrateMasterListsPreparerType above: rename → recreate with the new CHECK →
+// copy all rows (converting 'author' on the way) → drop the renamed copy.
+// Runs before seedMasterLists so fresh seeds ('message_author') never hit an
+// old CHECK. Guarded by inspecting sqlite_master so it only runs once.
+function migrateMasterListsAuthorRename(): void {
+  if (!db || useMemoryFallback) return;
+  const tableSql = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'master_lists'").get() as { sql: string } | undefined;
+  if (!tableSql || tableSql.sql.includes('message_author')) return;
+
+  const tx = db.transaction(() => {
+    db!.exec('ALTER TABLE master_lists RENAME TO master_lists_old');
+    db!.exec(`
+      CREATE TABLE master_lists (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        list_type TEXT NOT NULL CHECK(list_type IN ('message_author', 'sender', 'receiver', 'department', 'preparer')),
+        name TEXT NOT NULL,
+        name_en TEXT,
+        is_active INTEGER DEFAULT 1,
+        created_at INTEGER DEFAULT (strftime('%s','now'))
+      )
+    `);
+    db!.exec(`INSERT INTO master_lists (id, list_type, name, name_en, is_active, created_at)
+      SELECT id, CASE WHEN list_type = 'author' THEN 'message_author' ELSE list_type END, name, name_en, is_active, created_at
+      FROM master_lists_old`);
+    db!.exec('DROP TABLE master_lists_old');
+    db!.exec('CREATE INDEX IF NOT EXISTS idx_master_lists_type ON master_lists(list_type)');
+    db!.exec('CREATE INDEX IF NOT EXISTS idx_master_lists_name ON master_lists(name)');
+  });
+  tx();
+  console.log("[Database] Renamed master_lists.list_type 'author' to 'message_author'");
 }
 
 function migrateDocumentTypeId(): void {
@@ -656,7 +732,7 @@ function recreateDocumentsTableWithoutType(): void {
         subject TEXT NOT NULL,
         sender TEXT,
         receiver TEXT,
-        author TEXT,
+        message_author TEXT,
         address TEXT,
         target TEXT,
         content TEXT,
@@ -675,10 +751,10 @@ function recreateDocumentsTableWithoutType(): void {
       );
 
       INSERT INTO documents_new
-        (id, ref_number, type_id, folder_id, confidentiality, subject, sender, receiver, author, address, target, content, input_method,
+        (id, ref_number, type_id, folder_id, confidentiality, subject, sender, receiver, message_author, address, target, content, input_method,
          date, body, notes, status, signature_base64, attachments_json, created_at, updated_at, created_by)
       SELECT
-        id, ref_number, type_id, folder_id, confidentiality, subject, sender, receiver, author, address, target, content, input_method,
+        id, ref_number, type_id, folder_id, confidentiality, subject, sender, receiver, message_author, address, target, content, input_method,
         date, body, notes, status, signature_base64, attachments_json, created_at, updated_at, created_by
       FROM documents;
 
@@ -2707,7 +2783,7 @@ export function getArchivedDocuments(year: number): unknown[] {
   return db.prepare(`
     SELECT
       d.id, d.ref_number, d.type_id, d.folder_id, d.confidentiality, d.subject, d.sender, d.receiver,
-      d.author, d.address, d.target, d.content, d.input_method, d.date, d.notes, d.status,
+      d.message_author, d.address, d.target, d.content, d.input_method, d.date, d.notes, d.status,
       d.created_at, d.updated_at, d.created_by, ${orgUnitCol},
       dt.name as type, dt.label as type_label, dt.color as type_color, dt.icon as type_icon,
       CASE WHEN json_valid(d.attachments_json) THEN json_array_length(d.attachments_json) ELSE 0 END as attachments_count
@@ -2838,7 +2914,7 @@ export function importData(jsonData: string, mode: 'merge' | 'replace', callerRo
     const insertOrgUnit = db.prepare('INSERT OR REPLACE INTO org_units (id, name, unit_type, parent_id, is_active, created_by, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
     const insertDoc = db.prepare(`
       INSERT OR REPLACE INTO documents (
-        id, ref_number, type_id, folder_id, confidentiality, subject, sender, receiver, author, writer_name, address, target, content, input_method,
+        id, ref_number, type_id, folder_id, confidentiality, subject, sender, receiver, message_author, message_preparer, address, target, content, input_method,
         date, body, notes, status, barcode, signature_base64, attachments_json, created_at, updated_at, created_by, org_unit_id, archive_year
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
@@ -2913,8 +2989,8 @@ export function importData(jsonData: string, mode: 'merge' | 'replace', callerRo
             item.subject,
             item.sender ?? null,
             item.receiver ?? null,
-            item.author ?? null,
-            item.writer_name ?? null,
+            item.message_author ?? item.author ?? null,
+            item.message_preparer ?? item.writer_name ?? null,
             item.address ?? null,
             item.target ?? null,
             item.content ?? null,

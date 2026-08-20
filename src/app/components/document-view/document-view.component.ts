@@ -44,6 +44,19 @@ export class DocumentViewComponent implements OnInit, AfterViewInit {
   attachments: Attachment[] = [];
 
   async ngOnInit(): Promise<void> {
+    // Callers that open this dialog from a list (document:getAll) hold a
+    // payload WITHOUT attachments_json — fetch the full row so the
+    // attachments section and the printed report actually include them.
+    // Archive callers already pass a full row fetched via their own scope.
+    if (!this.data.scope && this.doc.attachments_json === undefined && this.doc.id) {
+      try {
+        const full = await this.documentService.getById(this.doc.id);
+        if (full) this.doc = full;
+      } catch {
+        // Fall back to the list payload — the report still prints, just
+        // without attachment sheets.
+      }
+    }
     this.attachments = this.documentService.parseAttachments(this.doc);
     this.currentUser = this.auth.currentUser();
     await this.auditService.log('عرض', this.doc.ref_number, this.doc.subject);

@@ -4,6 +4,7 @@ import { Folder } from '../models/folder.model';
 import { User } from '../models/user.model';
 import { BarcodeService } from './barcode.service';
 import { convertDocxToHtml } from '../utils/docx-preview.util';
+import { renderPdfPages } from '../utils/pdf-render.util';
 
 interface FileChip {
   label: string;
@@ -12,6 +13,10 @@ interface FileChip {
 }
 
 type AttachmentKind = 'image' | 'pdf' | 'docx' | 'unsupported';
+
+/** Per-PDF page cap for printed attachment copies — bounds print time and
+ *  memory on very large files; a continuation note is printed when hit. */
+const MAX_PDF_PRINT_PAGES = 50;
 
 @Injectable({
   providedIn: 'root'
@@ -27,17 +32,80 @@ export class PrintService {
       return;
     }
 
+    const printedAt = this.formatPrintTimestamp();
+    const printedBy = this.escapeHtml(user?.full_name || user?.username || '');
+    const attachments = this.parseAttachments(doc);
+
     const [logo, docxHtmlByIndex] = await Promise.all([
       this.getLogoDataUri(),
       this.resolveDocxAttachments(doc)
     ]);
-    printWindow.document.write(this.generatePrintHTML(doc, folder, user, logo, docxHtmlByIndex));
+
+    // Write the report immediately — attachment sheets are then STREAMED in
+    // one at a time (sequential, bounded memory), so even a document with
+    // several large PDFs shows progress instead of a blank white window.
+    printWindow.document.write(this.generatePrintHTML(doc, folder, user, logo, docxHtmlByIndex, printedAt, printedBy, attachments.length > 0));
     printWindow.document.close();
 
-    // Wait for images to load then print
-    setTimeout(() => {
-      printWindow.print();
-    }, 600);
+    const progress = printWindow.document.getElementById('att-progress');
+    const progressText = progress?.querySelector('.att-progress-text');
+    const appendSheet = (html: string) => {
+      if (progress) {
+        progress.insertAdjacentHTML('beforebegin', html);
+      } else {
+        printWindow.document.body.insertAdjacentHTML('beforeend', html);
+      }
+    };
+
+    try {
+      for (let i = 0; i < attachments.length; i++) {
+        const att = attachments[i];
+        const ext = (att.ext || '').toLowerCase();
+        if (ext === 'pdf' && att.base64) {
+          try {
+            const result = await renderPdfPages(att.base64, (pageImage, pageNum, totalPages) => {
+              appendSheet(this.wrapAttachmentSheet(
+                att, ext, i, attachments.length, doc, printedAt, printedBy,
+                `<img src="${pageImage}" alt="${this.escapeHtml(att.name)} — صفحة ${pageNum}">`,
+                totalPages > 1 ? ` — صفحة ${pageNum} من ${totalPages}` : '',
+                true
+              ));
+              if (progressText) {
+                progressText.textContent = `جاري تجهيز نسخ المرفقات… مرفق ${i + 1} من ${attachments.length} — صفحة ${pageNum}`;
+              }
+            }, MAX_PDF_PRINT_PAGES);
+            if (result.totalPages > result.rendered) {
+              appendSheet(this.buildPdfTruncatedSheet(att, ext, i, attachments.length, doc, printedAt, printedBy, result.rendered, result.totalPages));
+            }
+          } catch (err) {
+            console.error('[PrintService] PDF rendering failed for print:', att.name, err);
+            // Placeholder sheet for this file — other attachments still print.
+            appendSheet(this.buildAttachmentSheet(att, i, attachments.length, doc, printedAt, printedBy));
+          }
+        } else {
+          appendSheet(this.buildAttachmentSheet(att, i, attachments.length, doc, printedAt, printedBy, docxHtmlByIndex.get(i)));
+        }
+      }
+    } finally {
+      progress?.remove();
+    }
+
+    // Print only once every <img> (logo, image attachments, rendered PDF
+    // pages) has finished decoding — a blind timeout races large base64
+    // payloads and produces blank frames on slow machines.
+    const imagesReady = Promise.all(
+      Array.from(printWindow.document.images).map(img =>
+        img.complete
+          ? Promise.resolve()
+          : new Promise<void>(resolve => {
+              img.onload = () => resolve();
+              img.onerror = () => resolve();
+            })
+      )
+    );
+    const safetyCap = new Promise<void>(resolve => setTimeout(resolve, 10000));
+    await Promise.race([imagesReady, safetyCap]);
+    printWindow.print();
   }
 
   /** Small-format printout of just the barcode + ref number, sized for archive labels. */
@@ -161,19 +229,25 @@ export class PrintService {
     return 'image/jpeg';
   }
 
+  /** Parses the attachments array out of a document row; returns [] for a
+   *  stripped/missing/malformed attachments_json (e.g. unverified top-secret
+   *  list payloads). */
+  private parseAttachments(doc: ArchiveDocument): Attachment[] {
+    try {
+      const parsed = JSON.parse(doc.attachments_json);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+
   /** Converts every .docx attachment to HTML up front (mammoth is async) so the
    *  synchronous generatePrintHTML/buildAttachmentSheet pass below can just look
    *  the result up by index. A conversion failure for one attachment leaves that
    *  index unset — buildAttachmentSheet then falls back to the placeholder. */
   private async resolveDocxAttachments(doc: ArchiveDocument): Promise<Map<number, string>> {
     const result = new Map<number, string>();
-    let attachments: Attachment[] = [];
-    try {
-      const parsed = JSON.parse(doc.attachments_json);
-      if (Array.isArray(parsed)) attachments = parsed;
-    } catch {
-      return result;
-    }
+    const attachments = this.parseAttachments(doc);
 
     await Promise.all(attachments.map(async (att, index) => {
       if ((att.ext || '').toLowerCase() !== 'docx' || !att.base64) return;
@@ -225,7 +299,7 @@ export class PrintService {
     const note = kind === 'unsupported'
       ? 'غير قابل للمعاينة عند الطباعة — يُرجى فتح المرفق يدويًا'
       : kind === 'pdf'
-        ? 'ملف PDF — يُطبع من عارض المرفقات'
+        ? 'يُطبع في الصفحات التالية'
         : 'يُطبع في الصفحة التالية';
     return `
       <div class="att-row">
@@ -235,7 +309,9 @@ export class PrintService {
       </div>`;
   }
 
-  /** One printed A4 sheet per attachment, showing the actual file content (or a placeholder when it can't be previewed). */
+  /** One printed A4 sheet per attachment, showing the actual file content (or a placeholder when it can't be previewed).
+   *  PDFs are NOT handled here — they are streamed page-by-page from printDocument
+   *  via wrapAttachmentSheet; this method only produces the fallback placeholder. */
   private buildAttachmentSheet(att: Attachment, index: number, total: number, doc: ArchiveDocument, printedAt: string, printedBy: string, docxHtml?: string): string {
     const ext = (att.ext || '').toLowerCase();
     const kind = this.attachmentKind(ext, !!docxHtml);
@@ -244,13 +320,10 @@ export class PrintService {
     if (kind === 'image' && att.base64) {
       frameContent = `<img src="data:${this.imageMime(ext)};base64,${att.base64}" alt="${this.escapeHtml(att.name)}">`;
     } else if (kind === 'pdf') {
-      // <embed> with a base64 PDF does not paint into the print raster — the
-      // sheet would come out blank, so show the same styled placeholder used
-      // for unsupported types instead.
       frameContent = `
         <div class="p2-placeholder">
           <div class="icon">📄</div>
-          <p>ملف PDF — يُطبع من عارض المرفقات داخل النظام.</p>
+          <p>تعذر تجهيز ملف PDF للطباعة — يُفتح من عارض المرفقات داخل النظام.</p>
         </div>`;
     } else if (kind === 'docx' && docxHtml) {
       // docxHtml is DOMPurify-sanitized inside convertDocxToHtml — the bytes
@@ -271,31 +344,40 @@ export class PrintService {
     }
 
     const hasContent = kind === 'image' || kind === 'docx';
+    return this.wrapAttachmentSheet(att, ext, index, total, doc, printedAt, printedBy, frameContent, '', hasContent, kind === 'docx');
+  }
 
+  /** Note sheet appended when a PDF exceeded the per-file page cap. */
+  private buildPdfTruncatedSheet(att: Attachment, ext: string, index: number, total: number, doc: ArchiveDocument, printedAt: string, printedBy: string, rendered: number, totalPages: number): string {
+    return this.wrapAttachmentSheet(
+      att, ext, index, total, doc, printedAt, printedBy,
+      `<div class="p2-placeholder">
+        <div class="icon">📄</div>
+        <p>تمت طباعة أول ${rendered} صفحة من أصل ${totalPages} صفحة من هذا الملف. لطباعة باقي الصفحات يُرجى فتح المرفق من عارض المرفقات داخل النظام.</p>
+      </div>`,
+      ` — متابعة`, false
+    );
+  }
+
+  private wrapAttachmentSheet(att: Attachment, ext: string, index: number, total: number, doc: ArchiveDocument, printedAt: string, printedBy: string, frameContent: string, subSuffix: string, hasContent: boolean, isDocx = false): string {
     return `
       <div class="sheet">
         <div class="p2-header">
           <div>
             <div class="p2-file-name">${this.escapeHtml(att.name)}.${this.escapeHtml(ext)}</div>
-            <div class="p2-file-sub">مرفق ${index + 1} من ${total}</div>
+            <div class="p2-file-sub">مرفق ${index + 1} من ${total}${subSuffix}</div>
           </div>
           <div class="p2-follow-badge">تابع للرقم الإشاري: ${this.escapeHtml(doc.ref_number)}</div>
         </div>
-        <div class="p2-frame ${hasContent ? 'has-content' : ''} ${kind === 'docx' ? 'docx-frame' : ''}">
+        <div class="p2-frame ${hasContent ? 'has-content' : ''} ${isDocx ? 'docx-frame' : ''}">
           ${frameContent}
         </div>
         ${this.buildBarcodeFooter(doc, printedAt, printedBy)}
       </div>`;
   }
 
-  private generatePrintHTML(doc: ArchiveDocument, folder: Folder | undefined, user: User | null, logoDataUri: string | null, docxHtmlByIndex: Map<number, string>): string {
-    const attachments: Attachment[] = [];
-    try {
-      const parsed = JSON.parse(doc.attachments_json);
-      if (Array.isArray(parsed)) attachments.push(...parsed);
-    } catch {
-      // ignore
-    }
+  private generatePrintHTML(doc: ArchiveDocument, folder: Folder | undefined, user: User | null, logoDataUri: string | null, docxHtmlByIndex: Map<number, string>, printedAt: string, printedBy: string, hasAttachments: boolean): string {
+    const attachments = this.parseAttachments(doc);
 
     const typeLabel = `${doc.type_icon ?? ''} ${doc.type_label ?? doc.type ?? '—'}`.trim();
     // The signature is stored as a base64 data URI from the canvas, but it
@@ -308,8 +390,6 @@ export class PrintService {
       ? `<img src="${logoDataUri}" alt="شعار مركز البنيان">`
       : `<span class="seal-initials">م.ب</span>`;
     const classification = folder ? `${folder.id} — ${folder.name}` : '—';
-    const printedAt = this.formatPrintTimestamp();
-    const printedBy = this.escapeHtml(user?.full_name || user?.username || '');
 
     const contentParts: { label: string; value: string }[] = [];
     if (doc.address) contentParts.push({ label: 'العنوان / الوصف', value: doc.address });
@@ -324,9 +404,15 @@ export class PrintService {
         </div>`).join('')
       : `<p class="empty-note">لا يوجد محتوى إضافي مسجل لهذه الوثيقة.</p>`;
 
-    const attachmentSheets = attachments
-      .map((att, i) => this.buildAttachmentSheet(att, i, attachments.length, doc, printedAt, printedBy, docxHtmlByIndex.get(i)))
-      .join('');
+    // Attachment sheets are streamed in after this document is written (see
+    // printDocument) — the progress slot marks their insertion point and is
+    // removed when streaming finishes. Its inline style keeps it visible even
+    // before the (identical) report styles apply.
+    const attachmentProgress = hasAttachments
+      ? `<div id="att-progress" style="max-width:210mm;margin:24px auto;padding:28px;background:#fff;border:1px dashed #d7dbe3;border-radius:14px;text-align:center;color:#5b6472;font-size:10.5pt;">
+           <span class="att-progress-text">جاري تجهيز نسخ المرفقات للطباعة…</span>
+         </div>`
+      : '';
 
     return `
       <!DOCTYPE html>
@@ -640,7 +726,7 @@ export class PrintService {
           ${this.buildBarcodeFooter(doc, printedAt, printedBy)}
         </div>
 
-        ${attachmentSheets}
+        ${attachmentProgress}
       </body>
       </html>
     `;

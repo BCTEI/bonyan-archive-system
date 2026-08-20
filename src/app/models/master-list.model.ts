@@ -1,4 +1,4 @@
-export type MasterListType = 'author' | 'preparer' | 'sender' | 'receiver' | 'department';
+export type MasterListType = 'message_author' | 'preparer' | 'sender' | 'receiver' | 'department';
 
 export interface MasterListEntry {
   id: number;
