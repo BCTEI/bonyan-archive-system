@@ -2,6 +2,7 @@ import { Component, HostListener, OnDestroy, OnInit, inject, signal } from '@ang
 import { RouterOutlet, RouterLink, RouterLinkActive, Router } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
+import { MatDialog } from '@angular/material/dialog';
 import { FolderTreeComponent } from '../folder-tree/folder-tree.component';
 import { ToastComponent } from '../toast/toast.component';
 import { HeaderComponent } from '../header/header.component';
@@ -37,6 +38,7 @@ export class AppShellComponent implements OnInit, OnDestroy {
   router = inject(Router);
   private barcodeScan = inject(BarcodeScanService);
   private barcodeLookup = inject(BarcodeLookupService);
+  private dialog = inject(MatDialog);
   sidebarOpen = signal(true);
   isMobile = signal(false);
   currentYear = signal(new Date().getFullYear());
@@ -64,6 +66,9 @@ export class AppShellComponent implements OnInit, OnDestroy {
 
   @HostListener('document:keydown.escape')
   onEscape(): void {
+    // Esc is the natural "cancel" reflex — while a dialog is open it must not
+    // navigate the page out from under the modal.
+    if (this.dialog.openDialogs.length > 0) return;
     if (!this.router.url.includes('/main/dashboard')) {
       this.router.navigate(['/main/dashboard']);
     }
