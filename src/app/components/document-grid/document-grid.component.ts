@@ -124,7 +124,7 @@ export class DocumentGridComponent implements OnInit {
     try {
       const lists = await this.masterListService.loadAllLists(true);
       const withAll = (items: { name: string }[]) => [{ name: 'الكل' }, ...items.map(a => ({ name: a.name }))];
-      this.authors.set(withAll(lists.author));
+      this.authors.set(withAll(lists.message_author));
       this.preparers.set(withAll(lists.preparer));
       this.senders.set(withAll(lists.sender));
       this.receivers.set(withAll(lists.receiver));
@@ -165,10 +165,10 @@ export class DocumentGridComponent implements OnInit {
       list = list.filter(d => d.confidentiality === conf);
     }
     if (author !== 'الكل') {
-      list = list.filter(d => d.author === author);
+      list = list.filter(d => d.message_author === author);
     }
     if (preparer !== 'الكل') {
-      list = list.filter(d => d.writer_name === preparer);
+      list = list.filter(d => d.message_preparer === preparer);
     }
     if (sender !== 'الكل') {
       list = list.filter(d => d.sender === sender);
@@ -186,8 +186,8 @@ export class DocumentGridComponent implements OnInit {
           d.ref_number,
           d.sender,
           d.receiver,
-          d.author,
-          d.writer_name,
+          d.message_author,
+          d.message_preparer,
           d.content,
           d.address,
           d.notes

@@ -685,12 +685,12 @@ export class PrintService {
                 <tr>${this.dataCell('المرسل', doc.sender || '')}${this.dataCell('المستلم', doc.receiver || '')}</tr>
                 <tr>
                   <td class="dt-label">منشئ الرسالة</td>
-                  <td class="dt-value" colspan="3">${doc.author ? this.escapeHtml(doc.author) : '—'}</td>
+                  <td class="dt-value" colspan="3">${doc.message_author ? this.escapeHtml(doc.message_author) : '—'}</td>
                 </tr>
-                ${doc.writer_name ? `
+                ${doc.message_preparer ? `
                 <tr>
                   <td class="dt-label">معد الرسالة</td>
-                  <td class="dt-value" colspan="3">${this.escapeHtml(doc.writer_name)}</td>
+                  <td class="dt-value" colspan="3">${this.escapeHtml(doc.message_preparer)}</td>
                 </tr>` : ''}
               </tbody>
             </table>

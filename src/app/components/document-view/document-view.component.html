@@ -62,7 +62,7 @@
         </div>
       </section>
 
-      @if (doc.sender || doc.receiver || doc.author || doc.writer_name || doc.input_method) {
+      @if (doc.sender || doc.receiver || doc.message_author || doc.message_preparer || doc.input_method) {
         <section class="doc-section">
           <h3 class="doc-section-title">بيانات الأطراف</h3>
           <div class="doc-field-grid">
@@ -75,13 +75,13 @@
             @if (doc.type === 'صادر' || doc.type === 'وارد') {
               <div class="doc-field">
                 <span class="doc-field-label">منشئ الرسالة</span>
-                <span class="doc-field-value">{{ doc.author || 'غير محدد' }}</span>
+                <span class="doc-field-value">{{ doc.message_author || 'غير محدد' }}</span>
               </div>
             }
             @if (doc.type === 'صادر') {
               <div class="doc-field">
                 <span class="doc-field-label">معد الرسالة</span>
-                <span class="doc-field-value">{{ doc.writer_name || 'غير محدد' }}</span>
+                <span class="doc-field-value">{{ doc.message_preparer || 'غير محدد' }}</span>
               </div>
             }
             @if (doc.receiver) {

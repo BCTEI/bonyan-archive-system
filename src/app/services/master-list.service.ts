@@ -16,15 +16,15 @@ export class MasterListService {
   }
 
   /** Loads the five master lists used across the app in one round of parallel IPC calls. */
-  async loadAllLists(activeOnly = false): Promise<{ author: MasterListEntry[]; preparer: MasterListEntry[]; sender: MasterListEntry[]; receiver: MasterListEntry[]; department: MasterListEntry[] }> {
-    const [author, preparer, sender, receiver, department] = await Promise.all([
-      this.getAll('author', activeOnly),
+  async loadAllLists(activeOnly = false): Promise<{ message_author: MasterListEntry[]; preparer: MasterListEntry[]; sender: MasterListEntry[]; receiver: MasterListEntry[]; department: MasterListEntry[] }> {
+    const [message_author, preparer, sender, receiver, department] = await Promise.all([
+      this.getAll('message_author', activeOnly),
       this.getAll('preparer', activeOnly),
       this.getAll('sender', activeOnly),
       this.getAll('receiver', activeOnly),
       this.getAll('department', activeOnly)
     ]);
-    return { author, preparer, sender, receiver, department };
+    return { message_author, preparer, sender, receiver, department };
   }
 
   async create(input: MasterListInput): Promise<number> {

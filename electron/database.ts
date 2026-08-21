@@ -2397,7 +2397,7 @@ export function logDocumentAccess(documentId: number, userId: number, username: 
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Master lists (authors, senders, receivers, departments)
+// Master lists (message authors, preparers, senders, receivers, departments)
 // ─────────────────────────────────────────────────────────────────────────────
 
 export interface MasterListInput {
@@ -3017,9 +3017,12 @@ export function importData(jsonData: string, mode: 'merge' | 'replace', callerRo
       }
       if (data.master_lists) {
         for (const item of data.master_lists) {
+          // Pre-rename exports may still carry list_type 'author' — normalize it
+          // so the CHECK constraint ('message_author', ...) doesn't reject the import.
+          const listType = item.list_type === 'author' ? 'message_author' : item.list_type;
           insertMasterList.run(
             (item.id as number | undefined) ?? null,
-            item.list_type,
+            listType,
             item.name,
             item.name_en ?? null,
             item.is_active ?? 1,

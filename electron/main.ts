@@ -882,7 +882,7 @@ ipcMain.handle('documentType:delete', (_event: IpcMainInvokeEvent, id: number) =
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Master list handlers (message creators, preparers, senders, receivers, departments)
+// Master list handlers (message authors, preparers, senders, receivers, departments)
 // ─────────────────────────────────────────────────────────────────────────────
 
 ipcMain.handle('masterList:getAll', (_event: IpcMainInvokeEvent, listType?: string, activeOnly = false) => {

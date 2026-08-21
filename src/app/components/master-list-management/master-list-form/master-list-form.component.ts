@@ -23,7 +23,7 @@ export class MasterListFormComponent {
   private toast = inject(ToastService);
 
   item = this.data?.item;
-  listType = this.data?.listType ?? 'author';
+  listType = this.data?.listType ?? 'message_author';
   name = signal(this.item?.name ?? '');
   isSaving = signal(false);
 
@@ -33,7 +33,7 @@ export class MasterListFormComponent {
 
   typeLabel(): string {
     switch (this.listType) {
-      case 'author': return 'منشئ الرسالة';
+      case 'message_author': return 'منشئ الرسالة';
       case 'preparer': return 'معد الرسالة';
       case 'sender': return 'جهة مرسلة';
       case 'receiver': return 'جهة مستقبلة';

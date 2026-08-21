@@ -25,13 +25,13 @@ export class MasterListManagementComponent implements OnInit {
   private toast = inject(ToastService);
   private dialog = inject(MatDialog);
 
-  activeTab = signal<MasterListType>('author');
+  activeTab = signal<MasterListType>('message_author');
   items = signal<MasterListEntry[]>([]);
   search = signal('');
   loading = signal(false);
 
   tabs: { value: MasterListType; label: string; icon: string }[] = [
-    { value: 'author', label: 'منشئو الرسالة', icon: 'edit' },
+    { value: 'message_author', label: 'منشئو الرسالة', icon: 'edit' },
     { value: 'preparer', label: 'معدو الرسالة', icon: 'assignment_ind' },
     { value: 'sender', label: 'الجهات المرسلة', icon: 'send' },
     { value: 'receiver', label: 'الجهات المستقبلة', icon: 'mark_email_read' },

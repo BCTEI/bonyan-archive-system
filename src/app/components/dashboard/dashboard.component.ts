@@ -41,7 +41,7 @@ export class DashboardComponent implements AfterViewInit {
 
   stats = signal<{ total: number; [key: string]: number }>({ total: 0 });
   documentTypes = signal<DocumentTypeEntry[]>([]);
-  masterLists = signal<Record<MasterListType, MasterListEntry[]>>({ author: [], preparer: [], sender: [], receiver: [], department: [] });
+  masterLists = signal<Record<MasterListType, MasterListEntry[]>>({ message_author: [], preparer: [], sender: [], receiver: [], department: [] });
   recentAudit = signal<AuditEntry[]>([]);
   todaySessions = signal<UserSession[]>([]);
   recentDocuments = signal<ArchiveDocument[]>([]);
@@ -50,7 +50,7 @@ export class DashboardComponent implements AfterViewInit {
   chartDimension = signal<'type' | MasterListType>('type');
   chartDimensions: { value: 'type' | MasterListType; label: string }[] = [
     { value: 'type', label: 'حسب نوع الوثيقة' },
-    { value: 'author', label: 'حسب منشئ الرسالة' },
+    { value: 'message_author', label: 'حسب منشئ الرسالة' },
     { value: 'preparer', label: 'حسب معد الرسالة' },
     { value: 'sender', label: 'حسب المرسل' },
     { value: 'receiver', label: 'حسب المستلم' },
@@ -85,7 +85,7 @@ export class DashboardComponent implements AfterViewInit {
     try {
       this.masterLists.set(await this.masterListService.loadAllLists(true));
     } catch {
-      this.masterLists.set({ author: [], preparer: [], sender: [], receiver: [], department: [] });
+      this.masterLists.set({ message_author: [], preparer: [], sender: [], receiver: [], department: [] });
     }
   }
 
@@ -150,7 +150,7 @@ export class DashboardComponent implements AfterViewInit {
       const raw = dimension === 'department'
         ? (doc.sender || doc.receiver || 'غير محدد')
         : dimension === 'preparer'
-          ? (doc.writer_name || 'غير محدد')
+          ? (doc.message_preparer || 'غير محدد')
           : (doc[dimension] || 'غير محدد');
       const key = raw.trim() || 'غير محدد';
       counts.set(key, (counts.get(key) ?? 0) + 1);
