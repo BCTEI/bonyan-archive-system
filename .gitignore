@@ -5,3 +5,6 @@
 .angular
 *.log
 .DS_Store
+
+# SDD skill workspace (scratch)
+.superpowers/
