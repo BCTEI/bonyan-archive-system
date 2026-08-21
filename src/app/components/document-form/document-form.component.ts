@@ -1,7 +1,7 @@
 import { Component, inject, signal, OnInit, ElementRef, ViewChild } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { MatDialogRef, MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
+import { MatDialog, MatDialogRef, MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -19,11 +19,13 @@ import { OrgUnitService } from '../../services/org-unit.service';
 import { SignatureService } from '../../services/signature.service';
 import { ToastService } from '../../services/toast.service';
 import { MasterListEntry, MasterListType } from '../../models/master-list.model';
+import { FinalConfirmDialogComponent } from '../dialogs/final-confirm-dialog/final-confirm-dialog.component';
+import { HasPermissionDirective } from '../../directives/has-permission.directive';
 
 @Component({
   selector: 'app-document-form',
   standalone: true,
-  imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatAutocompleteModule],
+  imports: [CommonModule, FormsModule, MatDialogModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatAutocompleteModule, HasPermissionDirective],
   templateUrl: './document-form.component.html',
   styleUrl: './document-form.component.scss'
 })
@@ -38,6 +40,7 @@ export class DocumentFormComponent implements OnInit {
   private orgUnitService = inject(OrgUnitService);
   private signatureService = inject(SignatureService);
   private toast = inject(ToastService);
+  private dialog = inject(MatDialog);
 
   @ViewChild('sigCanvas', { static: false }) sigCanvasRef?: ElementRef<HTMLCanvasElement>;
 
@@ -67,6 +70,11 @@ export class DocumentFormComponent implements OnInit {
   quickAddName = signal('');
 
   orgUnitOptions = signal<FlatOrgUnit[]>([]);
+
+  fieldErrors = signal<Record<string, string>>({});
+  folderSearchText = signal('');
+  filteredFolders = signal<Folder[]>([]);
+  private initialSnapshot = '';
 
   confidentialityLevels: ConfidentialityLevel[] = ['عادي', 'سري', 'سري للغاية'];
 
@@ -109,6 +117,10 @@ export class DocumentFormComponent implements OnInit {
       // it from the yearly archive sequence at the moment document:create runs,
       // so it is never pre-fetched (and never wasted on an abandoned form).
     }
+
+    this.filteredFolders.set(fldrs);
+    this.folderSearchText.set(this.folderLabel(this.doc().folder_id));
+    this.initialSnapshot = this.snapshot();
   }
 
   /** Org-unit selection is offered to section_head and above; employees never see it (server stamps their own unit). */
@@ -133,7 +145,7 @@ export class DocumentFormComponent implements OnInit {
   async loadMasterLists(): Promise<void> {
     try {
       const [authors, preparers, senders, receivers, departments] = await Promise.all([
-        this.masterListService.getAll('author', true),
+        this.masterListService.getAll('message_author', true),
         this.masterListService.getAll('preparer', true),
         this.masterListService.getAll('sender', true),
         this.masterListService.getAll('receiver', true),
@@ -163,7 +175,8 @@ export class DocumentFormComponent implements OnInit {
       subject: '',
       sender: '',
       receiver: '',
-      writer_name: '',
+      message_author: '',
+      message_preparer: '',
       date: this.today,
       status: 'قيد الاعتماد',
       attachments_json: '[]',
@@ -173,20 +186,69 @@ export class DocumentFormComponent implements OnInit {
 
   updateDoc<K extends keyof ArchiveDocument>(key: K, value: ArchiveDocument[K]): void {
     this.doc.update(d => ({ ...d, [key]: value }));
+    this.clearFieldError(key as string);
+  }
+
+  clearFieldError(key: string): void {
+    if (!this.fieldErrors()[key]) return;
+    this.fieldErrors.update(map => {
+      const next = { ...map };
+      delete next[key];
+      return next;
+    });
   }
 
   onTypeChange(typeId: number): void {
     const type = this.documentTypes().find(t => t.id === typeId);
     this.selectedType.set(type);
     this.doc.update(doc => ({ ...doc, type_id: typeId }));
+    this.clearFieldError('type');
   }
 
   onFolderChange(folderId: number): void {
     this.doc.update(doc => ({ ...doc, folder_id: folderId }));
+    this.clearFieldError('folder');
   }
 
   onConfidentialityChange(level: ConfidentialityLevel): void {
     this.doc.update(doc => ({ ...doc, confidentiality: level }));
+  }
+
+  private folderLabel(id: number | null | undefined): string {
+    const f = this.folders().find(x => x.id === id);
+    return f ? `#${f.id} — ${f.name}` : '';
+  }
+
+  /** mat-autocomplete displayWith: shows the "#id — name" label for the selected folder id. */
+  displayFolder = (id: number | null): string => this.folderLabel(id);
+
+  onFolderInput(value: string | number): void {
+    // Option selections emit the numeric folder id here — onFolderSelected
+    // handles those; only free-typed text drives the filter.
+    if (typeof value !== 'string') return;
+    this.folderSearchText.set(value);
+    const term = value.trim().toLowerCase();
+    this.filteredFolders.set(
+      !term
+        ? this.folders()
+        : this.folders().filter(f => f.name.toLowerCase().includes(term) || String(f.id).includes(term))
+    );
+  }
+
+  onFolderSelected(id: number): void {
+    this.onFolderChange(id);
+    this.folderSearchText.set(this.folderLabel(id));
+  }
+
+  private snapshot(): string {
+    return JSON.stringify({ doc: this.doc(), attachments: this.attachments() });
+  }
+
+  /** Dirty = any field/attachment changed since load, or a signature drawn but not yet saved. */
+  isDirty(): boolean {
+    const canvas = this.getCanvas();
+    const canvasDirty = !!canvas && !this.signatureService.isEmpty(canvas);
+    return this.snapshot() !== this.initialSnapshot || canvasDirty;
   }
 
   typeName(typeId: number): string {
@@ -354,18 +416,6 @@ export class DocumentFormComponent implements OnInit {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
 
-  saveSignature(): void {
-    const canvas = this.getCanvas();
-    if (!canvas) return;
-    if (this.signatureService.isEmpty(canvas)) {
-      this.toast.show('يرجى التوقيع أولاً', 'warning');
-      return;
-    }
-    const base64 = this.signatureService.toBase64(canvas);
-    this.doc.update(d => ({ ...d, signature_base64: base64 }));
-    this.toast.show('تم حفظ التوقيع', 'success');
-  }
-
   onDrop(e: DragEvent): void {
     e.preventDefault();
     this.dragOver.set(false);
@@ -411,61 +461,87 @@ export class DocumentFormComponent implements OnInit {
     this.attachments.update(list => list.filter((_, i) => i !== index));
   }
 
+  /**
+   * Collects every validation failure into fieldErrors (keys match the
+   * template's data-field markers, in top-to-bottom visual order) and reports
+   * whether the form is valid.
+   */
+  private validate(): boolean {
+    const d = this.doc();
+    const type = this.selectedType();
+    const errors: Record<string, string> = {};
+
+    if (!d.type_id || !type) {
+      errors['type'] = 'يرجى اختيار نوع الوثيقة';
+    }
+    if (!d.folder_id) {
+      errors['folder'] = 'المجلد مطلوب';
+    }
+    if (!(d.subject ?? '').trim()) {
+      errors['subject'] = 'الموضوع مطلوب';
+    }
+    if (!d.date) {
+      errors['date'] = 'التاريخ مطلوب';
+    }
+    if (!(d.sender ?? '').trim()) {
+      errors['sender'] = 'المرسل مطلوب';
+    }
+    // Receiver is required for every type — incoming documents must name the
+    // internal recipient just as outgoing ones name the external recipient.
+    if (!(d.receiver ?? '').trim()) {
+      errors['receiver'] = 'المستلم مطلوب';
+    }
+    if (type && type.name === 'صادر' && !(d.message_author ?? '').trim()) {
+      errors['message_author'] = 'يرجى ملء اسم منشئ الرسالة';
+    }
+    if (type && type.name === 'وارد' && !d.input_method) {
+      errors['input_method'] = 'يرجى اختيار طريقة الاستلام';
+    }
+
+    this.fieldErrors.set(errors);
+    return Object.keys(errors).length === 0;
+  }
+
+  /** Scrolls the first invalid field into view and focuses its control. */
+  private focusFirstError(): void {
+    setTimeout(() => {
+      const firstKey = Object.keys(this.fieldErrors())[0];
+      if (!firstKey) return;
+      const el = document.querySelector<HTMLElement>(`[data-field="${firstKey}"]`);
+      if (!el) return;
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.querySelector<HTMLElement>('input, select, textarea, button')?.focus();
+    });
+  }
+
   async save(): Promise<void> {
     if (this.isSaving()) return;
 
     const d = this.doc();
-    const type = this.selectedType();
+    if (!this.validate()) {
+      this.toast.show('يرجى تصحيح الحقول المحددة باللون الأحمر', 'warning');
+      this.focusFirstError();
+      return;
+    }
 
-    if (!d.type_id) {
-      this.toast.show('نوع الملف مطلوب', 'warning');
-      return;
-    }
-    if (!type) {
-      this.toast.show('يرجى اختيار نوع الوثيقة', 'warning');
-      return;
-    }
-    if (!d.folder_id) {
-      this.toast.show('المجلد مطلوب', 'warning');
-      return;
-    }
-    if (!d.date) {
-      this.toast.show('التاريخ مطلوب', 'warning');
-      return;
-    }
-    // Trim before validating so whitespace-only values are rejected, and store
-    // the trimmed values so no stray spaces reach the archive.
+    // A signature drawn but never explicitly saved is captured here so it cannot
+    // be lost; an untouched canvas leaves any previously saved signature intact.
+    const canvas = this.getCanvas();
+    const signature = canvas && !this.signatureService.isEmpty(canvas)
+      ? this.signatureService.toBase64(canvas)
+      : d.signature_base64;
+
+    // Trim before storing so no stray spaces reach the archive.
     const sender = (d.sender ?? '').trim();
     const receiver = (d.receiver ?? '').trim();
     const subject = (d.subject ?? '').trim();
-    if (!sender) {
-      this.toast.show('المرسل مطلوب', 'warning');
-      return;
-    }
-    if (!receiver) {
-      // Required for every type — incoming documents must name the internal
-      // recipient just as outgoing ones name the external recipient.
-      this.toast.show('المستلم مطلوب', 'warning');
-      return;
-    }
-    if (!subject) {
-      this.toast.show('الموضوع مطلوب', 'warning');
-      return;
-    }
-    if (type.name === 'صادر' && !(d.author ?? '').trim()) {
-      this.toast.show('يرجى ملء اسم منشئ الرسالة', 'warning');
-      return;
-    }
-    if (type.name === 'وارد' && !d.input_method) {
-      this.toast.show('يرجى اختيار طريقة الاستلام', 'warning');
-      return;
-    }
 
     const payload: ArchiveDocument = {
       ...d,
       sender,
       receiver,
       subject,
+      signature_base64: signature,
       attachments_json: JSON.stringify(this.attachments()),
       created_by: this.auth.currentUser()?.username
     };
@@ -490,6 +566,21 @@ export class DocumentFormComponent implements OnInit {
   }
 
   cancel(): void {
-    this.dialogRef.close(false);
+    if (!this.isDirty()) {
+      this.dialogRef.close(false);
+      return;
+    }
+    this.dialog.open(FinalConfirmDialogComponent, {
+      width: '420px',
+      maxWidth: '95vw',
+      data: {
+        title: 'تجاهل التغييرات؟',
+        message: 'لديك بيانات غير محفوظة في هذه الوثيقة.',
+        warning: 'سيتم فقدان جميع البيانات المدخلة ولن يمكن استرجاعها.',
+        confirmText: 'تجاهل التغييرات'
+      }
+    }).afterClosed().subscribe((confirmed: boolean) => {
+      if (confirmed) this.dialogRef.close(false);
+    });
   }
 }

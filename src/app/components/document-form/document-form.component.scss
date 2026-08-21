@@ -11,3 +11,10 @@ canvas {
     border-color: var(--primary);
   }
 }
+
+/* Red outline for Material outline fields that failed validation */
+.field-invalid {
+  --mdc-outlined-text-field-outline-color: var(--danger);
+  --mdc-outlined-text-field-hover-outline-color: var(--danger);
+  --mdc-outlined-text-field-focus-outline-color: var(--danger);
+}
