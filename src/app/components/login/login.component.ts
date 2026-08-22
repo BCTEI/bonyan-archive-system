@@ -6,6 +6,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { AuthService } from '../../services/auth.service';
 import { ToastService } from '../../services/toast.service';
+import { toUserErrorMessage } from '../../utils/error-message.util';
 import { PasswordResetRequestComponent } from '../password-reset-request/password-reset-request.component';
 
 @Component({
@@ -61,7 +62,7 @@ export class LoginComponent {
         this.toast.show(this.errorMessage, 'error');
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'خطأ غير متوقع أثناء تسجيل الدخول';
+      const msg = toUserErrorMessage(err, 'خطأ غير متوقع أثناء تسجيل الدخول');
       console.error('[Login Component] Login error:', err);
       this.errorMessage = msg;
       this.toast.show(msg, 'error');

@@ -51,6 +51,10 @@
             <mat-icon>event_available</mat-icon>
             <span>الجرد السنوي</span>
           </a>
+          <a *appHasPermission="'canExternalBackup'" routerLink="/main/external-backup" routerLinkActive="active" class="nav-link">
+            <mat-icon>usb</mat-icon>
+            <span>النسخ الاحتياطي الخارجي</span>
+          </a>
         </nav>
 
         <div class="border-t border-border my-2"></div>

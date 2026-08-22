@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, protocol, shell, IpcMainInvokeEvent } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, protocol, shell, IpcMainInvokeEvent } from 'electron';
 import path from 'path';
 import fs from 'fs';
 
@@ -150,6 +150,7 @@ import {
   deleteOrgUnit,
   getOrgUnitSubtreeIds,
   isUserInSubtree,
+  getDbPath,
   AuthUser,
   FolderPermission,
   DocumentTypeInput,
@@ -157,6 +158,7 @@ import {
   OrgUnit,
   OrgUnitInput,
 } from './database';
+import { exportBackup, restoreBackup, readBackupHeader, compareVersions, BackupError, BACKUP_EXTENSION } from './backup';
 
 let loginWindow: BrowserWindow | null = null;
 let mainWindow: BrowserWindow | null = null;
@@ -287,7 +289,7 @@ function checkRateLimit(key: string): { locked: boolean; message?: string } {
   return { locked: false };
 }
 
-function recordFailedCodeAttempt(key: string): void {
+function recordFailedCodeAttempt(key: string): { locked: boolean; remaining: number } {
   const now = Date.now();
   let entry = codeAttempts.get(key);
   if (!entry || now - entry.firstFailureAt > RATE_LIMIT_WINDOW_MS) {
@@ -298,6 +300,10 @@ function recordFailedCodeAttempt(key: string): void {
     entry.lockedUntil = now + RATE_LIMIT_LOCK_MS;
   }
   codeAttempts.set(key, entry);
+  return {
+    locked: entry.lockedUntil != null,
+    remaining: Math.max(0, RATE_LIMIT_MAX_FAILURES - entry.failures),
+  };
 }
 
 function clearRateLimit(key: string): void {
@@ -413,6 +419,114 @@ ipcMain.handle('db:import', (_event: IpcMainInvokeEvent, jsonData: string, mode:
   if (!hasMinRole(user, 'deputy_manager')) return { success: false, error: 'ليس لديك صلاحية الاستيراد' };
   addAudit('استيراد بيانات', undefined, `الوضع: ${mode}`, user.username);
   return importData(jsonData, mode, user.role);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// External encrypted backup handlers (GM-only) — spec: docs/superpowers/specs/2026-08-22-external-backup-restore-design.md
+// ─────────────────────────────────────────────────────────────────────────────
+
+const backupRateLimitKey = (username: string): string => `backup-restore:${username.toLowerCase()}`;
+
+ipcMain.handle('backup:chooseDestination', async () => {
+  try {
+    const user = activeUser();
+    if (!hasMinRole(user, 'general_manager')) return { success: false, error: 'ليس لديك صلاحية' };
+    const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 12);
+    const { canceled, filePath } = await dialog.showSaveDialog(mainWindow!, {
+      title: 'اختيار مكان حفظ النسخة الاحتياطية',
+      defaultPath: `bonyan-backup-${stamp}${BACKUP_EXTENSION}`,
+      filters: [{ name: 'نسخة بنيان الاحتياطية', extensions: ['bonyan-backup'] }]
+    });
+    if (canceled || !filePath) return { success: true, canceled: true };
+    const finalPath = filePath.endsWith(BACKUP_EXTENSION) ? filePath : filePath + BACKUP_EXTENSION;
+    if (path.resolve(finalPath) === path.resolve(getDbPath())) {
+      return { success: false, error: 'لا يمكن الحفظ مكان ملف قاعدة البيانات الحالية' };
+    }
+    return { success: true, filePath: finalPath };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('backup:export', async (_event: IpcMainInvokeEvent, filePath: string, passphrase: string) => {
+  try {
+    const user = activeUser();
+    if (!hasMinRole(user, 'general_manager')) return { success: false, error: 'ليس لديك صلاحية' };
+    if (typeof passphrase !== 'string' || passphrase.length < 10) {
+      return { success: false, error: 'كلمة مرور النسخة يجب ألا تقل عن 10 أحرف' };
+    }
+    if (typeof filePath !== 'string' || !filePath.endsWith(BACKUP_EXTENSION)) {
+      return { success: false, error: 'مسار الحفظ غير صالح' };
+    }
+    const result = await exportBackup(
+      filePath,
+      passphrase,
+      { appVersion: app.getVersion(), createdBy: user!.username },
+      percent => mainWindow?.webContents.send('backup:progress', { phase: 'export', percent })
+    );
+    addAudit('تصدير نسخة احتياطية خارجية', undefined, `الوجهة: ${filePath} — البصمة: ${result.sha256}`, user!.username);
+    return { success: true, filePath, sizeBytes: result.sizeBytes, sha256: result.sha256 };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('backup:chooseBackupFile', async () => {
+  try {
+    const user = activeUser();
+    if (!hasMinRole(user, 'general_manager')) return { success: false, error: 'ليس لديك صلاحية' };
+    const { canceled, filePaths } = await dialog.showOpenDialog(mainWindow!, {
+      title: 'اختيار نسخة احتياطية للاستعادة',
+      properties: ['openFile'],
+      filters: [{ name: 'نسخة بنيان الاحتياطية', extensions: ['bonyan-backup'] }]
+    });
+    if (canceled || filePaths.length === 0) return { success: true, canceled: true };
+    const filePath = filePaths[0];
+    const { manifest } = readBackupHeader(filePath);
+    if (compareVersions(manifest.appVersion, app.getVersion()) > 0) {
+      return { success: false, error: 'تم إنشاء هذه النسخة بإصدار أحدث من التطبيق — حدّث التطبيق قبل الاستعادة' };
+    }
+    return { success: true, filePath, manifest };
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('backup:restore', async (_event: IpcMainInvokeEvent, filePath: string, passphrase: string) => {
+  try {
+    const user = activeUser();
+    if (!hasMinRole(user, 'general_manager')) return { success: false, error: 'ليس لديك صلاحية' };
+    const limitState = checkRateLimit(backupRateLimitKey(user!.username));
+    if (limitState.locked) return { success: false, error: limitState.message };
+    try {
+      const manifest = await restoreBackup(
+        filePath,
+        passphrase,
+        percent => mainWindow?.webContents.send('backup:progress', { phase: 'restore', percent })
+      );
+      clearRateLimit(backupRateLimitKey(user!.username));
+      addAudit('استعادة نسخة احتياطية خارجية', undefined, `المصدر: ${filePath} — تاريخ النسخة: ${manifest.createdAt}`, user!.username);
+      return { success: true };
+    } catch (err: unknown) {
+      if (err instanceof BackupError && err.code === 'AUTH') {
+        const attempt = recordFailedCodeAttempt(backupRateLimitKey(user!.username));
+        const message = attempt.locked
+          ? 'تم تجاوز عدد المحاولات المسموح بها — تم تأمين التحقق مؤقتاً لمدة 15 دقيقة'
+          : `${err.message} — المحاولات المتبقية قبل التأمين المؤقت: ${attempt.remaining}`;
+        return { success: false, error: message };
+      }
+      throw err;
+    }
+  } catch (err: unknown) {
+    return { success: false, error: err instanceof Error ? err.message : 'Unknown error' };
+  }
+});
+
+ipcMain.handle('backup:relaunchNow', () => {
+  const user = activeUser();
+  if (!hasMinRole(user, 'general_manager')) return { success: false, error: 'ليس لديك صلاحية' };
+  app.relaunch();
+  app.exit(0);
 });
 
 ipcMain.handle('db:audit', (_event: IpcMainInvokeEvent, action: string, docRef?: string, details?: string) => {
@@ -1272,8 +1386,16 @@ ipcMain.handle('document:update', (_event: IpcMainInvokeEvent, doc: Record<strin
 
     const existingRows = query('SELECT ref_number, confidentiality, created_by, org_unit_id FROM documents WHERE id = ?', [doc.id]) as
       Array<{ ref_number: string; confidentiality: string; created_by: string | null; org_unit_id: number | null }>;
-    if (existingRows.length === 0) return { success: false, error: 'الوثيقة غير موجودة' };
+    if (existingRows.length === 0) return { success: false, error: 'الوثيقة غير موجودة في السجل الحالي — وثائق السنوات المغلقة متاحة للقراءة والطباعة فقط' };
     const existing = existingRows[0];
+
+    // Closed-year documents are read-only. An archived (or tampered) payload is
+    // detected by its immutable ref_number not matching the live row — never let
+    // it overwrite a different live document that happens to share the id.
+    if (typeof doc.ref_number === 'string' && doc.ref_number && doc.ref_number !== existing.ref_number) {
+      addAudit('محاولة تعديل مرفوضة', doc.ref_number, 'محاولة تعديل وثيقة من سنة مغلقة أو بيانات غير متطابقة', user.username);
+      return { success: false, error: 'لا يمكن تعديل وثائق السنوات المغلقة — هي متاحة للقراءة والطباعة فقط' };
+    }
 
     if (!canTouchDocument(user, existing)) {
       return { success: false, error: 'ليس لديك صلاحية الوصول لهذه الوثيقة' };
@@ -1462,7 +1584,16 @@ ipcMain.handle('security:verifyPassword', (_event: IpcMainInvokeEvent, password:
     if (result.success) {
       clearRateLimit(passwordRateLimitKey(user.username));
     } else {
-      recordFailedCodeAttempt(passwordRateLimitKey(user.username));
+      const attempt = recordFailedCodeAttempt(passwordRateLimitKey(user.username));
+      // The security modal asks only for a password, so replace authenticateUser's
+      // username-mentioning generic error with password-only wording that reports
+      // the remaining attempts (or the fresh 15-minute lockout). Other errors
+      // (e.g. 'الحساب معطل، تواصل مع المدير') pass through unchanged.
+      if (result.error === 'اسم المستخدم أو كلمة المرور غير صحيحة') {
+        result.error = attempt.locked
+          ? 'تم تجاوز عدد المحاولات المسموح بها — تم تأمين التحقق مؤقتاً لمدة 15 دقيقة'
+          : `كلمة المرور غير صحيحة — المحاولات المتبقية قبل التأمين المؤقت: ${attempt.remaining}`;
+      }
     }
     return { valid: result.success, error: result.error };
   } catch (err: unknown) {

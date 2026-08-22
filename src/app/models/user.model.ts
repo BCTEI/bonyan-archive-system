@@ -44,6 +44,7 @@ export interface RolePermissions {
   canManageMasterLists: boolean;
   canManageOrgUnits: boolean;
   canBrowseArchive: boolean;
+  canExternalBackup: boolean;
 }
 
 export const ROLE_LABELS: Record<UserRole, string> = {
@@ -82,7 +83,8 @@ const ALL_PERMISSIONS: RolePermissions = {
   canCloseYear: true,
   canManageMasterLists: true,
   canManageOrgUnits: true,
-  canBrowseArchive: true
+  canBrowseArchive: true,
+  canExternalBackup: true
 };
 
 // dept_head and section_head: full control over their own documents plus audit
@@ -102,7 +104,8 @@ const HEAD_PERMISSIONS: RolePermissions = {
   canCloseYear: false,
   canManageMasterLists: false,
   canManageOrgUnits: false,
-  canBrowseArchive: false
+  canBrowseArchive: false,
+  canExternalBackup: false
 };
 
 const EMPLOYEE_PERMISSIONS: RolePermissions = {
@@ -119,7 +122,8 @@ const EMPLOYEE_PERMISSIONS: RolePermissions = {
   canCloseYear: false,
   canManageMasterLists: false,
   canManageOrgUnits: false,
-  canBrowseArchive: false
+  canBrowseArchive: false,
+  canExternalBackup: false
 };
 
 export function getRolePermissions(role: UserRole): RolePermissions {

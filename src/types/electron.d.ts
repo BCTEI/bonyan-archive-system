@@ -30,6 +30,16 @@ export interface OrgUnitInput {
   is_active?: number;
 }
 
+export interface BackupManifest {
+  app: string;
+  appVersion: string;
+  createdAt: string;
+  createdBy: string;
+  dbSizeBytes: number;
+  sha256: string;
+  counts: { documents: number; archivedYears: number; folders: number; users: number };
+}
+
 export interface UserCodeEntry {
   id: number;
   user_id: number;
@@ -148,6 +158,14 @@ export interface ElectronAPI {
     update: (id: number, data: Partial<OrgUnitInput>) => Promise<{ success: boolean; error?: string }>;
     delete: (id: number) => Promise<{ success: boolean; error?: string }>;
   };
+  backupAPI: {
+    chooseDestination: () => Promise<{ success: boolean; filePath?: string; canceled?: boolean; error?: string }>;
+    export: (filePath: string, passphrase: string) => Promise<{ success: boolean; filePath?: string; sizeBytes?: number; sha256?: string; error?: string }>;
+    chooseBackupFile: () => Promise<{ success: boolean; filePath?: string; manifest?: BackupManifest; canceled?: boolean; error?: string }>;
+    restore: (filePath: string, passphrase: string) => Promise<{ success: boolean; error?: string }>;
+    relaunchNow: () => Promise<{ success: boolean; error?: string }>;
+  };
+  onBackupProgress: (callback: (data: { phase: 'export' | 'restore'; percent: number }) => void) => () => void;
 }
 
 declare global {

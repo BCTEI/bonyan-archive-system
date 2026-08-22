@@ -1,0 +1,88 @@
+<div dir="rtl" class="p-6 max-w-4xl mx-auto">
+  <h2 class="text-xl font-bold text-primary mb-1">النسخ الاحتياطي الخارجي</h2>
+  <p class="text-text-light text-sm mb-6">تصدير نسخة مشفرة كاملة من الأرشيف إلى قرص خارجي، واستعادتها عند الحاجة.</p>
+
+  @if (!unlocked()) {
+    <div class="border border-border rounded-xl p-8 text-center bg-bg">
+      <mat-icon class="text-4xl text-primary mb-3">lock</mat-icon>
+      <p class="mb-4">هذه العملية حساسة وتتطلب تأكيد هوية المدير العام.</p>
+      <button mat-raised-button color="primary" (click)="unlock()">تأكيد الهوية</button>
+    </div>
+  } @else {
+    <!-- ═══ Export card ═══ -->
+    <section class="border border-border rounded-xl p-5 mb-6">
+      <h3 class="flex items-center gap-2 font-bold text-primary mb-3"><mat-icon>usb</mat-icon> تصدير نسخة احتياطية</h3>
+      <div class="flex items-center gap-3 mb-4">
+        <button mat-stroked-button (click)="chooseDestination()" [disabled]="exportPhase() === 'running'">اختيار مكان الحفظ</button>
+        <span class="text-sm text-text-light break-all">{{ exportPath() || 'لم يتم اختيار وجهة بعد' }}</span>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <label class="block text-sm">كلمة مرور النسخة (10 أحرف على الأقل)
+          <input type="password" class="w-full mt-1 px-3 py-2 rounded-lg border border-border bg-bg" [ngModel]="exportPassword()" (ngModelChange)="exportPassword.set($event)" autocomplete="new-password">
+        </label>
+        <label class="block text-sm">تأكيد كلمة المرور
+          <input type="password" class="w-full mt-1 px-3 py-2 rounded-lg border border-border bg-bg" [ngModel]="exportPasswordConfirm()" (ngModelChange)="exportPasswordConfirm.set($event)" autocomplete="new-password">
+        </label>
+      </div>
+      @if (exportPassword() && exportPassword() !== exportPasswordConfirm()) {
+        <p class="text-danger text-xs mb-2">كلمتا المرور غير متطابقتين</p>
+      }
+      <p class="text-text-light text-xs mb-4">احتفظ بكلمة المرور في مكان آمن — لا يمكن استعادة النسخة بدونها.</p>
+      @if (exportPhase() === 'running') {
+        <mat-progress-bar mode="determinate" [value]="exportPercent()"></mat-progress-bar>
+        <p class="text-xs text-text-light mt-1">جاري التصدير… {{ exportPercent() }}%</p>
+      }
+      @if (exportResult(); as r) {
+        <div class="border border-success rounded-lg p-3 mb-3 text-sm">
+          <p class="font-bold text-success mb-1">اكتمل التصدير بنجاح</p>
+          <p>الملف: <span dir="ltr">{{ r.filePath }}</span></p>
+          <p>الحجم: {{ formatSize(r.sizeBytes) }} — البصمة: <span dir="ltr" class="text-xs">{{ r.sha256 }}</span></p>
+        </div>
+      }
+      <button mat-raised-button color="primary" (click)="startExport()" [disabled]="!exportReady()">بدء التصدير</button>
+    </section>
+
+    <!-- ═══ Restore card ═══ -->
+    <section class="border border-border rounded-xl p-5">
+      <h3 class="flex items-center gap-2 font-bold text-primary mb-3"><mat-icon>restore</mat-icon> استعادة نسخة احتياطية</h3>
+      @if (restoreDone()) {
+        <div class="border border-success rounded-lg p-6 text-center">
+          <mat-icon class="text-4xl text-success mb-2">check_circle</mat-icon>
+          <p class="font-bold mb-2">اكتملت الاستعادة بنجاح</p>
+          <p class="text-sm text-text-light mb-4">سيتم إعادة تشغيل التطبيق خلال {{ relaunchCountdown() }} ثانية — سجّل الدخول ببيانات المستخدمين المخزنة في النسخة.</p>
+          <button mat-raised-button color="primary" (click)="relaunchNow()">إعادة تشغيل التطبيق الآن</button>
+        </div>
+      } @else {
+        <div class="flex items-center gap-3 mb-4">
+          <button mat-stroked-button (click)="chooseRestoreFile()" [disabled]="restorePhase() === 'running'">اختيار ملف النسخة</button>
+          <span class="text-sm text-text-light break-all">{{ restoreFile()?.filePath || 'لم يتم اختيار ملف بعد' }}</span>
+        </div>
+        @if (restoreFile(); as f) {
+          <div class="border border-border rounded-lg p-3 mb-4 text-sm grid grid-cols-2 gap-2">
+            <span>تاريخ الإنشاء: {{ f.manifest.createdAt | date:'yyyy-MM-dd HH:mm' }}</span>
+            <span>أنشأها: {{ f.manifest.createdBy }}</span>
+            <span>إصدار التطبيق: {{ f.manifest.appVersion }}</span>
+            <span>الحجم: {{ formatSize(f.manifest.dbSizeBytes) }}</span>
+            <span>الوثائق: {{ f.manifest.counts.documents }}</span>
+            <span>السنوات المغلقة: {{ f.manifest.counts.archivedYears }}</span>
+          </div>
+          <div class="border border-danger rounded-lg p-3 mb-4 text-sm text-danger">
+            سيتم استبدال جميع البيانات الحالية بمحتوى النسخة — سيتم أولاً حفظ نسخة أمان من البيانات الحالية تلقائياً.
+            <label class="flex items-center gap-2 mt-2">
+              <input type="checkbox" [ngModel]="restoreAcknowledged()" (ngModelChange)="restoreAcknowledged.set($event)">
+              أفهم أن البيانات الحالية ستُستبدل
+            </label>
+          </div>
+          <label class="block text-sm mb-4">كلمة مرور النسخة
+            <input type="password" class="w-full mt-1 px-3 py-2 rounded-lg border border-border bg-bg" [ngModel]="restorePassword()" (ngModelChange)="restorePassword.set($event)">
+          </label>
+          @if (restorePhase() === 'running') {
+            <mat-progress-bar mode="determinate" [value]="restorePercent()"></mat-progress-bar>
+            <p class="text-xs text-text-light mt-1">جاري الاستعادة… {{ restorePercent() }}%</p>
+          }
+          <button mat-raised-button color="warn" (click)="startRestore()" [disabled]="!restoreReady()">بدء الاستعادة</button>
+        }
+      }
+    </section>
+  }
+</div>

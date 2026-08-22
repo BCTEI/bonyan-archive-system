@@ -21,9 +21,11 @@
     </div>
 
     <div class="flex items-center gap-1 shrink-0">
-      <button *appHasPermission="'canEditDocument'" mat-icon-button (click)="edit()" title="تعديل الوثيقة">
-        <mat-icon>edit</mat-icon>
-      </button>
+      @if (!isArchived) {
+        <button *appHasPermission="'canEditDocument'" mat-icon-button (click)="edit()" title="تعديل الوثيقة">
+          <mat-icon>edit</mat-icon>
+        </button>
+      }
       <button mat-icon-button (click)="print()" title="طباعة الوثيقة">
         <mat-icon>print</mat-icon>
       </button>

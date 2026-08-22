@@ -1,4 +1,5 @@
 import { Injectable, signal } from '@angular/core';
+import { toUserErrorMessage } from '../utils/error-message.util';
 
 export interface Toast {
   id: number;
@@ -19,9 +20,9 @@ export class ToastService {
     setTimeout(() => this.dismiss(toast.id), duration);
   }
 
-  /** Collapses the repeated `catch (err) { const message = err instanceof Error ? err.message : fallback; this.toast.show(message, 'error'); }` idiom. */
+  /** Collapses the repeated `catch (err) { ...; this.toast.show(message, 'error'); }` idiom, routing the message through toUserErrorMessage so raw backend text never reaches the UI. */
   showError(err: unknown, fallback: string): void {
-    this.show(err instanceof Error ? err.message : fallback, 'error');
+    this.show(toUserErrorMessage(err, fallback), 'error');
   }
 
   dismiss(id: number): void {

@@ -1093,6 +1093,28 @@ export function run(sql: string, params?: unknown[]): { lastInsertRowid: number 
   return { lastInsertRowid: result.lastInsertRowid, changes: result.changes };
 }
 
+/** Absolute path of the live SQLite file. Falls back to the conventional
+ *  location when initDb() has not run yet (e.g. early dialog use). */
+export function getDbPath(): string {
+  return dbPath ?? path.join(app.getPath('userData'), 'archive.db');
+}
+
+/** Closes the SQLite handle so the file can be replaced on Windows (open
+ *  handles lock the file). A later initDb() call reopens it transparently. */
+export function closeDatabase(): void {
+  if (db) {
+    db.close();
+    db = null;
+  }
+}
+
+/** Consistent online snapshot of the live database via better-sqlite3's
+ *  backup API — safe to call while the app is running. */
+export async function createDbSnapshot(destPath: string): Promise<void> {
+  if (useMemoryFallback || !db) throw new Error('النسخ الاحتياطي غير مدعوم في وضع الذاكرة المؤقت');
+  await db.backup(destPath);
+}
+
 export interface AuthUser {
   id: number;
   username: string;

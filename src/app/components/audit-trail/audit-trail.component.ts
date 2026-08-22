@@ -69,7 +69,7 @@ export class AuditTrailComponent implements OnInit {
 
     const verified = await window.electronAPI.verifyPassword(user.username, password);
     if (!verified) {
-      this.toast.show('❌ كلمة المرور غير صحيحة', 'error');
+      this.toast.show('كلمة المرور غير صحيحة', 'error');
       return;
     }
 
@@ -84,12 +84,12 @@ export class AuditTrailComponent implements OnInit {
     try {
       const result = await this.auditService.clearAll();
       if (!result.success) {
-        this.toast.show('❌ خطأ: ' + result.error, 'error');
+        this.toast.show('خطأ: ' + result.error, 'error');
         return;
       }
 
       this.entries.set([]);
-      this.toast.show('✅ تم مسح سجل التدقيق بنجاح', 'success');
+      this.toast.show('تم مسح سجل التدقيق بنجاح', 'success');
 
       await this.auditService.log(
         'مسح سجل',
@@ -98,8 +98,7 @@ export class AuditTrailComponent implements OnInit {
       );
       await this.load();
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : 'خطأ في الاتصال بالنظام';
-      this.toast.show('❌ ' + message, 'error');
+      this.toast.showError(err, 'خطأ في الاتصال بالنظام');
     }
   }
 

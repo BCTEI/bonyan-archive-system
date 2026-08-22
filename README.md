@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-1.2.4-blue" alt="Version 1.2.4">
+  <img src="https://img.shields.io/badge/version-1.3.0-blue" alt="Version 1.3.0">
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20Linux-lightgrey" alt="Platform">
   <img src="https://img.shields.io/badge/license-Proprietary-red" alt="License: Proprietary">
   <img src="https://img.shields.io/badge/language-Arabic%20RTL-green" alt="Arabic RTL">

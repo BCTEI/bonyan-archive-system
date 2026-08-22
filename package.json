@@ -1,6 +1,6 @@
 {
   "name": "bonyan-archive-system",
-  "version": "1.2.4",
+  "version": "1.4.0",
   "description": "نظام الأرشيف الإلكتروني - مركز البنيان لتقنية والصناعيات الهندسية - مصراتة",
   "author": "مركز البنيان",
   "main": "dist/electron/main.js",

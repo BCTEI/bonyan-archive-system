@@ -219,8 +219,8 @@ export class DocumentFormComponent implements OnInit {
     return f ? `#${f.id} — ${f.name}` : '';
   }
 
-  /** mat-autocomplete displayWith: shows the "#id — name" label for the selected folder id. */
-  displayFolder = (id: number | null): string => this.folderLabel(id);
+  /** displayWith receives the numeric id on option selection but the label string whenever the component writes folderSearchText — pass strings through unchanged, resolve ids via folderLabel. */
+  displayFolder = (value: number | string | null): string => typeof value === 'string' ? value : this.folderLabel(value);
 
   onFolderInput(value: string | number): void {
     // Option selections emit the numeric folder id here — onFolderSelected

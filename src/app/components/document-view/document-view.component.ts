@@ -75,8 +75,18 @@ export class DocumentViewComponent implements OnInit, AfterViewInit {
     }
   }
 
+  /** Archived (closed-year) documents are read/print only — never editable. */
+  get isArchived(): boolean {
+    const s = this.data.scope;
+    return !!s && s !== 'live';
+  }
+
   async edit(): Promise<void> {
-    const allowed = await this.documentAccess.verifyAccess(this.doc, 'edit');
+    if (this.isArchived) {
+      this.toast.show('وثائق السنوات المغلقة متاحة للقراءة والطباعة فقط', 'warning');
+      return;
+    }
+    const allowed = await this.documentAccess.verifyAccess(this.doc, 'edit', this.data.scope ?? 'live');
     if (!allowed) return;
 
     const ref = this.dialog.open(DocumentFormComponent, {

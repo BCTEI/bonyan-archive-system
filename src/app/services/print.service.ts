@@ -3,6 +3,7 @@ import { ArchiveDocument, Attachment } from '../models/document.model';
 import { Folder } from '../models/folder.model';
 import { User } from '../models/user.model';
 import { BarcodeService } from './barcode.service';
+import { ToastService } from './toast.service';
 import { convertDocxToHtml } from '../utils/docx-preview.util';
 import { renderPdfPages } from '../utils/pdf-render.util';
 
@@ -18,17 +19,25 @@ type AttachmentKind = 'image' | 'pdf' | 'docx' | 'unsupported';
  *  memory on very large files; a continuation note is printed when hit. */
 const MAX_PDF_PRINT_PAGES = 50;
 
+/** unicode-range values for the print @font-face blocks, copied verbatim from
+ *  node_modules/@fontsource/tajawal/{400,500,700,800}.css — identical across
+ *  those four weights, so one range per subset. */
+const TAJAWAL_UNICODE_RANGE_ARABIC = 'U+0600-06FF,U+0750-077F,U+0870-088E,U+0890-0891,U+0897-08E1,U+08E3-08FF,U+200C-200E,U+2010-2011,U+204F,U+2E41,U+FB50-FDFF,U+FE70-FE74,U+FE76-FEFC,U+102E0-102FB,U+10E60-10E7E,U+10EC2-10EC4,U+10EFC-10EFF,U+1EE00-1EE03,U+1EE05-1EE1F,U+1EE21-1EE22,U+1EE24,U+1EE27,U+1EE29-1EE32,U+1EE34-1EE37,U+1EE39,U+1EE3B,U+1EE42,U+1EE47,U+1EE49,U+1EE4B,U+1EE4D-1EE4F,U+1EE51-1EE52,U+1EE54,U+1EE57,U+1EE59,U+1EE5B,U+1EE5D,U+1EE5F,U+1EE61-1EE62,U+1EE64,U+1EE67-1EE6A,U+1EE6C-1EE72,U+1EE74-1EE77,U+1EE79-1EE7C,U+1EE7E,U+1EE80-1EE89,U+1EE8B-1EE9B,U+1EEA1-1EEA3,U+1EEA5-1EEA9,U+1EEAB-1EEBB,U+1EEF0-1EEF1';
+const TAJAWAL_UNICODE_RANGE_LATIN = 'U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD';
+
 @Injectable({
   providedIn: 'root'
 })
 export class PrintService {
   private barcodeService = inject(BarcodeService);
+  private toast = inject(ToastService);
   private logoDataUri: Promise<string | null> | null = null;
+  private printFontFacesCss: Promise<string> | null = null;
 
   async printDocument(doc: ArchiveDocument, folder: Folder | undefined, user: User | null): Promise<void> {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
-      window.alert('تم حظر نافذة الطباعة، يرجى السماح بالنوافذ المنبثقة');
+      this.toast.show('تعذر فتح نافذة الطباعة — يرجى السماح بالنوافذ المنبثقة', 'warning');
       return;
     }
 
@@ -36,15 +45,16 @@ export class PrintService {
     const printedBy = this.escapeHtml(user?.full_name || user?.username || '');
     const attachments = this.parseAttachments(doc);
 
-    const [logo, docxHtmlByIndex] = await Promise.all([
+    const [logo, fontFacesCss, docxHtmlByIndex] = await Promise.all([
       this.getLogoDataUri(),
+      this.getPrintFontFacesCss(),
       this.resolveDocxAttachments(doc)
     ]);
 
     // Write the report immediately — attachment sheets are then STREAMED in
     // one at a time (sequential, bounded memory), so even a document with
     // several large PDFs shows progress instead of a blank white window.
-    printWindow.document.write(this.generatePrintHTML(doc, folder, user, logo, docxHtmlByIndex, printedAt, printedBy, attachments.length > 0));
+    printWindow.document.write(this.generatePrintHTML(doc, folder, user, logo, fontFacesCss, docxHtmlByIndex, printedAt, printedBy, attachments.length > 0));
     printWindow.document.close();
 
     const progress = printWindow.document.getElementById('att-progress');
@@ -112,7 +122,7 @@ export class PrintService {
   printBarcodeLabel(doc: ArchiveDocument) {
     const printWindow = window.open('', '_blank');
     if (!printWindow) {
-      window.alert('تم حظر نافذة الطباعة، يرجى السماح بالنوافذ المنبثقة');
+      this.toast.show('تعذر فتح نافذة الطباعة — يرجى السماح بالنوافذ المنبثقة', 'warning');
       return;
     }
 
@@ -138,6 +148,33 @@ export class PrintService {
         .catch(() => null);
     }
     return this.logoDataUri;
+  }
+
+  /** Fetches the Tajawal subset webfonts once and caches them as @font-face CSS with
+   *  embedded base64 data URIs, so print windows (separate document contexts that never
+   *  load the app's webfonts) render the report in Tajawal. Resolves to '' on any
+   *  failure — printing then falls back to the default font stack. */
+  private getPrintFontFacesCss(): Promise<string> {
+    if (!this.printFontFacesCss) {
+      const faces = ([400, 500, 700, 800] as const).flatMap(weight => ([
+        { file: `tajawal-arabic-${weight}-normal.woff2`, weight, unicodeRange: TAJAWAL_UNICODE_RANGE_ARABIC },
+        { file: `tajawal-latin-${weight}-normal.woff2`, weight, unicodeRange: TAJAWAL_UNICODE_RANGE_LATIN }
+      ]));
+      this.printFontFacesCss = Promise.all(faces.map(face =>
+        fetch(`assets/fonts/${face.file}`)
+          .then(res => (res.ok ? res.blob() : Promise.reject(new Error(`font not found: ${face.file}`))))
+          .then(blob => new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result as string);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          }))
+          .then(dataUri => `@font-face { font-family: 'Tajawal'; font-style: normal; font-display: swap; font-weight: ${face.weight}; src: url(${dataUri}) format('woff2'); unicode-range: ${face.unicodeRange}; }`)
+      ))
+        .then(blocks => blocks.join('\n'))
+        .catch(() => '');
+    }
+    return this.printFontFacesCss;
   }
 
   private generateLabelHTML(doc: ArchiveDocument): string {
@@ -183,15 +220,6 @@ export class PrintService {
       .replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#39;');
-  }
-
-  private inputMethodLabel(method: string): string {
-    switch (method) {
-      case 'upload': return 'تحميل من الجهاز';
-      case 'camera': return 'التقاط صورة';
-      case 'scanner': return 'الماسح الضوئي';
-      default: return method;
-    }
   }
 
   private statusClass(status: string): string {
@@ -322,7 +350,6 @@ export class PrintService {
     } else if (kind === 'pdf') {
       frameContent = `
         <div class="p2-placeholder">
-          <div class="icon">📄</div>
           <p>تعذر تجهيز ملف PDF للطباعة — يُفتح من عارض المرفقات داخل النظام.</p>
         </div>`;
     } else if (kind === 'docx' && docxHtml) {
@@ -332,13 +359,11 @@ export class PrintService {
     } else if (!att.base64) {
       frameContent = `
         <div class="p2-placeholder">
-          <div class="icon">⚠</div>
           <p>تعذر تحميل هذا المرفق للمعاينة والطباعة.</p>
         </div>`;
     } else {
       frameContent = `
         <div class="p2-placeholder">
-          <div class="icon">📄</div>
           <p>هذا النوع من الملفات (${this.escapeHtml(ext.toUpperCase())}) لا يمكن معاينته أو طباعته مباشرة ضمن هذه الصفحة. يُرجى فتح المرفق من داخل النظام لطباعته بشكل منفصل.</p>
         </div>`;
     }
@@ -352,7 +377,6 @@ export class PrintService {
     return this.wrapAttachmentSheet(
       att, ext, index, total, doc, printedAt, printedBy,
       `<div class="p2-placeholder">
-        <div class="icon">📄</div>
         <p>تمت طباعة أول ${rendered} صفحة من أصل ${totalPages} صفحة من هذا الملف. لطباعة باقي الصفحات يُرجى فتح المرفق من عارض المرفقات داخل النظام.</p>
       </div>`,
       ` — متابعة`, false
@@ -376,10 +400,10 @@ export class PrintService {
       </div>`;
   }
 
-  private generatePrintHTML(doc: ArchiveDocument, folder: Folder | undefined, user: User | null, logoDataUri: string | null, docxHtmlByIndex: Map<number, string>, printedAt: string, printedBy: string, hasAttachments: boolean): string {
+  private generatePrintHTML(doc: ArchiveDocument, folder: Folder | undefined, user: User | null, logoDataUri: string | null, fontFacesCss: string, docxHtmlByIndex: Map<number, string>, printedAt: string, printedBy: string, hasAttachments: boolean): string {
     const attachments = this.parseAttachments(doc);
 
-    const typeLabel = `${doc.type_icon ?? ''} ${doc.type_label ?? doc.type ?? '—'}`.trim();
+    const typeLabel = doc.type_label ?? doc.type ?? '—';
     // The signature is stored as a base64 data URI from the canvas, but it
     // round-trips through the DB — only render it if it still looks like one,
     // so a tampered value can't break out of the <img src> attribute.
@@ -421,6 +445,7 @@ export class PrintService {
         <meta charset="UTF-8">
         <title>${this.escapeHtml(doc.ref_number)} — ${this.escapeHtml(doc.subject)}</title>
         <style>
+          ${fontFacesCss}
           :root {
             --navy-deep: #152c49;
             --navy: #1e3a5f;
@@ -500,7 +525,7 @@ export class PrintService {
             background: linear-gradient(120deg, var(--navy), var(--navy-deep));
             color: #ffffff;
             font-weight: 800;
-            font-family: 'Courier New', monospace;
+            font-family: 'Tajawal', 'Segoe UI', Arial, sans-serif;
             direction: ltr;
             unicode-bidi: isolate;
             padding: 8px 16px;
@@ -589,7 +614,7 @@ export class PrintService {
           .footer-meta strong { color: var(--navy); }
           .footer-barcode { display: flex; flex-direction: column; align-items: center; gap: 3px; }
           .footer-barcode svg { max-width: 150px; height: auto; }
-          .footer-barcode span { font-family: 'Courier New', monospace; direction: ltr; unicode-bidi: isolate; font-size: 8pt; font-weight: 700; color: var(--ink); }
+          .footer-barcode span { font-family: 'Tajawal', 'Segoe UI', Arial, sans-serif; direction: ltr; unicode-bidi: isolate; font-size: 8pt; font-weight: 700; color: var(--ink); }
 
           /* ---- attachment (page 2+) sheets ---- */
           .p2-header {
@@ -628,7 +653,6 @@ export class PrintService {
           .p2-frame img { max-width: 100%; max-height: 100%; object-fit: contain; }
           .p2-frame embed { width: 100%; height: 100%; border: 0; }
           .p2-placeholder { text-align: center; color: var(--ink-soft); padding: 40px; }
-          .p2-placeholder .icon { font-size: 26pt; margin-bottom: 10px; }
           .p2-placeholder p { font-size: 10pt; line-height: 1.8; max-width: 340px; margin: 0 auto; }
 
           /* DOCX content flows as normal text rather than being centered/clipped
@@ -681,7 +705,10 @@ export class PrintService {
               <tbody>
                 <tr>${this.dataCell('نوع الوثيقة', typeLabel)}${this.dataCell('التصنيف', classification)}</tr>
                 <tr>${this.dataCell('مستوى السرية', doc.confidentiality)}${this.dataCell('الحالة', doc.status, this.statusClass(doc.status))}</tr>
-                <tr>${this.dataCell('التاريخ', doc.date)}${this.dataCell('طريقة الاستلام', doc.input_method ? this.inputMethodLabel(doc.input_method) : '')}</tr>
+                <tr>
+                  <td class="dt-label">التاريخ</td>
+                  <td class="dt-value" colspan="3">${doc.date ? this.escapeHtml(doc.date) : '—'}</td>
+                </tr>
                 <tr>${this.dataCell('المرسل', doc.sender || '')}${this.dataCell('المستلم', doc.receiver || '')}</tr>
                 <tr>
                   <td class="dt-label">منشئ الرسالة</td>

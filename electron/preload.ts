@@ -108,6 +108,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     create: (data: unknown) => ipcRenderer.invoke('orgUnit:create', data),
     update: (id: number, data: unknown) => ipcRenderer.invoke('orgUnit:update', id, data),
     delete: (id: number) => ipcRenderer.invoke('orgUnit:delete', id),
+  },
+  backupAPI: {
+    chooseDestination: () => ipcRenderer.invoke('backup:chooseDestination'),
+    export: (filePath: string, passphrase: string) => ipcRenderer.invoke('backup:export', filePath, passphrase),
+    chooseBackupFile: () => ipcRenderer.invoke('backup:chooseBackupFile'),
+    restore: (filePath: string, passphrase: string) => ipcRenderer.invoke('backup:restore', filePath, passphrase),
+    relaunchNow: () => ipcRenderer.invoke('backup:relaunchNow'),
+  },
+  onBackupProgress: (callback: (data: { phase: 'export' | 'restore'; percent: number }) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: { phase: 'export' | 'restore'; percent: number }) => callback(data);
+    ipcRenderer.on('backup:progress', listener);
+    return () => { ipcRenderer.removeListener('backup:progress', listener); };
   }
 });
 

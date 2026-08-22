@@ -14,6 +14,7 @@ import { ChangePasswordComponent } from './components/change-password/change-pas
 import { UserProfileComponent } from './components/user-profile/user-profile.component';
 import { MasterListManagementComponent } from './components/master-list-management/master-list-management.component';
 import { OrgUnitManagementComponent } from './components/org-unit-management/org-unit-management.component';
+import { ExternalBackupComponent } from './components/external-backup/external-backup.component';
 import { authGuard } from './guards/auth.guard';
 import { adminGuard } from './guards/admin.guard';
 import { permissionGuard } from './guards/permission.guard';
@@ -39,6 +40,7 @@ export const routes: Routes = [
       { path: 'master-lists', component: MasterListManagementComponent, canActivate: [adminGuard] },
       { path: 'annual-closing', component: AnnualClosingComponent, canActivate: [adminGuard] },
       { path: 'annual-closing/:year', component: ArchiveBrowserComponent, canActivate: [adminGuard] },
+      { path: 'external-backup', component: ExternalBackupComponent, canActivate: [adminGuard] },
       { path: 'change-password', component: ChangePasswordComponent },
       { path: 'profile', component: UserProfileComponent }
     ]

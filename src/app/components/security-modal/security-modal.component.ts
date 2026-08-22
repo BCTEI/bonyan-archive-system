@@ -9,6 +9,7 @@ import { MatInputModule } from '@angular/material/input';
 import { ArchiveDocument } from '../../models/document.model';
 import { SecurityService } from '../../services/security.service';
 import { AuthService } from '../../services/auth.service';
+import { toUserErrorMessage } from '../../utils/error-message.util';
 
 interface SecurityModalData {
   doc: ArchiveDocument;
@@ -99,10 +100,10 @@ export class SecurityModalComponent implements OnInit {
         }
       }
     } catch (err: unknown) {
-      // Server message surfaced verbatim — wrong password, disabled account, or
-      // the main-process rate-limit lockout text (5 attempts / 15 minutes).
-      const message = err instanceof Error ? err.message : 'فشل التحقق من كلمة المرور';
-      this.errorMessage.set(message);
+      // Arabic server messages (wrong password, disabled account, the main-process
+      // rate-limit lockout text) pass through verbatim; non-Arabic/technical ones
+      // are mapped or replaced by the fallback via toUserErrorMessage.
+      this.errorMessage.set(toUserErrorMessage(err, 'فشل التحقق من كلمة المرور'));
     } finally {
       this.loading.set(false);
     }
@@ -128,9 +129,10 @@ export class SecurityModalComponent implements OnInit {
         this.dialogRef.close({ verified: true, method: 'password+code' });
       }
     } catch (err: unknown) {
-      // Server message surfaced verbatim, including the rate-limit lockout text.
-      const message = err instanceof Error ? err.message : 'فشل التحقق من الرمز';
-      this.errorMessage.set(message);
+      // Arabic server messages (including the rate-limit lockout text) pass
+      // through verbatim; non-Arabic/technical ones are mapped or replaced by
+      // the fallback via toUserErrorMessage.
+      this.errorMessage.set(toUserErrorMessage(err, 'فشل التحقق من الرمز'));
     } finally {
       this.loading.set(false);
     }
